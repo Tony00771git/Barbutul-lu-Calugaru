@@ -1,0 +1,6 @@
+{
+  "name": "Barbutul lu' Călugăru",
+  "description": "Joc de băut cu temă medievală mănăstirească - Modurile Normal, Boardgame și Duel 1v1 Trivia",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

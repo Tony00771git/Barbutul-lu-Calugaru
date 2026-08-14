@@ -1,0 +1,195 @@
+@import "tailwindcss";
+
+@theme {
+  --font-cinzel: 'Cinzel', serif;
+  --font-bebas: 'Bebas Neue', sans-serif;
+  --font-body: 'Barlow Condensed', sans-serif;
+  --font-barlow: 'Barlow Condensed', sans-serif;
+
+  --color-gold: #e8c84a;
+  --color-flame: #e05c3a;
+  --color-dark-bg: #0d0d0d;
+  --color-card-bg: #161616;
+  --color-card-border: #2a2a2a;
+  --color-parchment: #f0ebe0;
+}
+
+body {
+  font-family: 'Barlow Condensed', sans-serif;
+  background-color: #0d0d0d;
+  color: #f0ebe0;
+}
+
+.font-cinzel {
+  font-family: 'Cinzel', serif;
+}
+
+.font-bebas {
+  font-family: 'Bebas Neue', sans-serif;
+}
+
+.font-barlow {
+  font-family: 'Barlow Condensed', sans-serif;
+}
+
+/* Custom Gold Glows */
+.gold-glow {
+  box-shadow: 0 0 16px rgba(232, 200, 74, 0.4);
+}
+
+.gold-glow-lg {
+  box-shadow: 0 0 25px rgba(232, 200, 74, 0.6);
+}
+
+.flame-glow {
+  box-shadow: 0 0 20px rgba(224, 92, 58, 0.5);
+}
+
+.gold-text-glow {
+  text-shadow: 0 0 12px rgba(232, 200, 74, 0.6);
+}
+
+.flame-text-glow {
+  text-shadow: 0 0 12px rgba(224, 92, 58, 0.8);
+}
+
+/* Screen shake animation for CHUG IT ALL */
+@keyframes screenShake {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  20% { transform: translate(-8px, 6px) rotate(-1.5deg); }
+  40% { transform: translate(8px, -6px) rotate(1.5deg); }
+  60% { transform: translate(-6px, -4px) rotate(-1deg); }
+  80% { transform: translate(6px, 4px) rotate(1deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+.animate-shake {
+  animation: screenShake 0.4s ease-in-out infinite;
+}
+
+/* Rolling dice animation */
+@keyframes diceRoll {
+  0% { transform: rotate(0deg) scale(0.8); }
+  25% { transform: rotate(90deg) scale(1.1); }
+  50% { transform: rotate(180deg) scale(0.9); }
+  75% { transform: rotate(270deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.animate-roll {
+  animation: diceRoll 0.5s ease-out;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #121212;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a2a;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #e8c84a;
+}
+
+/* 3D Card Flip & Perspective Helpers */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.perspective-2000 {
+  perspective: 2000px;
+}
+.transform-style-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* Slot Machine Reel Animations */
+@keyframes slotBlurSpin1 {
+  0% { transform: translateY(0%); filter: blur(0); }
+  25% { filter: blur(4px); }
+  75% { filter: blur(4px); }
+  100% { transform: translateY(-400%); filter: blur(0); }
+}
+
+@keyframes slotBlurSpin2 {
+  0% { transform: translateY(0%); filter: blur(0); }
+  35% { filter: blur(3.5px); }
+  80% { filter: blur(3.5px); }
+  100% { transform: translateY(-350%); filter: blur(0); }
+}
+
+@keyframes slotBlurSpin3 {
+  0% { transform: translateY(0%); filter: blur(0); }
+  30% { filter: blur(3px); }
+  70% { filter: blur(3px); }
+  100% { transform: translateY(-300%); filter: blur(0); }
+}
+
+@keyframes slotSuspenseSlow {
+  0% { transform: translateY(0%); filter: blur(0); }
+  50% { transform: translateY(-50%); filter: blur(1px); }
+  100% { transform: translateY(-100%); filter: blur(0); }
+}
+
+.animate-reel-spin-1 {
+  animation: slotBlurSpin1 0.28s linear infinite;
+}
+
+.animate-reel-spin-2 {
+  animation: slotBlurSpin2 0.36s linear infinite;
+}
+
+.animate-reel-spin-3 {
+  animation: slotBlurSpin3 0.44s linear infinite;
+}
+
+.animate-reel-suspense {
+  animation: slotSuspenseSlow 0.65s cubic-bezier(0.25, 1, 0.5, 1) infinite;
+}
+
+@keyframes suspenseGlow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 68, 68, 0.6), inset 0 0 15px rgba(255, 215, 0, 0.5);
+    border-color: #ff4444;
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(255, 215, 0, 0.9), inset 0 0 25px rgba(255, 68, 68, 0.8);
+    border-color: #ffd700;
+  }
+}
+
+.animate-suspense-glow {
+  animation: suspenseGlow 0.5s ease-in-out infinite;
+}
+
+@keyframes leverArmPull {
+  0% { transform: rotate(0deg) scaleY(1); }
+  40% { transform: rotate(45deg) scaleY(0.7) translateY(8px); }
+  100% { transform: rotate(0deg) scaleY(1); }
+}
+
+.animate-lever-pull {
+  animation: leverArmPull 0.6s cubic-bezier(0.2, 0.8, 0.3, 1);
+  transform-origin: bottom center;
+}
+
+@keyframes bulbBlink {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 6px #ffd700); }
+  50% { opacity: 0.3; filter: none; }
+}
+
+.animate-bulb {
+  animation: bulbBlink 1s infinite ease-in-out;
+}
+
