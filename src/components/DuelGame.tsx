@@ -33,6 +33,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
     nextRound,
     startDrinkTimer,
     endGame,
+    addBot,
     errorMessage,
     clearError,
   } = socket;
@@ -192,7 +193,9 @@ export const DuelGame: React.FC<DuelGameProps> = ({
 
       // If authenticated, record match in Firestore
       if (auth.currentUser) {
-        const winner = room.winnerId === host.id ? host.name : (guest && room.winnerId === guest.id ? guest.name : undefined);
+        const hostPts = (p1Scores.sipsTotal || 0) + 25 * (p1Scores.chugsTotal || 0);
+        const guestPts = (p2Scores.sipsTotal || 0) + 25 * (p2Scores.chugsTotal || 0);
+        const winner = hostPts < guestPts ? host.name : (guestPts < hostPts ? (guest ? guest.name : 'Jucător 2') : 'Egalitate');
         recordDuelMatchHistory({
           matchId: `match_${Date.now()}_${room.code}`,
           roomCode: room.code,
@@ -207,7 +210,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
 
       onEndGame([player1, player2]);
     }
-  }, [room?.status]);
+  }, [room?.status, onEndGame, updateProfileStats]);
 
   if (!room) {
     return (
@@ -368,17 +371,29 @@ export const DuelGame: React.FC<DuelGameProps> = ({
 
         {/* Action Button */}
         {isHost ? (
-          <button
-            onClick={startGame}
-            disabled={!room.guestPlayer}
-            className={`w-full py-3.5 px-4 rounded-xl font-cinzel font-black text-sm tracking-wider uppercase transition-all shadow-xl ${
-              room.guestPlayer
-                ? 'bg-gradient-to-r from-[#ffd700] via-[#e8c84a] to-[#d4af37] text-black hover:brightness-110 active:scale-98 gold-glow cursor-pointer'
-                : 'bg-[#22180f] text-gray-500 border border-gray-700 cursor-not-allowed'
-            }`}
-          >
-            {room.guestPlayer ? t('duelStartBattle') : `⏳ ${t('duelWaitingOpponent')}`}
-          </button>
+          <div className="space-y-2">
+            {!room.guestPlayer && (
+              <button
+                onClick={addBot}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#2e1d10] to-[#1a1109] border border-[#ffd700]/70 hover:border-[#ffd700] text-xs font-cinzel font-bold text-[#ffd700] hover:brightness-110 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md"
+              >
+                <span>🤖</span>
+                <span>Joacă / Testează cu Călugărul Bot Onufrie (AI)</span>
+              </button>
+            )}
+
+            <button
+              onClick={startGame}
+              disabled={!room.guestPlayer}
+              className={`w-full py-3.5 px-4 rounded-xl font-cinzel font-black text-sm tracking-wider uppercase transition-all shadow-xl ${
+                room.guestPlayer
+                  ? 'bg-gradient-to-r from-[#ffd700] via-[#e8c84a] to-[#d4af37] text-black hover:brightness-110 active:scale-98 gold-glow cursor-pointer'
+                  : 'bg-[#22180f] text-gray-500 border border-gray-700 cursor-not-allowed'
+              }`}
+            >
+              {room.guestPlayer ? t('duelStartBattle') : `⏳ ${t('duelWaitingOpponent')}`}
+            </button>
+          </div>
         ) : (
           <div className="w-full py-3.5 px-4 rounded-xl bg-[#22180f] border border-[#e8c84a]/40 text-center font-cinzel text-xs text-[#ffd700] animate-pulse">
             ⏳ Așteptăm ca gazda ({room.hostPlayer.name}) să pornească duelul...

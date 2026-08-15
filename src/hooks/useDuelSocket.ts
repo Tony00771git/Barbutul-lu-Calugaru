@@ -14,6 +14,7 @@ export interface UseDuelSocketReturn {
     targetPoints?: number
   ) => void;
   joinRoom: (roomCode: string, guestPlayer: { id: string; name: string; avatarIcon: string; color: string }) => void;
+  addBot: () => void;
   startGame: () => void;
   skipReveal: () => void;
   submitAnswer: (optionIndex: number) => void;
@@ -152,6 +153,14 @@ export function useDuelSocket(): UseDuelSocketReturn {
     });
   }, [send]);
 
+  const addBot = useCallback(() => {
+    if (!room) return;
+    send({
+      type: 'add_bot',
+      roomCode: room.code,
+    });
+  }, [room, send]);
+
   const startGame = useCallback(() => {
     if (!room || !playerId) return;
     send({
@@ -236,6 +245,7 @@ export function useDuelSocket(): UseDuelSocketReturn {
     errorMessage,
     createRoom,
     joinRoom,
+    addBot,
     startGame,
     skipReveal,
     submitAnswer,

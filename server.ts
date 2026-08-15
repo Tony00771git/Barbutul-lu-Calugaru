@@ -120,6 +120,162 @@ function broadcastToRoom(roomCode: string, payload: any) {
   });
 }
 
+function processAnswer(roomCode: string, playerId: string, optionIndex: number) {
+  const room = rooms.get(roomCode);
+  if (!room || room.status !== 'in_game' || room.phase !== 'race') return;
+  if (room.lockedOutPlayerId === playerId) return;
+
+  const currentQ = room.deck[room.currentCardIndex % room.deck.length];
+  if (!currentQ) return;
+
+  const isCorrect = optionIndex === currentQ.correct;
+  const otherPlayerId = room.hostPlayer.id === playerId ? room.guestPlayer?.id : room.hostPlayer.id;
+
+  if (isCorrect) {
+    // Player answered correctly!
+    const winnerId = playerId;
+    const loserId = otherPlayerId || '';
+    const stake = room.stake;
+
+    // Update scores
+    if (room.scores[winnerId]) {
+      room.scores[winnerId].roundsWon += 1;
+      room.scores[winnerId].correct += 1;
+    }
+    if (loserId && room.scores[loserId]) {
+      if (stake.type === 'sips') {
+        room.scores[loserId].sipsTotal += stake.count;
+      } else {
+        room.scores[loserId].chugsTotal += 1;
+      }
+    }
+
+    // Check if either player reached targetPoints limit
+    const hostPts = (room.scores[room.hostPlayer.id]?.sipsTotal || 0) + 25 * (room.scores[room.hostPlayer.id]?.chugsTotal || 0);
+    const guestPts = room.guestPlayer ? ((room.scores[room.guestPlayer.id]?.sipsTotal || 0) + 25 * (room.scores[room.guestPlayer.id]?.chugsTotal || 0)) : 0;
+    const isTargetReached = hostPts >= room.targetPoints || guestPts >= room.targetPoints;
+    const targetLoserId = hostPts >= room.targetPoints ? room.hostPlayer.id : (guestPts >= room.targetPoints && room.guestPlayer ? room.guestPlayer.id : null);
+
+    room.phase = 'resolution';
+    room.roundResult = {
+      winnerId,
+      loserIds: loserId ? [loserId] : [],
+      stakeType: stake.type,
+      stakeAmount: stake.count,
+      correctAnswerRo: currentQ.a_ro[currentQ.correct],
+      correctAnswerEn: currentQ.a_en[currentQ.correct],
+      reason: room.lockedOutPlayerId ? 'rebound_correct' : 'first_correct',
+      drinkCountdownEndsAt: null,
+      isTargetReached,
+      targetLoserId,
+    };
+
+    broadcastToRoom(roomCode, {
+      type: 'round_resolved',
+      room: getSanitizedRoom(room),
+    });
+
+    // If bot has to drink, auto-start drink timer
+    if (room.guestPlayer?.id === 'bot_onufrie' && loserId === 'bot_onufrie') {
+      setTimeout(() => {
+        const cur = rooms.get(roomCode);
+        if (cur && cur.phase === 'resolution' && cur.roundResult && !cur.roundResult.drinkCountdownEndsAt) {
+          cur.roundResult.drinkCountdownEndsAt = Date.now() + 10000;
+          broadcastToRoom(roomCode, {
+            type: 'drink_timer_started',
+            room: getSanitizedRoom(cur),
+          });
+        }
+      }, 1200);
+    }
+  } else {
+    // Player answered wrong!
+    if (room.scores[playerId]) {
+      room.scores[playerId].wrong += 1;
+    }
+
+    if (!room.lockedOutPlayerId) {
+      // First wrong answer -> Lock this player out
+      room.lockedOutPlayerId = playerId;
+
+      broadcastToRoom(roomCode, {
+        type: 'first_wrong',
+        lockedOutPlayerId: playerId,
+        otherPlayerId: otherPlayerId || null,
+        room: getSanitizedRoom(room),
+      });
+
+      // If other player is bot, trigger bot rebound answer
+      if (otherPlayerId === 'bot_onufrie') {
+        checkAndTriggerBot(roomCode, 1500 + Math.random() * 1500);
+      }
+    } else {
+      // Both players answered wrong!
+      const stake = room.stake;
+
+      // Both drink
+      [room.hostPlayer.id, room.guestPlayer?.id].filter(Boolean).forEach(pId => {
+        if (pId && room.scores[pId]) {
+          if (stake.type === 'sips') {
+            room.scores[pId].sipsTotal += stake.count;
+          } else {
+            room.scores[pId].chugsTotal += 1;
+          }
+        }
+      });
+
+      // Check if either player reached targetPoints limit
+      const hostPts = (room.scores[room.hostPlayer.id]?.sipsTotal || 0) + 25 * (room.scores[room.hostPlayer.id]?.chugsTotal || 0);
+      const guestPts = room.guestPlayer ? ((room.scores[room.guestPlayer.id]?.sipsTotal || 0) + 25 * (room.scores[room.guestPlayer.id]?.chugsTotal || 0)) : 0;
+      const isTargetReached = hostPts >= room.targetPoints || guestPts >= room.targetPoints;
+      const targetLoserId = hostPts >= room.targetPoints ? room.hostPlayer.id : (guestPts >= room.targetPoints && room.guestPlayer ? room.guestPlayer.id : null);
+
+      room.phase = 'resolution';
+      room.roundResult = {
+        winnerId: null,
+        loserIds: [room.hostPlayer.id, room.guestPlayer?.id].filter(Boolean) as string[],
+        stakeType: stake.type,
+        stakeAmount: stake.count,
+        correctAnswerRo: currentQ.a_ro[currentQ.correct],
+        correctAnswerEn: currentQ.a_en[currentQ.correct],
+        reason: 'both_wrong',
+        drinkCountdownEndsAt: null,
+        isTargetReached,
+        targetLoserId,
+      };
+
+      broadcastToRoom(roomCode, {
+        type: 'round_resolved',
+        room: getSanitizedRoom(room),
+      });
+    }
+  }
+}
+
+function checkAndTriggerBot(roomCode: string, delayMs = 2800 + Math.random() * 2000) {
+  const room = rooms.get(roomCode);
+  if (!room || room.status !== 'in_game' || room.guestPlayer?.id !== 'bot_onufrie') return;
+
+  const currentRound = room.currentRound;
+  setTimeout(() => {
+    const cur = rooms.get(roomCode);
+    if (!cur || cur.status !== 'in_game' || cur.phase !== 'race' || cur.currentRound !== currentRound) return;
+    if (cur.lockedOutPlayerId === 'bot_onufrie') return;
+
+    const currentQ = cur.deck[cur.currentCardIndex % cur.deck.length];
+    if (!currentQ) return;
+
+    // 75% accuracy for AI monk
+    let chosenOption = currentQ.correct;
+    if (Math.random() > 0.75) {
+      const wrongOptions = [0, 1, 2, 3].filter(idx => idx !== currentQ.correct);
+      chosenOption = wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
+    }
+
+    processAnswer(roomCode, 'bot_onufrie', chosenOption);
+  }, delayMs);
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -213,6 +369,30 @@ async function startServer() {
               playerId: host.id,
             })
           );
+        } else if (type === 'add_bot') {
+          const { roomCode } = msg;
+          const code = (roomCode || '').toUpperCase().trim();
+          const room = rooms.get(code);
+
+          if (!room || room.status !== 'lobby') return;
+
+          const botGuest: DuelPlayerInfo = {
+            id: 'bot_onufrie',
+            name: 'Călugărul Onufrie (AI)',
+            avatarIcon: 'monk_drunk',
+            color: '#e05c3a',
+            isHost: false,
+            connected: true,
+          };
+
+          room.guestPlayer = botGuest;
+          room.scores[botGuest.id] = { sipsTotal: 0, chugsTotal: 0, roundsWon: 0, correct: 0, wrong: 0 };
+
+          broadcastToRoom(code, {
+            type: 'player_joined',
+            room: getSanitizedRoom(room),
+            joinedPlayer: botGuest,
+          });
         } else if (type === 'join_room') {
           const { roomCode, guestPlayer } = msg;
           const code = (roomCode || '').toUpperCase().trim();
@@ -312,118 +492,13 @@ async function startServer() {
             phase: 'race',
             room: getSanitizedRoom(room),
           });
+
+          // Trigger bot if in room
+          checkAndTriggerBot(code);
         } else if (type === 'submit_answer') {
           const { roomCode, playerId, optionIndex } = msg;
           const code = (roomCode || '').toUpperCase().trim();
-          const room = rooms.get(code);
-
-          if (!room || room.status !== 'in_game' || room.phase !== 'race') return;
-          if (room.lockedOutPlayerId === playerId) return; // Player already failed this round
-
-          const currentQ = room.deck[room.currentCardIndex % room.deck.length];
-          const isCorrect = optionIndex === currentQ.correct;
-          const otherPlayerId = room.hostPlayer.id === playerId ? room.guestPlayer?.id : room.hostPlayer.id;
-
-          if (isCorrect) {
-            // Player answered correctly!
-            const winnerId = playerId;
-            const loserId = otherPlayerId!;
-            const stake = room.stake;
-
-            // Update scores
-            if (room.scores[winnerId]) {
-              room.scores[winnerId].roundsWon += 1;
-              room.scores[winnerId].correct += 1;
-            }
-            if (room.scores[loserId]) {
-              if (stake.type === 'sips') {
-                room.scores[loserId].sipsTotal += stake.count;
-              } else {
-                room.scores[loserId].chugsTotal += 1;
-              }
-            }
-
-            // Check if either player reached targetPoints limit
-            const hostPts = (room.scores[room.hostPlayer.id]?.sipsTotal || 0) + 25 * (room.scores[room.hostPlayer.id]?.chugsTotal || 0);
-            const guestPts = room.guestPlayer ? ((room.scores[room.guestPlayer.id]?.sipsTotal || 0) + 25 * (room.scores[room.guestPlayer.id]?.chugsTotal || 0)) : 0;
-            const isTargetReached = hostPts >= room.targetPoints || guestPts >= room.targetPoints;
-            const targetLoserId = hostPts >= room.targetPoints ? room.hostPlayer.id : (guestPts >= room.targetPoints && room.guestPlayer ? room.guestPlayer.id : null);
-
-            room.phase = 'resolution';
-            room.roundResult = {
-              winnerId,
-              loserIds: [loserId],
-              stakeType: stake.type,
-              stakeAmount: stake.count,
-              correctAnswerRo: currentQ.a_ro[currentQ.correct],
-              correctAnswerEn: currentQ.a_en[currentQ.correct],
-              reason: room.lockedOutPlayerId ? 'rebound_correct' : 'first_correct',
-              drinkCountdownEndsAt: null,
-              isTargetReached,
-              targetLoserId,
-            };
-
-            broadcastToRoom(code, {
-              type: 'round_resolved',
-              room: getSanitizedRoom(room),
-            });
-          } else {
-            // Player answered wrong!
-            if (room.scores[playerId]) {
-              room.scores[playerId].wrong += 1;
-            }
-
-            if (!room.lockedOutPlayerId) {
-              // First wrong answer -> Lock this player out
-              room.lockedOutPlayerId = playerId;
-
-              broadcastToRoom(code, {
-                type: 'first_wrong',
-                lockedOutPlayerId: playerId,
-                otherPlayerId: otherPlayerId,
-                room: getSanitizedRoom(room),
-              });
-            } else {
-              // Both players answered wrong!
-              const stake = room.stake;
-
-              // Both drink
-              [room.hostPlayer.id, room.guestPlayer?.id].filter(Boolean).forEach(pId => {
-                if (pId && room.scores[pId]) {
-                  if (stake.type === 'sips') {
-                    room.scores[pId].sipsTotal += stake.count;
-                  } else {
-                    room.scores[pId].chugsTotal += 1;
-                  }
-                }
-              });
-
-              // Check if either player reached targetPoints limit
-              const hostPts = (room.scores[room.hostPlayer.id]?.sipsTotal || 0) + 25 * (room.scores[room.hostPlayer.id]?.chugsTotal || 0);
-              const guestPts = room.guestPlayer ? ((room.scores[room.guestPlayer.id]?.sipsTotal || 0) + 25 * (room.scores[room.guestPlayer.id]?.chugsTotal || 0)) : 0;
-              const isTargetReached = hostPts >= room.targetPoints || guestPts >= room.targetPoints;
-              const targetLoserId = hostPts >= room.targetPoints ? room.hostPlayer.id : (guestPts >= room.targetPoints && room.guestPlayer ? room.guestPlayer.id : null);
-
-              room.phase = 'resolution';
-              room.roundResult = {
-                winnerId: null,
-                loserIds: [room.hostPlayer.id, room.guestPlayer?.id].filter(Boolean) as string[],
-                stakeType: stake.type,
-                stakeAmount: stake.count,
-                correctAnswerRo: currentQ.a_ro[currentQ.correct],
-                correctAnswerEn: currentQ.a_en[currentQ.correct],
-                reason: 'both_wrong',
-                drinkCountdownEndsAt: null,
-                isTargetReached,
-                targetLoserId,
-              };
-
-              broadcastToRoom(code, {
-                type: 'round_resolved',
-                room: getSanitizedRoom(room),
-              });
-            }
-          }
+          processAnswer(code, playerId, optionIndex);
         } else if (type === 'start_drink_timer') {
           const { roomCode, playerId } = msg;
           const code = (roomCode || '').toUpperCase().trim();
