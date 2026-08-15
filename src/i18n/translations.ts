@@ -15,6 +15,8 @@ export const translations = {
     tabScore: "SCOR",
     tabCustomize: "CUSTOMIZE",
     tabRules: "Reguli",
+    tabCloudLogin: "Conectează-te",
+    tabCloudAccount: "Cont Cloud",
 
     // Setup
     selectMode: "Alege Modul de Joc",
@@ -218,6 +220,8 @@ export const translations = {
     tabScore: "SCORE",
     tabCustomize: "CUSTOMIZE",
     tabRules: "Rules",
+    tabCloudLogin: "Log In",
+    tabCloudAccount: "Cloud Account",
 
     // Setup
     selectMode: "Choose Game Mode",

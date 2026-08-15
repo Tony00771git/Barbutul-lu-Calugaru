@@ -148,11 +148,11 @@ function MainAppContent() {
                 ? 'bg-gradient-to-r from-emerald-950 to-[#122415] border-emerald-500/50 text-emerald-300 hover:brightness-110'
                 : 'bg-gradient-to-r from-[#2a1708] to-[#1a1005] border-[#ffd700]/40 text-[#ffd700] hover:brightness-110'
             }`}
-            title="Firebase Cloud Cont & Top Global"
+            title={t('tabCloudAccount')}
           >
             <span>{user ? '🟢' : '☁️'}</span>
-            <span className="truncate max-w-[80px] sm:max-w-none">
-              {user ? (cloudProfile?.displayName || user.displayName || 'Cont Cloud') : 'Firebase'}
+            <span className="truncate max-w-[110px] sm:max-w-none">
+              {user ? (cloudProfile?.displayName || user.displayName || t('tabCloudAccount')) : t('tabCloudLogin')}
             </span>
           </button>
 

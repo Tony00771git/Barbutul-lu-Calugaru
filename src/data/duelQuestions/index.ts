@@ -1,21 +1,25 @@
 import { DuelDifficulty, DuelQuestion, DuelSubmode } from '../../types';
 import { generalEasyQuestions } from './generalEasy';
 import { generalMediumQuestions } from './generalMedium';
+import { generalMediumExtraQuestions } from './generalMediumExtra';
 import { generalHardQuestions } from './generalHard';
+import { generalHardExtraQuestions } from './generalHardExtra';
 import { footballEasyQuestions } from './footballEasy';
 import { footballMediumQuestions } from './footballMedium';
+import { footballMediumExtraQuestions } from './footballMediumExtra';
 import { footballHardQuestions } from './footballHard';
+import { footballHardExtraQuestions } from './footballHardExtra';
 
 export const allDuelQuestionsMap: Record<DuelSubmode, Record<DuelDifficulty, DuelQuestion[]>> = {
   general: {
     easy: generalEasyQuestions,
-    medium: generalMediumQuestions,
-    hard: generalHardQuestions,
+    medium: [...generalMediumQuestions, ...generalMediumExtraQuestions],
+    hard: [...generalHardQuestions, ...generalHardExtraQuestions],
   },
   football: {
     easy: footballEasyQuestions,
-    medium: footballMediumQuestions,
-    hard: footballHardQuestions,
+    medium: [...footballMediumQuestions, ...footballMediumExtraQuestions],
+    hard: [...footballHardQuestions, ...footballHardExtraQuestions],
   },
 };
 
