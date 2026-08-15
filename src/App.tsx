@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { GameMode, Difficulty, CustomDoubles, Player, ThemeId, DuelSubmode, DuelDifficulty } from './types';
 import { SetupScreen } from './components/SetupScreen';
 import { NormalGame } from './components/NormalGame';
@@ -9,6 +10,7 @@ import { Podium } from './components/Podium';
 import { ScoreModal } from './components/ScoreModal';
 import { CustomizeTab } from './components/CustomizeTab';
 import { RulesModal } from './components/RulesModal';
+import { CloudAccountModal } from './components/CloudAccountModal';
 import { ThemeBackground } from './components/ThemeBackground';
 import { LegendaryBanner } from './components/LegendaryBanner';
 import { useDuelSocket } from './hooks/useDuelSocket';
@@ -17,6 +19,7 @@ type AppScreen = 'setup' | 'normal' | 'boardgame' | 'duel' | 'podium';
 
 function MainAppContent() {
   const { theme, t, activeLegendaryAchievement, dismissLegendaryAchievement } = useApp();
+  const { user, cloudProfile } = useAuth();
 
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('setup');
   const [gameMode, setGameMode] = useState<GameMode>('normal');
@@ -45,6 +48,7 @@ function MainAppContent() {
   const [showScoreModal, setShowScoreModal] = useState<boolean>(false);
   const [showCustomizeModal, setShowCustomizeModal] = useState<boolean>(false);
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
+  const [showCloudModal, setShowCloudModal] = useState<boolean>(false);
 
   const handleStartGame = (
     mode: GameMode,
@@ -136,6 +140,22 @@ function MainAppContent() {
         </button>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Cloud Account & Leaderboard Button */}
+          <button
+            onClick={() => setShowCloudModal(true)}
+            className={`py-1.5 px-2.5 sm:px-3 rounded-xl border text-xs font-cinzel font-bold flex items-center gap-1.5 shadow transition-all ${
+              user
+                ? 'bg-gradient-to-r from-emerald-950 to-[#122415] border-emerald-500/50 text-emerald-300 hover:brightness-110'
+                : 'bg-gradient-to-r from-[#2a1708] to-[#1a1005] border-[#ffd700]/40 text-[#ffd700] hover:brightness-110'
+            }`}
+            title="Firebase Cloud Cont & Top Global"
+          >
+            <span>{user ? '🟢' : '☁️'}</span>
+            <span className="truncate max-w-[80px] sm:max-w-none">
+              {user ? (cloudProfile?.displayName || user.displayName || 'Cont Cloud') : 'Firebase'}
+            </span>
+          </button>
+
           {/* Live Score Button */}
           <button
             onClick={() => setShowScoreModal(true)}
@@ -223,6 +243,11 @@ function MainAppContent() {
         gameMode={gameMode}
       />
 
+      <CloudAccountModal
+        isOpen={showCloudModal}
+        onClose={() => setShowCloudModal(false)}
+      />
+
       {showCustomizeModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl p-4 max-w-xl w-full max-h-[90vh] overflow-y-auto gold-glow">
@@ -251,8 +276,10 @@ function MainAppContent() {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainAppContent />
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <MainAppContent />
+      </AppProvider>
+    </AuthProvider>
   );
 }

@@ -4,6 +4,8 @@ import { useApp } from '../context/AppContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { MonkMascot } from './MonkMascot';
 import { UseDuelSocketReturn } from '../hooks/useDuelSocket';
+import { recordDuelMatchHistory } from '../lib/firestoreService';
+import { auth } from '../lib/firebase';
 
 interface DuelGameProps {
   socket: UseDuelSocketReturn;
@@ -187,6 +189,21 @@ export const DuelGame: React.FC<DuelGameProps> = ({
       [player1, player2].forEach(p => {
         updateProfileStats(p.name, p.sipsTotal, p.chugsTotal, p.avatarIcon);
       });
+
+      // If authenticated, record match in Firestore
+      if (auth.currentUser) {
+        const winner = room.winnerId === host.id ? host.name : (guest && room.winnerId === guest.id ? guest.name : undefined);
+        recordDuelMatchHistory({
+          matchId: `match_${Date.now()}_${room.code}`,
+          roomCode: room.code,
+          submode: room.submode,
+          difficulty: room.difficulty,
+          hostPlayerName: host.name,
+          guestPlayerName: guest ? guest.name : 'Jucător 2',
+          winnerName: winner,
+          roundsTotal: room.currentRound,
+        }).catch(err => console.warn('Could not record duel history in Firestore:', err));
+      }
 
       onEndGame([player1, player2]);
     }

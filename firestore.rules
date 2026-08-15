@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // User Profile Validation
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['userId', 'displayName', 'gamesPlayed', 'totalSips', 'totalChugs', 'createdAt', 'updatedAt']) &&
+        data.userId is string && data.userId == request.auth.uid &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 50 &&
+        (!('avatarIcon' in data) || (data.avatarIcon is string && data.avatarIcon.size() <= 64)) &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
+        data.gamesPlayed is number && data.gamesPlayed >= 0 &&
+        data.totalSips is number && data.totalSips >= 0 &&
+        data.totalChugs is number && data.totalChugs >= 0 &&
+        (!('duelWins' in data) || (data.duelWins is number && data.duelWins >= 0)) &&
+        (!('duelPlayed' in data) || (data.duelPlayed is number && data.duelPlayed >= 0)) &&
+        (!('unlockedAchievements' in data) || (data.unlockedAchievements is list && data.unlockedAchievements.size() <= 50)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Leaderboard Entry Validation
+    function isValidLeaderboardEntry(data) {
+      return data.keys().hasAll(['userId', 'displayName', 'totalSips', 'totalChugs', 'duelWins', 'duelPlayed', 'updatedAt']) &&
+        data.userId is string && data.userId == request.auth.uid &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 50 &&
+        (!('avatarIcon' in data) || (data.avatarIcon is string && data.avatarIcon.size() <= 64)) &&
+        data.totalSips is number && data.totalSips >= 0 &&
+        data.totalChugs is number && data.totalChugs >= 0 &&
+        data.duelWins is number && data.duelWins >= 0 &&
+        data.duelPlayed is number && data.duelPlayed >= 0 &&
+        data.updatedAt is timestamp;
+    }
+
+    // Duel History Validation
+    function isValidDuelHistory(data) {
+      return data.keys().hasAll(['matchId', 'roomCode', 'submode', 'difficulty', 'hostPlayerName', 'guestPlayerName', 'roundsTotal', 'creatorUid', 'createdAt']) &&
+        data.matchId is string && data.matchId.size() <= 128 &&
+        data.roomCode is string && data.roomCode.size() <= 10 &&
+        data.submode in ['general', 'football'] &&
+        data.difficulty in ['easy', 'medium', 'hard'] &&
+        data.hostPlayerName is string && data.hostPlayerName.size() >= 1 && data.hostPlayerName.size() <= 50 &&
+        data.guestPlayerName is string && data.guestPlayerName.size() >= 1 && data.guestPlayerName.size() <= 50 &&
+        (!('winnerName' in data) || (data.winnerName is string && data.winnerName.size() <= 50)) &&
+        data.roundsTotal is number && data.roundsTotal >= 0 &&
+        data.creatorUid is string && data.creatorUid == request.auth.uid &&
+        data.createdAt is timestamp;
+    }
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User Profiles Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Private profiles cannot be listed
+      allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+      allow delete: if isOwner(userId);
+    }
+
+    // Global Leaderboard Collection
+    match /leaderboards/{userId} {
+      allow get, list: if true; // Public tavern rankings
+      allow create: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidLeaderboardEntry(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow update: if isOwner(userId) &&
+        isValidId(userId) &&
+        isValidLeaderboardEntry(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().updatedAt == request.time;
+      allow delete: if isOwner(userId);
+    }
+
+    // Match Duel Histories Collection
+    match /duel_histories/{matchId} {
+      allow get, list: if true; // Public tavern duel logs
+      allow create: if isSignedIn() &&
+        isValidId(matchId) &&
+        isValidDuelHistory(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update, delete: if false; // Completed duel history is immutable
+    }
+  }
+}

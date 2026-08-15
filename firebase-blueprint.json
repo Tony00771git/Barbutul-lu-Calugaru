@@ -1,0 +1,183 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile storing stats, achievements, and preferences",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "User auth UID",
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Public player display name",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "avatarIcon": {
+          "type": "string",
+          "description": "Selected avatar identifier",
+          "maxLength": 64
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address if provided",
+          "maxLength": 256
+        },
+        "gamesPlayed": {
+          "type": "number",
+          "description": "Total number of games played"
+        },
+        "totalSips": {
+          "type": "number",
+          "description": "Total sips (guri) accumulated"
+        },
+        "totalChugs": {
+          "type": "number",
+          "description": "Total chugs (gropi) accumulated"
+        },
+        "duelWins": {
+          "type": "number",
+          "description": "Total 1v1 duel victories"
+        },
+        "duelPlayed": {
+          "type": "number",
+          "description": "Total 1v1 duel matches played"
+        },
+        "unlockedAchievements": {
+          "type": "array",
+          "description": "List of unlocked achievement IDs"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of profile creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last update"
+        }
+      },
+      "required": ["userId", "displayName", "gamesPlayed", "totalSips", "totalChugs", "createdAt", "updatedAt"]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Public ranking entry for global tavern drinking and duel leaderboard",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID",
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Public player name",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "avatarIcon": {
+          "type": "string",
+          "description": "Avatar key",
+          "maxLength": 64
+        },
+        "totalSips": {
+          "type": "number",
+          "description": "Total sips consumed"
+        },
+        "totalChugs": {
+          "type": "number",
+          "description": "Total chugs consumed"
+        },
+        "duelWins": {
+          "type": "number",
+          "description": "Total duel matches won"
+        },
+        "duelPlayed": {
+          "type": "number",
+          "description": "Total duel matches played"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last score update"
+        }
+      },
+      "required": ["userId", "displayName", "totalSips", "totalChugs", "duelWins", "duelPlayed", "updatedAt"]
+    },
+    "DuelHistory": {
+      "title": "DuelHistory",
+      "description": "Record of a completed 1v1 tavern duel match",
+      "type": "object",
+      "properties": {
+        "matchId": {
+          "type": "string",
+          "description": "Unique match identifier",
+          "maxLength": 128
+        },
+        "roomCode": {
+          "type": "string",
+          "description": "Room 4-letter code",
+          "maxLength": 10
+        },
+        "submode": {
+          "type": "string",
+          "description": "Submode (general, football)",
+          "enum": ["general", "football"]
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "Difficulty (easy, medium, hard)",
+          "enum": ["easy", "medium", "hard"]
+        },
+        "hostPlayerName": {
+          "type": "string",
+          "description": "Host player name",
+          "maxLength": 50
+        },
+        "guestPlayerName": {
+          "type": "string",
+          "description": "Guest player name",
+          "maxLength": 50
+        },
+        "winnerName": {
+          "type": "string",
+          "description": "Winner name or null if draw",
+          "maxLength": 50
+        },
+        "roundsTotal": {
+          "type": "number",
+          "description": "Number of rounds played"
+        },
+        "creatorUid": {
+          "type": "string",
+          "description": "UID of the player submitting match result",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Match end timestamp"
+        }
+      },
+      "required": ["matchId", "roomCode", "submode", "difficulty", "hostPlayerName", "guestPlayerName", "roundsTotal", "creatorUid", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Private and editable user player profile"
+    },
+    "/leaderboards/{userId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Publicly readable tavern leaderboard scores"
+    },
+    "/duel_histories/{matchId}": {
+      "schema": "DuelHistory",
+      "description": "Publicly readable duel game history record"
+    }
+  }
+}
