@@ -495,14 +495,23 @@ export const BoardGame: React.FC<BoardGameProps> = ({
     const sips = res.sips || 0;
     const isChug = !!res.chug;
     setTurnResult({
-      title: isChug ? '🔥 CARTE: GROAPĂ!' : sips > 0 ? '🍺 CARTE: PEDEAPSĂ!' : '✨ CARTE EXECUTATĂ!',
-      reason: `Ai tras cartea: "${cardTitle}"`,
+      title: isChug
+        ? (language === 'ro' ? '🔥 CARTE: GROAPĂ!' : '🔥 CARD: CHUG!')
+        : sips > 0
+        ? (language === 'ro' ? '🍺 CARTE: PEDEAPSĂ!' : '🍺 CARD: PENALTY!')
+        : (language === 'ro' ? '✨ CARTE EXECUTATĂ!' : '✨ CARD EXECUTED!'),
+      reason: language === 'ro' ? `Ai tras cartea: "${cardTitle}"` : `You drew the card: "${cardTitle}"`,
       sipsToDrink: sips,
       isChug: isChug,
       isImmune: sips === 0 && !isChug,
-      specialNote: language === 'ro' ? res.messageRo : res.messageEn,
+      specialNote: language === 'ro' ? (activeCard.effectRo) : (activeCard.effectEn),
     });
-    addLog(`${activePlayer.name} a tras cartea "${cardTitle}"`, 'card');
+    addLog(
+      language === 'ro'
+        ? `${activePlayer.name} a tras cartea "${cardTitle}"`
+        : `${activePlayer.name} drew card "${cardTitle}"`,
+      'card'
+    );
   };
 
   // Surrender / Give up
@@ -519,7 +528,12 @@ export const BoardGame: React.FC<BoardGameProps> = ({
     }));
 
     setShowGiveUpConfirm(false);
-    addLog(`🏳️ ${activePlayer.name} s-a predat și a părăsit mănăstirea!`, 'jail');
+    addLog(
+      language === 'ro'
+        ? `🏳️ ${activePlayer.name} s-a predat și a părăsit mănăstirea!`
+        : `🏳️ ${activePlayer.name} surrendered and left the monastery!`,
+      'jail'
+    );
 
     const remaining = players.filter(p => !p.hasGivenUp && p.id !== activePlayer.id);
     if (remaining.length <= 1) {
@@ -720,11 +734,11 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             <div className="flex items-center gap-1.5">
               <span className="text-xs sm:text-sm">🏰</span>
               <span className="text-[11px] sm:text-xs font-cinzel font-bold text-[#ffd700] tracking-wider">
-                MĂNĂSTIREA VESELĂ
+                {language === 'ro' ? 'MĂNĂSTIREA VESELĂ' : 'MERRY MONASTERY'}
               </span>
             </div>
             <div className="text-[9px] sm:text-[10px] font-cinzel text-gray-400 flex items-center gap-1">
-              <span>↻ 30 Chilii</span>
+              <span>{language === 'ro' ? '↻ 30 Chilii' : '↻ 30 Cells'}</span>
             </div>
           </div>
 
@@ -738,7 +752,9 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               isDrinking={isMoving}
             />
             <div className="text-[10px] sm:text-[11px] font-cinzel text-[#ffd700] font-bold">
-              {isMoving ? `🎲 ${activePlayer.name} înaintează...` : `Tura lui ${activePlayer.name}`}
+              {isMoving
+                ? (language === 'ro' ? `🎲 ${activePlayer.name} înaintează...` : `🎲 ${activePlayer.name} is moving...`)
+                : (language === 'ro' ? `Tura lui ${activePlayer.name}` : `${activePlayer.name}'s turn`)}
             </div>
 
             {/* Live Mini Tavern Chronicle Log */}
@@ -855,16 +871,25 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               return p;
             }));
 
-            addLog(`${activePlayer.name} a cumpărat ${tileName} pentru ${price} Galbeni 🏰!`, 'buy');
+            addLog(
+              language === 'ro'
+                ? `${activePlayer.name} a cumpărat ${tileName} pentru ${price} Galbeni 🏰!`
+                : `${activePlayer.name} purchased ${tileName} for ${price} Gold 🏰!`,
+              'buy'
+            );
             setPendingBuyTile(null);
 
             setTurnResult({
-              title: '🏰 PROPRIETATE ACHIZIȚIONATĂ!',
-              reason: `Ai cumpărat ${tileName} (Tile #${pendingBuyTile.index}) pentru ${price} Galbeni!`,
+              title: language === 'ro' ? '🏰 PROPRIETATE ACHIZIȚIONATĂ!' : '🏰 PROPERTY ACQUIRED!',
+              reason: language === 'ro'
+                ? `Ai cumpărat ${tileName} (Tile #${pendingBuyTile.index}) pentru ${price} Galbeni!`
+                : `You purchased ${tileName} (Tile #${pendingBuyTile.index}) for ${price} Gold!`,
               sipsToDrink: sipsDue,
               isChug: isChug,
               isImmune: false,
-              specialNote: `Proprietatea îți aparține acum! Pentru a sfinți achiziția, bei ${isChug ? 'o GROAPĂ' : `${sipsDue} guri de bere`} (în turele viitoare când pici pe ea nu vei mai bea nimic!).`,
+              specialNote: language === 'ro'
+                ? `Proprietatea îți aparține acum! Pentru a sfinți achiziția, bei ${isChug ? 'o GROAPĂ' : `${sipsDue} guri de bere`} (în turele viitoare când pici pe ea nu vei mai bea nimic!).`
+                : `The sanctuary is now yours! To bless your purchase, drink ${isChug ? 'a CHUG' : `${sipsDue} sips of beer`} (future landings here are completely safe!).`,
             });
           }}
           onSkip={() => {
@@ -874,14 +899,21 @@ export const BoardGame: React.FC<BoardGameProps> = ({
 
             const sipsDue = tile.sipsCount || 2;
             setTurnResult({
-              title: '🍺 AI REFUZAT CUMPĂRAREA!',
-              reason: `Ai ales să nu cumperi ${tileName}. Pedeapsă:`,
+              title: language === 'ro' ? '🍺 AI REFUZAT CUMPĂRAREA!' : '🍺 PURCHASE DECLINED!',
+              reason: language === 'ro' ? `Ai ales să nu cumperi ${tileName}. Pedeapsă:` : `You chose not to purchase ${tileName}. Penalty:`,
               sipsToDrink: sipsDue,
               isChug: tile.type === 'chug',
               isImmune: false,
-              specialNote: `Bei ${sipsDue} guri de bere pentru ezitare!`,
+              specialNote: language === 'ro'
+                ? `Bei ${sipsDue} guri de bere pentru ezitare!`
+                : `Drink ${sipsDue} sips of beer for hesitating!`,
             });
-            addLog(`${activePlayer.name} a refuzat cumpărarea la ${tileName} și bea ${sipsDue} guri.`, 'drink');
+            addLog(
+              language === 'ro'
+                ? `${activePlayer.name} a refuzat cumpărarea la ${tileName} și bea ${sipsDue} guri.`
+                : `${activePlayer.name} declined buying ${tileName} and drinks ${sipsDue} sips.`,
+              'drink'
+            );
           }}
         />
       )}
@@ -898,7 +930,12 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               return p;
             }));
             setShowJailModal(false);
-            addLog(`${activePlayer.name} a plătit 10 Galbeni cauțiune și a ieșit din temniță!`, 'jail');
+            addLog(
+              language === 'ro'
+                ? `${activePlayer.name} a plătit 10 Galbeni cauțiune și a ieșit din temniță!`
+                : `${activePlayer.name} paid 10 Gold bail and left jail!`,
+              'jail'
+            );
           }}
           onUseKey={() => {
             setPlayers(prev => prev.map((p, idx) => {
@@ -908,7 +945,12 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               return p;
             }));
             setShowJailModal(false);
-            addLog(`${activePlayer.name} a folosit o Cheie de Temniță 🔓!`, 'jail');
+            addLog(
+              language === 'ro'
+                ? `${activePlayer.name} a folosit o Cheie de Temniță 🔓!`
+                : `${activePlayer.name} used a Dungeon Key 🔓!`,
+              'jail'
+            );
           }}
           onWait={() => {
             setPlayers(prev => prev.map((p, idx) => {
@@ -923,7 +965,12 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               return p;
             }));
             setShowJailModal(false);
-            addLog(`${activePlayer.name} își ispășește pedeapsa în temniță.`, 'jail');
+            addLog(
+              language === 'ro'
+                ? `${activePlayer.name} își ispășește pedeapsa în temniță.`
+                : `${activePlayer.name} serves their time in jail.`,
+              'jail'
+            );
             advanceTurn();
           }}
         />
@@ -943,24 +990,34 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             if (isCorrect) {
               setPlayers(prev => prev.map((p, idx) => idx === activePlayerIndex ? { ...p, pardonLetters: p.pardonLetters + 1, gold: p.gold + 5 } : p));
               setTurnResult({
-                title: '🧠 RĂSPUNS CORECT!',
-                reason: 'Ai dat răspunsul corect la întrebarea de cultură!',
+                title: language === 'ro' ? '🧠 RĂSPUNS CORECT!' : '🧠 CORRECT ANSWER!',
+                reason: language === 'ro' ? 'Ai dat răspunsul corect la întrebarea de cultură!' : 'You answered the trivia question correctly!',
                 sipsToDrink: 0,
                 isChug: false,
                 isImmune: true,
-                specialNote: 'Ai primit +1 Scrisoare de Iertare 🎟️ și +5 Galbeni 🪙!',
+                specialNote: language === 'ro' ? 'Ai primit +1 Scrisoare de Iertare 🎟️ și +5 Galbeni 🪙!' : 'Awarded +1 Pardon Letter 🎟️ and +5 Gold 🪙!',
               });
-              addLog(`${activePlayer.name} a răspuns CORECT la Trivia (+1 Iertare)!`, 'card');
+              addLog(
+                language === 'ro'
+                  ? `${activePlayer.name} a răspuns CORECT la Trivia (+1 Iertare)!`
+                  : `${activePlayer.name} answered CORRECTLY to Trivia (+1 Pardon)!`,
+                'card'
+              );
             } else {
               setTurnResult({
-                title: '🧠 RĂSPUNS GREȘIT!',
-                reason: 'Nu ai știut răspunsul la întrebarea mănăstirească.',
+                title: language === 'ro' ? '🧠 RĂSPUNS GREȘIT!' : '🧠 WRONG ANSWER!',
+                reason: language === 'ro' ? 'Nu ai știut răspunsul la întrebarea mănăstirească.' : 'You missed the answer to the monastery question.',
                 sipsToDrink: 5,
                 isChug: false,
                 isImmune: false,
-                specialNote: 'Pedeapsă: Bei 5 guri zdravene de bere!',
+                specialNote: language === 'ro' ? 'Pedeapsă: Bei 5 guri zdravene de bere!' : 'Penalty: Drink 5 hefty sips of beer!',
               });
-              addLog(`${activePlayer.name} a greșit la Trivia (5 guri)!`, 'drink');
+              addLog(
+                language === 'ro'
+                  ? `${activePlayer.name} a greșit la Trivia (5 guri)!`
+                  : `${activePlayer.name} missed Trivia (5 sips)!`,
+                'drink'
+              );
             }
           }}
         />
@@ -974,24 +1031,34 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             if (resultType === 'monks') {
               setPlayers(prev => prev.map((p, idx) => idx !== activePlayerIndex ? { ...p, sipsTotal: p.sipsTotal + 3 } : p));
               setTurnResult({
-                title: '🎰 3 CĂLUGĂRI LA SLOT!',
-                reason: 'Ai tras 3 Călugări identici la Slotul Sfânt!',
+                title: language === 'ro' ? '🎰 3 CĂLUGĂRI LA SLOT!' : '🎰 3 MONKS ON SLOTS!',
+                reason: language === 'ro' ? 'Ai tras 3 Călugări identici la Slotul Sfânt!' : 'You rolled 3 matching Monks on the holy slot machine!',
                 sipsToDrink: 0,
                 isChug: false,
                 isImmune: true,
-                specialNote: 'Toți ceilalți jucători beau câte 3 guri fiecare!',
+                specialNote: language === 'ro' ? 'Toți ceilalți jucători beau câte 3 guri fiecare!' : 'All other players drink 3 sips each!',
               });
-              addLog(`${activePlayer.name} a dat 3 Călugări la Slot! Toți ceilalți beau 3 guri!`, 'card');
+              addLog(
+                language === 'ro'
+                  ? `${activePlayer.name} a dat 3 Călugări la Slot! Toți ceilalți beau 3 guri!`
+                  : `${activePlayer.name} hit 3 Monks on Slots! All others drink 3 sips!`,
+                'card'
+              );
             } else if (resultType === 'beers') {
               setTurnResult({
-                title: '🎰 3 BERI LA SLOT!',
-                reason: 'Ai tras 3 Halbe de bere la Slotul Sfânt!',
+                title: language === 'ro' ? '🎰 3 BERI LA SLOT!' : '🎰 3 BEERS ON SLOTS!',
+                reason: language === 'ro' ? 'Ai tras 3 Halbe de bere la Slotul Sfânt!' : 'You rolled 3 Beer Steins on the holy slot machine!',
                 sipsToDrink: 3,
                 isChug: false,
                 isImmune: false,
-                specialNote: 'Bei 3 guri de bere proaspătă!',
+                specialNote: language === 'ro' ? 'Bei 3 guri de bere proaspătă!' : 'Drink 3 sips of freshly brewed monastery beer!',
               });
-              addLog(`${activePlayer.name} a nimerit 3 Beri la Slot (3 guri).`, 'drink');
+              addLog(
+                language === 'ro'
+                  ? `${activePlayer.name} a nimerit 3 Beri la Slot (3 guri).`
+                  : `${activePlayer.name} hit 3 Beers on Slots (3 sips).`,
+                'drink'
+              );
             } else if (resultType === 'sevens') {
               setPlayers(prev => {
                 let totalStolen = 0;
@@ -1012,14 +1079,21 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               });
               setParticleType('chug');
               setTurnResult({
-                title: '🎰 JACKPOT: 7-7-7 SACRU! 🔥',
-                reason: 'Ai nimerit Marele Jackpot 7-7-7!',
+                title: language === 'ro' ? '🎰 JACKPOT: 7-7-7 SACRU! 🔥' : '🎰 SACRED 7-7-7 JACKPOT! 🔥',
+                reason: language === 'ro' ? 'Ai nimerit Marele Jackpot 7-7-7!' : 'You hit the Grand 7-7-7 Sacred Jackpot!',
                 sipsToDrink: 0,
                 isChug: false,
                 isImmune: true,
-                specialNote: 'Iei până la 10 Galbeni de la toți ceilalți ȘI toți ceilalți dau GROAPĂ / CHUG IT ALL!',
+                specialNote: language === 'ro'
+                  ? 'Iei până la 10 Galbeni de la toți ceilalți ȘI toți ceilalți dau GROAPĂ / CHUG IT ALL!'
+                  : 'Stole up to 10 Gold from everyone AND all other players must CHUG IT ALL!',
               });
-              addLog(`🎰 JACKPOT 7-7-7 pentru ${activePlayer.name}! GROAPĂ la toți ceilalți!`, 'gold');
+              addLog(
+                language === 'ro'
+                  ? `🎰 JACKPOT 7-7-7 pentru ${activePlayer.name}! GROAPĂ la toți ceilalți!`
+                  : `🎰 7-7-7 JACKPOT for ${activePlayer.name}! CHUG for all others!`,
+                'gold'
+              );
             }
           }}
         />
@@ -1033,20 +1107,25 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             setShowMerchantModal(false);
             setPlayers(prev => prev.map((p, idx) => idx === activePlayerIndex ? { ...p, gold: p.gold - 30, pardonLetters: p.pardonLetters + 1 } : p));
             setTurnResult({
-              title: '🧙 AFACERE CU VRĂJITORUL!',
-              reason: 'Ai cumpărat o Scrisoare de Iertare pentru 30 Galbeni.',
+              title: language === 'ro' ? '🧙 AFACERE CU VRĂJITORUL!' : '🧙 DEAL WITH THE WIZARD!',
+              reason: language === 'ro' ? 'Ai cumpărat o Scrisoare de Iertare pentru 30 Galbeni.' : 'You purchased a Pardon Letter for 30 Gold.',
               sipsToDrink: 0,
               isChug: false,
               isImmune: true,
-              specialNote: 'Ai adăugat 1 Scrisoare de Iertare 🎟️ în inventar!',
+              specialNote: language === 'ro' ? 'Ai adăugat 1 Scrisoare de Iertare 🎟️ în inventar!' : 'Added 1 Pardon Letter 🎟️ to your inventory!',
             });
-            addLog(`${activePlayer.name} a cumpărat o Scrisoare de Iertare 🎟️ de la Vrăjitor.`, 'card');
+            addLog(
+              language === 'ro'
+                ? `${activePlayer.name} a cumpărat o Scrisoare de Iertare 🎟️ de la Vrăjitor.`
+                : `${activePlayer.name} bought a Pardon Letter 🎟️ from the Wizard.`,
+              'card'
+            );
           }}
           onDecline={() => {
             setShowMerchantModal(false);
             setTurnResult({
-              title: '🧙 AI TRECUT DE VRĂJITOR',
-              reason: 'Ai refuzat oferta negustorului.',
+              title: language === 'ro' ? '🧙 AI TRECUT DE VRĂJITOR' : '🧙 PASSED THE WIZARD',
+              reason: language === 'ro' ? 'Ai refuzat oferta negustorului.' : 'You declined the merchant offer.',
               sipsToDrink: 0,
               isChug: false,
               isImmune: true,
@@ -1062,25 +1141,35 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             setShowTwoTruthsModal(false);
             if (guessed) {
               setTurnResult({
-                title: '🎭 AU GHICIT MINCIUNA!',
-                reason: 'Ceilalți frați au ghicit care era minciuna ta.',
+                title: language === 'ro' ? '🎭 AU GHICIT MINCIUNA!' : '🎭 LIE GUESSED!',
+                reason: language === 'ro' ? 'Ceilalți frați au ghicit care era minciuna ta.' : 'The other monks discovered your lie.',
                 sipsToDrink: 5,
                 isChug: false,
                 isImmune: false,
-                specialNote: 'Pedeapsă: Bei 5 guri de bere!',
+                specialNote: language === 'ro' ? 'Pedeapsă: Bei 5 guri de bere!' : 'Penalty: Drink 5 sips of beer!',
               });
-              addLog(`Ceilalți au ghicit minciuna lui ${activePlayer.name} (5 guri).`, 'drink');
+              addLog(
+                language === 'ro'
+                  ? `Ceilalți au ghicit minciuna lui ${activePlayer.name} (5 guri).`
+                  : `Others guessed ${activePlayer.name}'s lie (5 sips).`,
+                'drink'
+              );
             } else {
               setPlayers(prev => prev.map((p, idx) => idx !== activePlayerIndex ? { ...p, sipsTotal: p.sipsTotal + 3 } : p));
               setTurnResult({
-                title: '🎭 N-AU GHICIT MINCIUNA!',
-                reason: 'I-ai păcălit pe toți frații din mănăstire!',
+                title: language === 'ro' ? '🎭 N-AU GHICIT MINCIUNA!' : '🎭 LIE UNDISCOVERED!',
+                reason: language === 'ro' ? 'I-ai păcălit pe toți frații din mănăstire!' : 'You fooled all the monks in the abbey!',
                 sipsToDrink: 0,
                 isChug: false,
                 isImmune: true,
-                specialNote: 'Toți ceilalți jucători beau câte 3 guri!',
+                specialNote: language === 'ro' ? 'Toți ceilalți jucători beau câte 3 guri!' : 'All other players drink 3 sips each!',
               });
-              addLog(`${activePlayer.name} i-a păcălit pe toți la 2 Adevăruri (ceilalți beau 3 guri)!`, 'drink');
+              addLog(
+                language === 'ro'
+                  ? `${activePlayer.name} i-a păcălit pe toți la 2 Adevăruri (ceilalți beau 3 guri)!`
+                  : `${activePlayer.name} fooled everyone in 2 Truths (others drink 3 sips)!`,
+                'drink'
+              );
             }
           }}
         />
@@ -1099,14 +1188,23 @@ export const BoardGame: React.FC<BoardGameProps> = ({
 
             setPlayers(prev => prev.map(p => p.id === targetId ? { ...p, sipsTotal: p.sipsTotal + sips } : p));
             setTurnResult({
-              title: '👉 GURI ÎMPĂRȚITE!',
-              reason: `I-ai trimis ${sips} guri lui ${targetPlayer?.name || 'adversarului'}.`,
+              title: language === 'ro' ? '👉 GURI ÎMPĂRȚITE!' : '👉 SIPS DISTRIBUTED!',
+              reason: language === 'ro'
+                ? `I-ai trimis ${sips} guri lui ${targetPlayer?.name || 'adversarului'}.`
+                : `You gave ${sips} sips to ${targetPlayer?.name || 'opponent'}.`,
               sipsToDrink: 0,
               isChug: false,
               isImmune: true,
-              specialNote: `${targetPlayer?.name} trebuie să bea acum ${sips} guri!`,
+              specialNote: language === 'ro'
+                ? `${targetPlayer?.name} trebuie să bea acum ${sips} guri!`
+                : `${targetPlayer?.name} must now drink ${sips} sips!`,
             });
-            addLog(`${activePlayer.name} a trimis ${sips} guri lui ${targetPlayer?.name}.`, 'drink');
+            addLog(
+              language === 'ro'
+                ? `${activePlayer.name} a trimis ${sips} guri lui ${targetPlayer?.name}.`
+                : `${activePlayer.name} sent ${sips} sips to ${targetPlayer?.name}.`,
+              'drink'
+            );
           }}
         />
       )}

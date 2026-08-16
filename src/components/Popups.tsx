@@ -27,11 +27,11 @@ export const TileDetailModal: React.FC<{
 
         {tile.buyable && (
           <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-3 rounded-xl text-xs space-y-1">
-            <div className="text-gray-400 font-cinzel">Preț / Cost: <span className="text-[#e8c84a] font-bold">{tile.price} 🪙</span></div>
+            <div className="text-gray-400 font-cinzel">{language === 'ro' ? 'Preț / Cost:' : 'Price / Cost:'} <span className="text-[#e8c84a] font-bold">{tile.price} 🪙</span></div>
             {ownerName ? (
-              <div className="text-green-400 font-bold">Proprietar: {ownerName} 👑</div>
+              <div className="text-green-400 font-bold">{language === 'ro' ? 'Proprietar:' : 'Owner:'} {ownerName} 👑</div>
             ) : (
-              <div className="text-gray-400">Liberă pentru cumpărare</div>
+              <div className="text-gray-400">{language === 'ro' ? 'Liberă pentru cumpărare' : 'Available for purchase'}</div>
             )}
           </div>
         )}
@@ -100,14 +100,14 @@ export const PardonLetterPromptModal: React.FC<{
   onUse: () => void;
   onDecline: () => void;
 }> = ({ player, onUse, onDecline }) => {
-  const { t } = useApp();
+  const { t, language } = useApp();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl p-6 max-w-sm w-full space-y-4 gold-glow text-center">
         <div className="text-5xl">🎟️ 🍺</div>
         <h3 className="text-xl font-cinzel font-bold text-[#e8c84a] gold-text-glow">
-          Scrisoare de Iertare / Pardon Letter
+          {language === 'ro' ? 'Scrisoare de Iertare' : 'Pardon Letter'}
         </h3>
         <p className="text-sm font-barlow text-[#f0ebe0]">
           {t('askUsePardonLetter', { count: player.pardonLetters })}
@@ -216,10 +216,12 @@ export const CardModal: React.FC<{
       {/* Title as requested in screenshot */}
       <div className={`text-center mb-4 sm:mb-6 transition-all duration-500 ${isExpanded ? 'opacity-30 scale-95' : 'opacity-100 scale-100'}`}>
         <h2 className="text-2xl sm:text-4xl font-cinzel font-bold text-[#e8c84a] tracking-widest gold-text-glow">
-          {isRisk ? 'ALEGE O CARTE DE RISC' : 'ALEGE O CARTE'}
+          {language === 'ro' ? (isRisk ? 'ALEGE O CARTE DE RISC' : 'ALEGE O CARTE') : (isRisk ? 'CHOOSE A RISK CARD' : 'CHOOSE A CARD')}
         </h2>
         <p className="text-xs sm:text-sm font-barlow text-gray-400 mt-1">
-          {selectedIdx === null ? 'Atinge una din cele 10 cărți pentru a-ți dezvălui soarta' : 'Soarta a fost pecetluită...'}
+          {selectedIdx === null
+            ? (language === 'ro' ? 'Atinge una din cele 10 cărți pentru a-ți dezvălui soarta' : 'Tap one of the 10 cards to reveal your fate')
+            : (language === 'ro' ? 'Soarta a fost pecetluită...' : 'Your fate is sealed...')}
         </p>
       </div>
 
@@ -291,7 +293,7 @@ export const CardModal: React.FC<{
             }`}>
               {/* Top Tag */}
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-cinzel font-bold border border-white/20 bg-black/60 shadow">
-                <span>{isRisk ? '🔥 RISC MĂNĂSTIRESC' : '✨ MISTER SFÂNT'}</span>
+                <span>{language === 'ro' ? (isRisk ? '🔥 RISC MĂNĂSTIRESC' : '✨ MISTER SFÂNT') : (isRisk ? '🔥 MONASTERY RISK' : '✨ HOLY MYSTERY')}</span>
               </div>
 
               {/* Large Icon / Artwork */}
@@ -314,7 +316,7 @@ export const CardModal: React.FC<{
               {/* Consequence Badge */}
               <div className="bg-black/60 border border-white/10 rounded-2xl p-3 shadow-inner">
                 <span className={`text-sm font-cinzel font-bold ${isGood ? 'text-green-400' : 'text-orange-400'}`}>
-                  {isGood ? '✨ Binecuvântare primită' : '⚖️ Pedeapsă de ispășit'}
+                  {language === 'ro' ? (isGood ? '✨ Binecuvântare primită' : '⚖️ Pedeapsă de ispășit') : (isGood ? '✨ Blessing received' : '⚖️ Penalty to serve')}
                 </span>
               </div>
 
@@ -422,7 +424,7 @@ export const TriviaModal: React.FC<{
 export const SlotModal: React.FC<{
   onComplete: (resultType: 'monks' | 'beers' | 'sevens') => void;
 }> = ({ onComplete }) => {
-  const { t } = useApp();
+  const { t, language } = useApp();
   const [spinning, setSpinning] = useState<boolean>(false);
   const [leverPulled, setLeverPulled] = useState<boolean>(false);
   
@@ -565,18 +567,18 @@ export const SlotModal: React.FC<{
 
           <h3 className="text-xl sm:text-2xl font-cinzel font-black text-[#ffd700] tracking-wider gold-text-glow flex items-center justify-center gap-2">
             <span>🎰</span>
-            <span>PĂCĂNEAUA SFÂNTĂ</span>
+            <span>{language === 'ro' ? 'PĂCĂNEAUA SFÂNTĂ' : 'HOLY SLOT MACHINE'}</span>
             <span>🎰</span>
           </h3>
           <p className="text-[10px] font-cinzel text-amber-200/80 tracking-widest uppercase">
-            Taverna Păcatului Mănăstiresc • 100% Cinstire
+            {language === 'ro' ? 'Taverna Păcatului Mănăstiresc • 100% Cinstire' : 'Monastery Tavern • 100% Fair Play'}
           </p>
         </div>
 
         {/* Suspense 7-7 Alert Header Banner */}
         {isSuspense77 && (
           <div className="bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-black font-cinzel font-black text-xs sm:text-sm py-1.5 px-3 rounded-xl animate-pulse shadow-lg tracking-wider">
-            🔥 SUSPANS 7 - 7 ! VINE AL TREILEA 7️⃣?! 🔥
+            {language === 'ro' ? '🔥 SUSPANS 7 - 7 ! VINE AL TREILEA 7️⃣?! 🔥' : '🔥 SUSPENSE 7 - 7 ! WILL THE 3RD 7️⃣ LAND?! 🔥'}
           </div>
         )}
 
@@ -585,11 +587,11 @@ export const SlotModal: React.FC<{
           <div className="bg-[#0e0a06] border border-[#e8c84a]/40 rounded-xl p-1.5 text-[10px] sm:text-[11px] font-barlow text-gray-300 grid grid-cols-3 gap-1.5 shadow-inner">
             <div className="p-1 rounded bg-[#1c140d]/60 border border-amber-500/20">
               <div className="text-xs">🍺🍺🍺</div>
-              <div className="text-[#ffd700] font-bold">3 Guri</div>
+              <div className="text-[#ffd700] font-bold">{language === 'ro' ? '3 Guri' : '3 Sips'}</div>
             </div>
             <div className="p-1 rounded bg-[#1c140d]/60 border border-amber-500/20">
               <div className="text-xs">🧔‍♂️🧔‍♂️🧔‍♂️</div>
-              <div className="text-[#ffd700] font-bold">Toți beau 3!</div>
+              <div className="text-[#ffd700] font-bold">{language === 'ro' ? 'Toți beau 3!' : 'All drink 3!'}</div>
             </div>
             <div className="p-1 rounded bg-[#2e1208]/80 border border-red-500/30">
               <div className="text-xs">7️⃣7️⃣7️⃣</div>
@@ -644,7 +646,7 @@ export const SlotModal: React.FC<{
           <div
             onClick={!spinning ? handleSpin : undefined}
             className={`hidden sm:flex flex-col items-center justify-end h-28 cursor-pointer ${spinning ? 'cursor-not-allowed opacity-60' : 'hover:brightness-125'}`}
-            title="Trage de manetă!"
+            title={language === 'ro' ? 'Trage de manetă!' : 'Pull the lever!'}
           >
             {/* Lever Knob */}
             <div className={`w-7 h-7 rounded-full bg-gradient-to-br from-red-500 to-red-800 border-2 border-amber-300 shadow-[0_0_12px_rgba(239,68,68,0.7)] ${
@@ -661,10 +663,14 @@ export const SlotModal: React.FC<{
         <div className="flex items-center justify-between px-2 text-[10px] font-cinzel text-gray-400">
           <div className="flex items-center gap-1">
             <span className={`w-2 h-2 rounded-full ${spinning ? 'bg-amber-400 animate-ping' : 'bg-green-400 shadow-[0_0_6px_#4ade80]'}`} />
-            <span>{spinning ? (isSuspense77 ? '🔥 SUSPANS ACTIV' : 'ROTIRE ACTIVĂ') : 'GATA DE JOC'}</span>
+            <span>
+              {spinning
+                ? (isSuspense77 ? (language === 'ro' ? '🔥 SUSPANS ACTIV' : '🔥 SUSPENSE ACTIVE') : (language === 'ro' ? 'ROTIRE ACTIVĂ' : 'SPINNING...'))
+                : (language === 'ro' ? 'GATA DE JOC' : 'READY TO PLAY')}
+            </span>
           </div>
           <div className="text-amber-300/80">
-            🪙 1 MONEDĂ MĂNĂSTIREASCĂ
+            🪙 1 {language === 'ro' ? 'MONEDĂ MĂNĂSTIREASCĂ' : 'MONASTERY COIN'}
           </div>
         </div>
 
@@ -681,7 +687,13 @@ export const SlotModal: React.FC<{
               }`}
             >
               <span>⚡</span>
-              <span>{isSuspense77 ? '🔥 SUSPANS 7-7...' : spinning ? 'ROTIRE ÎN CURS...' : 'SPIN / ROTEȘTE'}</span>
+              <span>
+                {isSuspense77
+                  ? (language === 'ro' ? '🔥 SUSPANS 7-7...' : '🔥 SUSPENSE 7-7...')
+                  : spinning
+                  ? (language === 'ro' ? 'ROTIRE ÎN CURS...' : 'SPINNING...')
+                  : (language === 'ro' ? 'SPIN / ROTEȘTE' : 'SPIN THE REELS')}
+              </span>
               <span>⚡</span>
             </button>
           </div>
@@ -695,11 +707,11 @@ export const SlotModal: React.FC<{
                 ? 'bg-[#2e1208] border-red-500 flame-glow'
                 : 'bg-[#1e170d] border-[#ffd700] gold-glow'
             }`}>
-              <div className="text-xs font-cinzel text-gray-400 uppercase">Rezultat Slot</div>
+              <div className="text-xs font-cinzel text-gray-400 uppercase">{language === 'ro' ? 'Rezultat Slot' : 'Slot Outcome'}</div>
               <div className="text-base sm:text-lg font-cinzel font-black text-[#ffd700] mt-0.5">
-                {resultType === 'monks' && '🧔‍♂️ 3 CĂLUGĂRI! Ceilalți beau 3 guri fiecare!'}
-                {resultType === 'beers' && '🍺 3 BERI! Bei 3 guri de bere!'}
-                {resultType === 'sevens' && '🔥 MARELE JACKPOT! Furi 10🪙 de la toți ȘI toți dau GROAPĂ!'}
+                {resultType === 'monks' && (language === 'ro' ? '🧔‍♂️ 3 CĂLUGĂRI! Ceilalți beau 3 guri fiecare!' : '🧔‍♂️ 3 MONKS! Everyone else drinks 3 sips each!')}
+                {resultType === 'beers' && (language === 'ro' ? '🍺 3 BERI! Bei 3 guri de bere!' : '🍺 3 BEERS! Drink 3 sips of beer!')}
+                {resultType === 'sevens' && (language === 'ro' ? '🔥 MARELE JACKPOT! Furi 10🪙 de la toți ȘI toți dau GROAPĂ!' : '🔥 GRAND JACKPOT! Steal 10🪙 from everyone AND all CHUG!')}
               </div>
             </div>
 
@@ -707,7 +719,7 @@ export const SlotModal: React.FC<{
               onClick={() => onComplete(resultType)}
               className="w-full py-3.5 rounded-2xl bg-[#ffd700] text-black font-cinzel font-black text-base hover:brightness-110 gold-glow shadow-xl"
             >
-              COLECTEAZĂ SOARTA ➔
+              {language === 'ro' ? 'COLECTEAZĂ SOARTA ➔' : 'CLAIM YOUR FATE ➔'}
             </button>
           </div>
         )}
@@ -857,9 +869,15 @@ export const TurnEndDrinkModal: React.FC<{
   onUsePardonLetter,
   onConfirm,
 }) => {
-  const { t } = useApp();
+  const { t, language } = useApp();
 
   const isDrinking = (sipsToDrink > 0 || isChug) && !isImmune;
+
+  const defaultTitle = isChug
+    ? (language === 'ro' ? '🔥 GROAPĂ TOTALĂ! 🔥' : '🔥 TOTAL CHUG! 🔥')
+    : isDrinking
+    ? (language === 'ro' ? '🍺 TREBUIE SĂ BEI! 🍺' : '🍺 YOU MUST DRINK! 🍺')
+    : (language === 'ro' ? '🛡️ TURA A TRECUT! 🛡️' : '🛡️ TURN COMPLETED! 🛡️');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none">
@@ -879,7 +897,7 @@ export const TurnEndDrinkModal: React.FC<{
               <AvatarDisplay avatarId={player.avatarIcon} className="w-full h-full" />
             </div>
             <span className="font-bold">{player.name}</span>
-            <span>- Tura s-a încheiat</span>
+            <span>- {language === 'ro' ? 'Tura s-a încheiat' : 'Turn finished'}</span>
           </div>
           <h3
             className={`text-2xl font-cinzel font-black tracking-wide ${
@@ -890,7 +908,7 @@ export const TurnEndDrinkModal: React.FC<{
                 : 'text-emerald-400'
             }`}
           >
-            {title || (isChug ? '🔥 GROAPĂ TOTALĂ! 🔥' : isDrinking ? '🍺 TREBUIE SĂ BEI! 🍺' : '🛡️ TURA A TRECUT! 🛡️')}
+            {title || defaultTitle}
           </h3>
         </div>
 
@@ -909,7 +927,9 @@ export const TurnEndDrinkModal: React.FC<{
 
         {/* Action / Roll Reason Description */}
         <div className="bg-[#1e1913] border border-[#382b1d] rounded-2xl p-3 text-sm font-barlow text-[#f0ebe0] space-y-1">
-          <div className="text-xs text-gray-400 uppercase tracking-wider font-cinzel">Ce s-a întâmplat:</div>
+          <div className="text-xs text-gray-400 uppercase tracking-wider font-cinzel">
+            {language === 'ro' ? 'Ce s-a întâmplat:' : 'What happened:'}
+          </div>
           <div className="font-bold text-[#ffd875] text-base">{reason}</div>
           {specialNote && (
             <div className="text-xs text-orange-300 font-medium pt-1 border-t border-[#382b1d]/60 mt-1">
@@ -931,31 +951,37 @@ export const TurnEndDrinkModal: React.FC<{
           {isChug ? (
             <div className="space-y-1">
               <div className="text-3xl font-cinzel font-black text-red-400 tracking-wider">
-                💀 GROAPĂ!
+                💀 {language === 'ro' ? 'GROAPĂ!' : 'CHUG!'}
               </div>
               <div className="text-sm font-barlow text-red-200">
-                Bei <strong>tot paharul dintr-o răsuflare!</strong>
+                {language === 'ro' ? (
+                  <>Bei <strong>tot paharul dintr-o răsuflare!</strong></>
+                ) : (
+                  <>Drink the <strong>entire drink in one go!</strong></>
+                )}
               </div>
             </div>
           ) : isDrinking ? (
             <div className="space-y-1">
               <div className="text-xs uppercase font-cinzel tracking-widest text-[#e8c84a]">
-                Pedeapsă de băut
+                {language === 'ro' ? 'Pedeapsă de băut' : 'Drink Penalty'}
               </div>
               <div className="text-3xl font-cinzel font-black text-[#ffd700] gold-text-glow">
-                🍺 {sipsToDrink} {sipsToDrink === 1 ? 'GURĂ' : 'GURI'}
+                🍺 {sipsToDrink} {language === 'ro' ? (sipsToDrink === 1 ? 'GURĂ' : 'GURI') : (sipsToDrink === 1 ? 'SIP' : 'SIPS')}
               </div>
               <div className="text-xs text-gray-300 font-barlow">
-                Ia {sipsToDrink} {sipsToDrink === 1 ? 'gură' : 'guri'} de bere/băutură înainte de a continua!
+                {language === 'ro'
+                  ? `Ia ${sipsToDrink} ${sipsToDrink === 1 ? 'gură' : 'guri'} de băutură înainte de a continua!`
+                  : `Take ${sipsToDrink} ${sipsToDrink === 1 ? 'sip' : 'sips'} before continuing!`}
               </div>
             </div>
           ) : (
             <div className="space-y-1">
               <div className="text-xl font-cinzel font-bold text-emerald-400">
-                🛡️ ZERO GURI!
+                🛡️ {language === 'ro' ? 'ZERO GURI!' : 'ZERO SIPS!'}
               </div>
               <div className="text-xs text-gray-300 font-barlow">
-                Ești în siguranță! Nu trebuie să bei nimic în această tură.
+                {language === 'ro' ? 'Ești în siguranță! Nu trebuie să bei nimic în această tură.' : 'You are safe! No drinks required this turn.'}
               </div>
             </div>
           )}
@@ -968,7 +994,7 @@ export const TurnEndDrinkModal: React.FC<{
               onClick={onUsePardonLetter}
               className="w-full py-2.5 rounded-xl border border-[#e8c84a] bg-[#2d2212] text-[#ffd700] font-cinzel font-bold text-xs hover:bg-[#3d2f19] flex items-center justify-center gap-1.5 shadow"
             >
-              <span>🎟️ Folosește Scrisoare de Iertare (rămase: {player.pardonLetters})</span>
+              <span>🎟️ {language === 'ro' ? `Folosește Scrisoare de Iertare (rămase: ${player.pardonLetters})` : `Use Pardon Letter (remaining: ${player.pardonLetters})`}</span>
             </button>
           )}
 
@@ -982,7 +1008,11 @@ export const TurnEndDrinkModal: React.FC<{
                 : 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:brightness-110'
             }`}
           >
-            <span>{isDrinking ? '✅ Am băut! Următorul Jucător ➔' : '➔ Următorul Jucător'}</span>
+            <span>
+              {isDrinking
+                ? (language === 'ro' ? '✅ Am băut! Următorul Jucător ➔' : '✅ I drank! Next Player ➔')
+                : (language === 'ro' ? '➔ Următorul Jucător' : '➔ Next Player')}
+            </span>
           </button>
         </div>
       </div>

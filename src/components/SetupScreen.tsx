@@ -465,92 +465,94 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
               {/* Backdrop to dismiss profile dropdown */}
               {openDropdownIndex !== null && (
                 <div
-                  className="fixed inset-0 z-20"
+                  className="fixed inset-0 z-40"
                   onClick={() => setOpenDropdownIndex(null)}
                 />
               )}
 
-              <div className="relative z-10 flex items-center gap-2">
-                {/* Avatar Selector Square with [+] overlay */}
-                <button
-                  type="button"
-                  onClick={() => setAvatarModalIndex(0)}
-                  className="w-12 h-12 rounded-2xl bg-[#1d140c] border-2 border-[#ffd700] hover:scale-105 active:scale-95 transition-all relative flex-shrink-0 flex items-center justify-center shadow-md overflow-hidden group"
-                >
-                  <AvatarDisplay avatarId={playerAvatars[0] || 'monk_drunk'} className="w-full h-full p-0.5" />
-                  <div className="absolute -bottom-1 -right-1 bg-[#ffd700] text-black w-5 h-5 rounded-full flex items-center justify-center text-xs font-black shadow border border-black/50">
-                    +
-                  </div>
-                </button>
-
-                {/* Name Input & Profile Dropdown Button */}
-                <div className="relative flex-1 flex items-center">
-                  <input
-                    type="text"
-                    value={playerNames[0] || ''}
-                    onChange={e => handleNameChange(0, e.target.value)}
-                    placeholder={duelRole === 'host' ? 'Numele tău (Gazdă)' : 'Numele tău (Luptător)'}
-                    className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ffd700] rounded-xl pl-3.5 pr-24 py-2.5 text-sm text-[#f0ebe0] focus:outline-none transition-all font-barlow"
-                  />
-
-                  {/* Dropdown Toggle Button */}
+              <div className={`relative ${openDropdownIndex === 0 ? 'z-50' : 'z-10'}`}>
+                <div className="flex items-center gap-2">
+                  {/* Avatar Selector Square with [+] overlay */}
                   <button
                     type="button"
-                    onClick={() => setOpenDropdownIndex(openDropdownIndex === 0 ? null : 0)}
-                    className={`absolute right-1.5 py-1 px-2.5 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1 transition-all ${
-                      openDropdownIndex === 0
-                        ? 'bg-[#ffd700] text-black shadow'
-                        : 'bg-[#221a10] border border-[#e8c84a]/40 text-[#ffd700] hover:bg-[#2e2316]'
-                    }`}
+                    onClick={() => setAvatarModalIndex(0)}
+                    className="w-12 h-12 rounded-2xl bg-[#1d140c] border-2 border-[#ffd700] hover:scale-105 active:scale-95 transition-all relative flex-shrink-0 flex items-center justify-center shadow-md overflow-hidden group"
                   >
-                    <span>👤 Profil</span>
-                    <span className="text-[10px]">{openDropdownIndex === 0 ? '▲' : '▼'}</span>
+                    <AvatarDisplay avatarId={playerAvatars[0] || 'monk_drunk'} className="w-full h-full p-0.5" />
+                    <div className="absolute -bottom-1 -right-1 bg-[#ffd700] text-black w-5 h-5 rounded-full flex items-center justify-center text-xs font-black shadow border border-black/50">
+                      +
+                    </div>
                   </button>
-                </div>
-              </div>
 
-              {/* Dropdown Menu for Saved Profiles */}
-              {openDropdownIndex === 0 && (
-                <div className="relative z-30 bg-gradient-to-b from-[#1c150e] to-[#120d09] border-2 border-[#e8c84a] rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] max-h-48 overflow-y-auto p-2 animate-fade-in">
-                  <div className="flex items-center justify-between px-2 py-1 border-b border-[#2e2216] mb-1.5">
-                    <span className="text-[10px] text-[#ffd700] font-cinzel font-bold uppercase tracking-wider">
-                      📜 {language === 'ro' ? 'Profiluri Salvate' : 'Saved Profiles'}
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-barlow">
-                      {profiles.length} {language === 'ro' ? 'înregistrate' : 'found'}
-                    </span>
+                  {/* Name Input & Profile Dropdown Button */}
+                  <div className="relative flex-1 flex items-center">
+                    <input
+                      type="text"
+                      value={playerNames[0] || ''}
+                      onChange={e => handleNameChange(0, e.target.value)}
+                      placeholder={duelRole === 'host' ? (language === 'ro' ? 'Numele tău (Gazdă)' : 'Your Name (Host)') : (language === 'ro' ? 'Numele tău (Luptător)' : 'Your Name (Fighter)')}
+                      className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ffd700] rounded-xl pl-3.5 pr-24 py-2.5 text-sm text-[#f0ebe0] focus:outline-none transition-all font-barlow"
+                    />
+
+                    {/* Dropdown Toggle Button */}
+                    <button
+                      type="button"
+                      onClick={() => setOpenDropdownIndex(openDropdownIndex === 0 ? null : 0)}
+                      className={`absolute right-1.5 py-1 px-2.5 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1 transition-all ${
+                        openDropdownIndex === 0
+                          ? 'bg-[#ffd700] text-black shadow'
+                          : 'bg-[#221a10] border border-[#e8c84a]/40 text-[#ffd700] hover:bg-[#2e2316]'
+                      }`}
+                    >
+                      <span>{language === 'ro' ? '👤 Profil' : '👤 Profile'}</span>
+                      <span className="text-[10px]">{openDropdownIndex === 0 ? '▲' : '▼'}</span>
+                    </button>
                   </div>
-
-                  {profiles.length === 0 ? (
-                    <div className="p-3 text-center text-xs text-gray-400 font-barlow">
-                      {language === 'ro' ? 'Nu ai profiluri salvate încă.' : 'No saved profiles yet.'}
-                    </div>
-                  ) : (
-                    <div className="space-y-1">
-                      {profiles.map(p => (
-                        <div
-                          key={p.id}
-                          onClick={() => selectProfileForPlayer(0, p.name, p.avatarIcon)}
-                          className="p-2 rounded-xl hover:bg-[#2c2014] cursor-pointer text-sm font-barlow text-[#e8c84a] flex items-center justify-between border border-transparent hover:border-[#ffd700]/30 transition-colors"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-[#0d0a07] border border-[#e8c84a]/30">
-                              <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} className="w-full h-full" />
-                            </div>
-                            <div>
-                              <div className="font-cinzel font-bold text-xs text-[#f0ebe0]">{p.name}</div>
-                              <div className="text-[10px] text-gray-400">Jocuri: {p.gamesPlayed} | 🍺 {p.totalSips} guri</div>
-                            </div>
-                          </div>
-                          <span className="text-xs bg-[#e8c84a]/20 text-[#ffd700] px-2 py-0.5 rounded font-cinzel font-bold">
-                            Alege ➔
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
-              )}
+
+                {/* Dropdown Menu for Saved Profiles */}
+                {openDropdownIndex === 0 && (
+                  <div className="absolute left-0 right-0 top-14 mt-1 z-50 bg-gradient-to-b from-[#1c150e] to-[#120d09] border-2 border-[#e8c84a] rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] max-h-56 overflow-y-auto p-2 animate-fade-in">
+                    <div className="flex items-center justify-between px-2 py-1 border-b border-[#2e2216] mb-1.5">
+                      <span className="text-[10px] text-[#ffd700] font-cinzel font-bold uppercase tracking-wider">
+                        📜 {language === 'ro' ? 'Profiluri Salvate' : 'Saved Profiles'}
+                      </span>
+                      <span className="text-[10px] text-gray-400 font-barlow">
+                        {profiles.length} {language === 'ro' ? 'înregistrate' : 'found'}
+                      </span>
+                    </div>
+
+                    {profiles.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-gray-400 font-barlow">
+                        {language === 'ro' ? 'Nu ai profiluri salvate încă.' : 'No saved profiles yet.'}
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {profiles.map(p => (
+                          <div
+                            key={p.id}
+                            onClick={() => selectProfileForPlayer(0, p.name, p.avatarIcon)}
+                            className="p-2 rounded-xl hover:bg-[#2c2014] cursor-pointer text-sm font-barlow text-[#e8c84a] flex items-center justify-between border border-transparent hover:border-[#ffd700]/30 transition-colors"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-[#0d0a07] border border-[#e8c84a]/30">
+                                <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} className="w-full h-full" />
+                              </div>
+                              <div>
+                                <div className="font-cinzel font-bold text-xs text-[#f0ebe0]">{p.name}</div>
+                                <div className="text-[10px] text-gray-400">{language === 'ro' ? 'Jocuri' : 'Games'}: {p.gamesPlayed} | 🍺 {p.totalSips} {t('sipsUnit')}</div>
+                              </div>
+                            </div>
+                            <span className="text-xs bg-[#e8c84a]/20 text-[#ffd700] px-2 py-0.5 rounded font-cinzel font-bold">
+                              {language === 'ro' ? 'Alege ➔' : 'Select ➔'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -678,7 +680,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
             {/* Backdrop to dismiss profile dropdown */}
             {openDropdownIndex !== null && (
               <div
-                className="fixed inset-0 z-20"
+                className="fixed inset-0 z-40"
                 onClick={() => setOpenDropdownIndex(null)}
               />
             )}
@@ -690,7 +692,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                 const openUpwards = (idx >= playerCount - 1 && playerCount >= 2);
 
                 return (
-                  <div key={idx} className="relative z-10">
+                  <div key={idx} className={`relative ${isDropdownOpen ? 'z-50' : 'z-10'}`}>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -721,7 +723,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                               : 'bg-[#221a10] border border-[#e8c84a]/40 text-[#ffd700] hover:bg-[#2e2316]'
                           }`}
                         >
-                          <span>👤 Profil</span>
+                          <span>{language === 'ro' ? '👤 Profil' : '👤 Profile'}</span>
                           <span className="text-[10px]">{isDropdownOpen ? '▲' : '▼'}</span>
                         </button>
                       </div>
@@ -729,7 +731,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
 
                     {isDropdownOpen && (
                       <div
-                        className={`absolute left-0 right-0 z-30 bg-gradient-to-b from-[#1c150e] to-[#120d09] border-2 border-[#e8c84a] rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] max-h-56 overflow-y-auto p-2 animate-fade-in ${
+                        className={`absolute left-0 right-0 z-50 bg-gradient-to-b from-[#1c150e] to-[#120d09] border-2 border-[#e8c84a] rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] max-h-56 overflow-y-auto p-2 animate-fade-in ${
                           openUpwards ? 'bottom-full mb-2' : 'top-14 mt-1'
                         }`}
                       >
@@ -765,12 +767,12 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                                       {p.name}
                                     </div>
                                     <div className="text-[10px] text-gray-400">
-                                      Jocuri: {p.gamesPlayed} | 🍺 {p.totalSips} guri
+                                      {language === 'ro' ? 'Jocuri' : 'Games'}: {p.gamesPlayed} | 🍺 {p.totalSips} {t('sipsUnit')}
                                     </div>
                                   </div>
                                 </div>
                                 <span className="text-xs bg-[#e8c84a]/20 text-[#ffd700] px-2 py-0.5 rounded font-cinzel font-bold">
-                                  Alege ➔
+                                  {language === 'ro' ? 'Alege ➔' : 'Select ➔'}
                                 </span>
                               </div>
                             ))}

@@ -11,7 +11,7 @@ interface PodiumProps {
 }
 
 export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHome }) => {
-  const { t, batchUpdateProfiles } = useApp();
+  const { t, language, batchUpdateProfiles } = useApp();
 
   // Save profile stats once on render
   useEffect(() => {
@@ -70,7 +70,11 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
           {t('podiumTitle')}
         </h1>
         <p className="text-xs font-barlow text-gray-400 uppercase tracking-widest">
-          {mode === 'normal' ? 'Modul Normal (Zaruri)' : mode === 'duel' ? '⚔️ Modul Duel 1v1 (Trivia)' : 'Modul Boardgame (Aventură)'}
+          {mode === 'normal'
+            ? (language === 'ro' ? 'Modul Normal (Zaruri)' : 'Classic Mode (Dice)')
+            : mode === 'duel'
+            ? (language === 'ro' ? '⚔️ Modul Duel 1v1 (Trivia)' : '⚔️ 1v1 Duel Mode (Trivia)')
+            : (language === 'ro' ? 'Modul Boardgame (Aventură)' : 'Board Game Mode (Adventure)')}
         </p>
       </div>
 
@@ -87,7 +91,7 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
             </div>
             <div className="text-[10px] text-gray-400 font-barlow text-center">
               {mode === 'normal' || mode === 'duel'
-                ? `${top2.sipsTotal} guri | ${top2.chugsTotal} gropi (${top2.sipsTotal + 25 * top2.chugsTotal} pt)`
+                ? `${top2.sipsTotal} ${language === 'ro' ? 'guri' : 'sips'} | ${top2.chugsTotal} ${language === 'ro' ? 'gropi' : 'chugs'} (${top2.sipsTotal + 25 * top2.chugsTotal} pt)`
                 : `${top2.gold} 🪙`}
             </div>
             <div className="w-full h-24 bg-gradient-to-t from-[#2a2a2a] to-[#3a3a3a] border-t-2 border-slate-300 rounded-t-xl flex flex-col items-center justify-center mt-2 shadow-lg">
@@ -108,12 +112,14 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
             </div>
             <div className="text-xs text-[#e8c84a] font-barlow font-bold text-center">
               {mode === 'normal' || mode === 'duel'
-                ? `${top1.sipsTotal} guri | ${top1.chugsTotal} gropi (${top1.sipsTotal + 25 * top1.chugsTotal} pt)`
+                ? `${top1.sipsTotal} ${language === 'ro' ? 'guri' : 'sips'} | ${top1.chugsTotal} ${language === 'ro' ? 'gropi' : 'chugs'} (${top1.sipsTotal + 25 * top1.chugsTotal} pt)`
                 : `${top1.gold} 🪙`}
             </div>
             <div className="w-full h-32 bg-gradient-to-t from-[#e8c84a]/40 to-[#e8c84a] border-t-2 border-[#ffd700] rounded-t-xl flex flex-col items-center justify-center mt-2 gold-glow">
               <span className="text-3xl font-cinzel font-bold text-black">🥇</span>
-              <span className="text-sm font-bebas text-black font-bold">REGELE / KING</span>
+              <span className="text-sm font-bebas text-black font-bold">
+                {language === 'ro' ? 'REGELE' : 'KING'}
+              </span>
             </div>
           </div>
         )}
@@ -121,7 +127,7 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
         {/* Rank 3 (Right) */}
         {top3 && (
           <div className="flex flex-col items-center animate-fade-in">
-            <div className="w-11 h-11 rounded-2xl bg-[#1e150f] border-2 border-amber-700 overflow-hidden shadow-md mb-1">
+            <div className="w-11 h-11 rounded-xl bg-[#1e150f] border-2 border-amber-700 overflow-hidden shadow-md mb-1">
               <AvatarDisplay avatarId={top3.avatarIcon} className="w-full h-full" />
             </div>
             <div className="text-xs font-cinzel font-bold text-[#f0ebe0] truncate max-w-[90px]">
@@ -129,7 +135,7 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
             </div>
             <div className="text-[10px] text-gray-400 font-barlow text-center">
               {mode === 'normal' || mode === 'duel'
-                ? `${top3.sipsTotal} guri | ${top3.chugsTotal} gropi (${top3.sipsTotal + 25 * top3.chugsTotal} pt)`
+                ? `${top3.sipsTotal} ${language === 'ro' ? 'guri' : 'sips'} | ${top3.chugsTotal} ${language === 'ro' ? 'gropi' : 'chugs'} (${top3.sipsTotal + 25 * top3.chugsTotal} pt)`
                 : `${top3.gold} 🪙`}
             </div>
             <div className="w-full h-20 bg-gradient-to-t from-[#2a1a12] to-[#3d2417] border-t-2 border-amber-700 rounded-t-xl flex flex-col items-center justify-center mt-2 shadow-lg">
@@ -185,7 +191,7 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
               <div>
                 <div className="text-[10px] font-cinzel text-gray-400 uppercase">{t('biggestFool')}</div>
                 <div className="text-xs font-cinzel font-bold text-purple-400">
-                  {biggestFoolPlayers.map(p => p.name).join(', ')} ({maxPasses} pass)
+                  {biggestFoolPlayers.map(p => p.name).join(', ')} ({maxPasses} {language === 'ro' ? 'pasuri' : 'passes'})
                 </div>
               </div>
             </div>
@@ -200,7 +206,7 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
             {t('fullRanking')}
           </h3>
           <span className="text-[10px] font-barlow text-gray-400">
-            Gură = 1p • Groapă = 25p
+            {language === 'ro' ? 'Gură = 1p • Groapă = 25p' : 'Sip = 1p • Chug = 25p'}
           </span>
         </div>
 
@@ -221,14 +227,14 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
                 </div>
                 <div>
                   <div className="font-cinzel font-bold text-[#f0ebe0]">
-                    {p.name} {p.hasGivenUp && ' (Abandon)'}
+                    {p.name} {p.hasGivenUp && (language === 'ro' ? ' (Abandon)' : ' (Gave Up)')}
                   </div>
                   <div className="text-xs text-gray-400">
                     {mode === 'normal'
-                      ? `${p.sipsTotal} guri | ${p.chugsTotal} gropi`
+                      ? `${p.sipsTotal} ${language === 'ro' ? 'guri' : 'sips'} | ${p.chugsTotal} ${language === 'ro' ? 'gropi' : 'chugs'}`
                       : mode === 'duel'
-                      ? `${p.sipsTotal} guri băute ${p.chugsTotal > 0 ? `| ${p.chugsTotal} chugs` : ''}`
-                      : `${p.gold} galbeni | ${p.properties.length} proprietăți`}
+                      ? `${p.sipsTotal} ${language === 'ro' ? 'guri băute' : 'sips taken'} ${p.chugsTotal > 0 ? `| ${p.chugsTotal} ${language === 'ro' ? 'gropi' : 'chugs'}` : ''}`
+                      : `${p.gold} ${language === 'ro' ? 'galbeni' : 'gold'} | ${p.properties.length} ${language === 'ro' ? 'proprietăți' : 'properties'}`}
                   </div>
                 </div>
               </div>
@@ -257,7 +263,7 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
             onClick={onHome}
             className="w-full py-3 rounded-xl bg-[#1e150f] border border-[#e8c84a]/50 text-[#ffd700] font-cinzel font-bold text-sm hover:bg-[#2b1d14] transition-all active:scale-98"
           >
-            🏠 Meniul Principal (Toate Modurile)
+            🏠 {language === 'ro' ? 'Meniul Principal (Toate Modurile)' : 'Main Menu (All Modes)'}
           </button>
         )}
       </div>

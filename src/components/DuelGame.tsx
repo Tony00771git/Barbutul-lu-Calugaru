@@ -330,7 +330,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
                 {room.hostPlayer.name}
               </div>
               <span className="text-[10px] bg-[#2a1e12] border border-[#e8c84a]/50 text-[#e8c84a] px-2 py-0.5 rounded-full font-cinzel">
-                Gazdă
+                {language === 'ro' ? 'Gazdă' : 'Host'}
               </span>
             </div>
 
@@ -351,7 +351,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
                     {room.guestPlayer.name}
                   </div>
                   <span className="text-[10px] bg-green-950 border border-green-500 text-green-300 px-2 py-0.5 rounded-full font-cinzel">
-                    Gata
+                    {language === 'ro' ? 'Gata' : 'Ready'}
                   </span>
                 </>
               ) : (
@@ -373,10 +373,10 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           {/* Submode and Difficulty Info */}
           <div className="pt-2 border-t border-[#2a2a2a] flex items-center justify-between text-xs font-cinzel text-gray-300 px-2">
             <span>
-              Categorie: <strong className="text-[#ffd700]">{room.submode === 'general' ? '🌍 General' : '⚽ Fotbal'}</strong>
+              {language === 'ro' ? 'Categorie:' : 'Category:'} <strong className="text-[#ffd700]">{room.submode === 'general' ? (language === 'ro' ? '🌍 General' : '🌍 General') : (language === 'ro' ? '⚽ Fotbal' : '⚽ Football')}</strong>
             </span>
             <span>
-              Dificultate: <strong className="text-[#e05c3a]">{room.difficulty.toUpperCase()}</strong>
+              {language === 'ro' ? 'Dificultate:' : 'Difficulty:'} <strong className="text-[#e05c3a]">{room.difficulty.toUpperCase()}</strong>
             </span>
           </div>
         </div>
@@ -390,7 +390,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
                 className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#2e1d10] to-[#1a1109] border border-[#ffd700]/70 hover:border-[#ffd700] text-xs font-cinzel font-bold text-[#ffd700] hover:brightness-110 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-md"
               >
                 <span>🤖</span>
-                <span>Joacă / Testează cu Călugărul Bot Onufrie (AI)</span>
+                <span>{language === 'ro' ? 'Joacă / Testează cu Călugărul Bot Onufrie (AI)' : 'Play / Test with AI Bot Brother Onufrie'}</span>
               </button>
             )}
 
@@ -408,7 +408,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           </div>
         ) : (
           <div className="w-full py-3.5 px-4 rounded-xl bg-[#22180f] border border-[#e8c84a]/40 text-center font-cinzel text-xs text-[#ffd700] animate-pulse">
-            ⏳ Așteptăm ca gazda ({room.hostPlayer.name}) să pornească duelul...
+            {language === 'ro' ? `⏳ Așteptăm ca gazda (${room.hostPlayer.name}) să pornească duelul...` : `⏳ Waiting for host (${room.hostPlayer.name}) to start duel...`}
           </div>
         )}
 
@@ -417,7 +417,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           onClick={onLeave}
           className="w-full py-2.5 rounded-xl bg-[#140e08] border border-gray-700 text-xs font-cinzel text-gray-400 hover:text-[#f0ebe0] transition-all"
         >
-          🚪 Părăsește Camera
+          🚪 {language === 'ro' ? 'Părăsește Camera' : 'Leave Room'}
         </button>
       </div>
     );
@@ -458,10 +458,10 @@ export const DuelGame: React.FC<DuelGameProps> = ({
       <div className="bg-[#1f160e] border border-[#e8c84a]/40 rounded-xl px-3 py-1.5 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-1.5 text-xs font-cinzel text-[#ffd700] font-bold">
           <span>🎯</span>
-          <span>Prag Limită: <strong className="text-white text-sm">{targetPoints}p</strong></span>
+          <span>{language === 'ro' ? 'Prag Limită:' : 'Target Limit:'} <strong className="text-white text-sm">{targetPoints}p</strong></span>
         </div>
         <div className="text-[11px] font-barlow text-gray-300">
-          1 gură = <strong className="text-[#ffd700]">1p</strong> | 1 groapă = <strong className="text-red-400">25p</strong>
+          {language === 'ro' ? '1 gură = ' : '1 sip = '}<strong className="text-[#ffd700]">1p</strong> | {language === 'ro' ? '1 groapă = ' : '1 chug = '}<strong className="text-red-400">25p</strong>
         </div>
       </div>
 
@@ -476,10 +476,12 @@ export const DuelGame: React.FC<DuelGameProps> = ({
             <div>
               <div className="font-cinzel font-bold text-xs sm:text-sm text-[#ffd700] flex items-center gap-1">
                 <span>{me?.name}</span>
-                <span className="text-[10px] bg-[#2a1e12] px-1.5 py-0.2 rounded border border-[#ffd700]/50 text-[#ffd700]">TU</span>
+                <span className="text-[10px] bg-[#2a1e12] px-1.5 py-0.2 rounded border border-[#ffd700]/50 text-[#ffd700]">
+                  {language === 'ro' ? 'TU' : 'YOU'}
+                </span>
               </div>
               <div className="text-[11px] font-barlow text-gray-300">
-                🏆 {myScores.roundsWon} vict. | 🍺 {myScores.sipsTotal} guri {myScores.chugsTotal > 0 && `| 🔥 ${myScores.chugsTotal} gropi`}
+                🏆 {myScores.roundsWon} {language === 'ro' ? 'vict.' : 'wins'} | 🍺 {myScores.sipsTotal} {language === 'ro' ? 'guri' : 'sips'} {myScores.chugsTotal > 0 && `| 🔥 ${myScores.chugsTotal} ${language === 'ro' ? 'gropi' : 'chugs'}`}
               </div>
             </div>
           </div>
@@ -488,14 +490,14 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           <div className="flex flex-col items-center">
             <div className="flex items-center gap-1 text-[10px] font-cinzel text-gray-400 uppercase">
               <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-              <span>Runda {room.currentRound}</span>
+              <span>{language === 'ro' ? `Runda ${room.currentRound}` : `Round ${room.currentRound}`}</span>
             </div>
             <div className={`px-2 py-0.5 rounded-full text-[11px] font-cinzel font-black tracking-wide border shadow mt-0.5 ${
               room.stake.type === 'chug'
                 ? 'bg-red-950 border-red-500 text-red-300 animate-pulse'
                 : 'bg-[#2a1e12] border-[#e8c84a]/60 text-[#ffd700]'
             }`}>
-              {room.stake.type === 'chug' ? '🔥 CHUG IT ALL' : `🍺 ${room.stake.count} GURI`}
+              {room.stake.type === 'chug' ? (language === 'ro' ? '🔥 CHUG IT ALL / GROAPĂ' : '🔥 CHUG IT ALL') : (language === 'ro' ? `🍺 ${room.stake.count} GURI` : `🍺 ${room.stake.count} SIPS`)}
             </div>
           </div>
 
@@ -509,7 +511,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
                 <span>{opponent?.name}</span>
               </div>
               <div className="text-[11px] font-barlow text-gray-300">
-                🏆 {opponentScores.roundsWon} vict. | 🍺 {opponentScores.sipsTotal} guri {opponentScores.chugsTotal > 0 && `| 🔥 ${opponentScores.chugsTotal} gropi`}
+                🏆 {opponentScores.roundsWon} {language === 'ro' ? 'vict.' : 'wins'} | 🍺 {opponentScores.sipsTotal} {language === 'ro' ? 'guri' : 'sips'} {opponentScores.chugsTotal > 0 && `| 🔥 ${opponentScores.chugsTotal} ${language === 'ro' ? 'gropi' : 'chugs'}`}
               </div>
             </div>
           </div>
@@ -520,7 +522,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           {/* Me Progress */}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[11px]">
-              <span className="text-[#ffd700] font-bold">Puncte TU:</span>
+              <span className="text-[#ffd700] font-bold">{language === 'ro' ? 'Puncte TU:' : 'Your Points:'}</span>
               <span className={`font-bold ${myPoints >= targetPoints ? 'text-red-400 animate-pulse' : 'text-gray-200'}`}>
                 {myPoints} / {targetPoints}p
               </span>
@@ -538,7 +540,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           {/* Opponent Progress */}
           <div className="space-y-1">
             <div className="flex items-center justify-between text-[11px]">
-              <span className="text-[#e05c3a] font-bold">Puncte {opponent?.name || 'Oponent'}:</span>
+              <span className="text-[#e05c3a] font-bold">{language === 'ro' ? `Puncte ${opponent?.name || 'Oponent'}:` : `${opponent?.name || 'Opponent'}'s Points:`}</span>
               <span className={`font-bold ${opponentPoints >= targetPoints ? 'text-red-400 animate-pulse' : 'text-gray-200'}`}>
                 {opponentPoints} / {targetPoints}p
               </span>
@@ -560,10 +562,10 @@ export const DuelGame: React.FC<DuelGameProps> = ({
         {/* Category & Difficulty Pill */}
         <div className="flex items-center justify-center gap-2">
           <span className="px-3 py-1 rounded-full bg-[#20150c] border border-[#e8c84a]/40 text-xs font-cinzel text-[#ffd700]">
-            {room.submode === 'general' ? '🌍 Cultură Generală' : '⚽ Fotbal'}
+            {room.submode === 'general' ? (language === 'ro' ? '🌍 Cultură Generală' : '🌍 General Knowledge') : (language === 'ro' ? '⚽ Fotbal' : '⚽ Football')}
           </span>
           <span className="px-3 py-1 rounded-full bg-[#20150c] border border-[#e8c84a]/40 text-xs font-cinzel text-gray-300">
-            Dificultate: <span className="font-bold text-[#e05c3a]">{room.difficulty.toUpperCase()}</span>
+            {language === 'ro' ? 'Dificultate:' : 'Difficulty:'} <span className="font-bold text-[#e05c3a]">{room.difficulty.toUpperCase()}</span>
           </span>
         </div>
 
@@ -591,14 +593,16 @@ export const DuelGame: React.FC<DuelGameProps> = ({
             </div>
 
             <p className="text-xs text-gray-400 font-barlow">
-              Citiți întrebarea cu atenție. Opțiunile vor apărea simultan pe ecranele ambilor jucători!
+              {language === 'ro'
+                ? 'Citiți întrebarea cu atenție. Opțiunile vor apărea simultan pe ecranele ambilor jucători!'
+                : 'Read the question carefully. Options will appear simultaneously on both screens!'}
             </p>
 
             <button
               onClick={skipReveal}
               className="mt-2 px-5 py-2 rounded-xl bg-gradient-to-r from-[#e8c84a] to-[#ffd700] text-black font-cinzel font-black text-xs sm:text-sm shadow hover:brightness-110 active:scale-95 transition-all cursor-pointer"
             >
-              ⚡ GATA! Afișează Opțiunile Acum ➔
+              {language === 'ro' ? '⚡ GATA! Afișează Opțiunile Acum ➔' : '⚡ READY! Show Options Now ➔'}
             </button>
           </div>
         )}
@@ -609,13 +613,17 @@ export const DuelGame: React.FC<DuelGameProps> = ({
             {/* Lockout status alerts */}
             {isLockedOut && (
               <div className="p-3 bg-red-950/80 border-2 border-red-500 rounded-xl text-center text-red-200 text-xs sm:text-sm font-cinzel font-bold animate-shake">
-                ❌ AI RĂSPUNS GREȘIT! Ești blocat în această rundă! {opponent?.name} are șansa de a răspunde!
+                {language === 'ro'
+                  ? `❌ AI RĂSPUNS GREȘIT! Ești blocat în această rundă! ${opponent?.name} are șansa de a răspunde!`
+                  : `❌ WRONG ANSWER! You are locked out this round! ${opponent?.name} can now answer!`}
               </div>
             )}
 
             {isOpponentLockedOut && (
               <div className="p-3 bg-amber-950/80 border-2 border-amber-500 rounded-xl text-center text-amber-200 text-xs sm:text-sm font-cinzel font-bold animate-pulse">
-                ⚠️ {opponent?.name} A RĂSPUNS GREȘIT! Ai șansa de a câștiga runda dacă răspunzi corect!
+                {language === 'ro'
+                  ? `⚠️ ${opponent?.name} A RĂSPUNS GREȘIT! Ai șansa de a câștiga runda dacă răspunzi corect!`
+                  : `⚠️ ${opponent?.name} MISSED! You can win this round if you answer correctly!`}
               </div>
             )}
 
@@ -655,14 +663,14 @@ export const DuelGame: React.FC<DuelGameProps> = ({
         </button>
 
         <span className="text-[11px] font-cinzel text-gray-400">
-          Cod: <strong className="text-[#ffd700]">{room.code}</strong>
+          {language === 'ro' ? 'Cod:' : 'Code:'} <strong className="text-[#ffd700]">{room.code}</strong>
         </span>
 
         <button
           onClick={onOpenRules}
           className="py-2 px-3 rounded-xl bg-[#22180f] border border-[#e8c84a]/40 hover:border-[#ffd700] text-[#ffd700] text-xs font-cinzel font-bold transition-all"
         >
-          📜 Reguli
+          📜 {t('tabRules')}
         </button>
       </div>
 
@@ -687,7 +695,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
                   <AvatarDisplay avatarId={me?.avatarIcon || 'monk_drunk'} className="w-full h-full" />
                 </div>
                 <span className="font-bold">{me?.name}</span>
-                <span>- Rezultat Rundă</span>
+                <span>- {language === 'ro' ? 'Rezultat Rundă' : 'Round Result'}</span>
               </div>
 
               <h3
@@ -702,12 +710,12 @@ export const DuelGame: React.FC<DuelGameProps> = ({
                 }`}
               >
                 {isTargetReached
-                  ? (isILostTarget ? '💀 AI PIERDUT DUELUL!' : '👑 AI CÂȘTIGAT DUELUL!')
+                  ? (isILostTarget ? (language === 'ro' ? '💀 AI PIERDUT DUELUL!' : '💀 YOU LOST THE DUEL!') : (language === 'ro' ? '👑 AI CÂȘTIGAT DUELUL!' : '👑 YOU WON THE DUEL!'))
                   : isChug
-                  ? '🔥 GROAPĂ TOTALĂ! 🔥'
+                  ? (language === 'ro' ? '🔥 GROAPĂ TOTALĂ! 🔥' : '🔥 CHUG IT ALL! 🔥')
                   : isMyDrinking
-                  ? '🍺 TREBUIE SĂ BEI! 🍺'
-                  : '🛡️ AI CÂȘTIGAT RUNDA! 🛡️'}
+                  ? (language === 'ro' ? '🍺 TREBUIE SĂ BEI! 🍺' : '🍺 YOU MUST DRINK! 🍺')
+                  : (language === 'ro' ? '🛡️ AI CÂȘTIGAT RUNDA! 🛡️' : '🛡️ YOU WON THE ROUND! 🛡️')}
               </h3>
             </div>
 
@@ -726,7 +734,9 @@ export const DuelGame: React.FC<DuelGameProps> = ({
 
             {/* Correct Answer Highlight Box */}
             <div className="bg-[#1e1913] border border-[#382b1d] rounded-2xl p-3 text-xs font-barlow text-[#f0ebe0] space-y-1">
-              <div className="text-[11px] text-gray-400 uppercase tracking-wider font-cinzel">Răspunsul corect:</div>
+              <div className="text-[11px] text-gray-400 uppercase tracking-wider font-cinzel">
+                {language === 'ro' ? 'Răspunsul corect:' : 'Correct answer:'}
+              </div>
               <div className="font-bold text-[#ffd875] text-sm sm:text-base">
                 ✅ {language === 'ro' ? res.correctAnswerRo : res.correctAnswerEn}
               </div>
@@ -745,31 +755,37 @@ export const DuelGame: React.FC<DuelGameProps> = ({
               {isChug ? (
                 <div className="space-y-0.5">
                   <div className="text-2xl font-cinzel font-black text-red-400 tracking-wider">
-                    💀 GROAPĂ (25 puncte)
+                    💀 {language === 'ro' ? 'GROAPĂ (25 puncte)' : 'CHUG (25 points)'}
                   </div>
                   <div className="text-xs font-barlow text-red-200">
-                    {isMyDrinking ? 'Bei tot paharul dintr-o răsuflare!' : `${opponent?.name} bea tot paharul!`}
+                    {isMyDrinking
+                      ? (language === 'ro' ? 'Bei tot paharul dintr-o răsuflare!' : 'Drink the entire glass in one go!')
+                      : (language === 'ro' ? `${opponent?.name} bea tot paharul!` : `${opponent?.name} drinks the whole glass!`)}
                   </div>
                 </div>
               ) : isMyDrinking ? (
                 <div className="space-y-0.5">
                   <div className="text-[11px] uppercase font-cinzel tracking-widest text-[#e8c84a]">
-                    Pedeapsă de băut
+                    {language === 'ro' ? 'Pedeapsă de băut' : 'Drink Penalty'}
                   </div>
                   <div className="text-2xl font-cinzel font-black text-[#ffd700] gold-text-glow">
-                    🍺 {penaltySips} {penaltySips === 1 ? 'GURĂ' : 'GURI'} ({penaltySips} puncte)
+                    🍺 {penaltySips} {language === 'ro' ? (penaltySips === 1 ? 'GURĂ' : 'GURI') : (penaltySips === 1 ? 'SIP' : 'SIPS')} ({penaltySips} {language === 'ro' ? 'puncte' : 'points'})
                   </div>
                   <div className="text-xs text-gray-300 font-barlow">
-                    Ia {penaltySips} {penaltySips === 1 ? 'gură' : 'guri'} de bere/băutură!
+                    {language === 'ro'
+                      ? `Ia ${penaltySips} ${penaltySips === 1 ? 'gură' : 'guri'} de bere/băutură!`
+                      : `Take ${penaltySips} ${penaltySips === 1 ? 'sip' : 'sips'} of your drink!`}
                   </div>
                 </div>
               ) : (
                 <div className="space-y-0.5">
                   <div className="text-lg font-cinzel font-bold text-emerald-400">
-                    🛡️ ZERO GURI! EȘTI SALVAT!
+                    🛡️ {language === 'ro' ? 'ZERO GURI! EȘTI SALVAT!' : 'ZERO SIPS! YOU ARE SAFE!'}
                   </div>
                   <div className="text-xs text-gray-300 font-barlow">
-                    {opponent?.name} trebuie să bea {penaltySips} {penaltySips === 1 ? 'gură' : 'guri'}!
+                    {language === 'ro'
+                      ? `${opponent?.name} trebuie să bea ${penaltySips} ${penaltySips === 1 ? 'gură' : 'guri'}!`
+                      : `${opponent?.name} must drink ${penaltySips} ${penaltySips === 1 ? 'sip' : 'sips'}!`}
                   </div>
                 </div>
               )}
@@ -778,11 +794,11 @@ export const DuelGame: React.FC<DuelGameProps> = ({
             {/* Target Points Comparison */}
             <div className="bg-[#18130d] border border-white/10 rounded-xl p-2.5 space-y-1.5 text-xs font-cinzel">
               <div className="flex justify-between items-center text-[11px] text-gray-300">
-                <span>Scor Duel (Prag {targetPoints}p):</span>
-                <span>{myPoints >= targetPoints || opponentPoints >= targetPoints ? '🚨 PRAG ATINS' : 'În desfășurare'}</span>
+                <span>{language === 'ro' ? `Scor Duel (Prag ${targetPoints}p):` : `Duel Score (Target ${targetPoints}p):`}</span>
+                <span>{myPoints >= targetPoints || opponentPoints >= targetPoints ? (language === 'ro' ? '🚨 PRAG ATINS' : '🚨 TARGET REACHED') : (language === 'ro' ? 'În desfășurare' : 'In progress')}</span>
               </div>
               <div className="flex justify-between items-center font-bold">
-                <span className="text-[#ffd700]">TU: {myPoints}p</span>
+                <span className="text-[#ffd700]">{language === 'ro' ? 'TU:' : 'YOU:'} {myPoints}p</span>
                 <span className="text-[#e05c3a]">{opponent?.name || 'Oponent'}: {opponentPoints}p</span>
               </div>
             </div>
@@ -794,7 +810,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
                   onClick={endGame}
                   className="w-full py-3.5 rounded-2xl font-cinzel font-black text-sm bg-gradient-to-r from-[#e8c84a] via-[#ffd700] to-[#e8c84a] text-black hover:brightness-110 active:scale-95 shadow-xl gold-glow cursor-pointer"
                 >
-                  🏆 Vezi Podiumul & Câștigătorul ➔
+                  🏆 {language === 'ro' ? 'Vezi Podiumul & Câștigătorul ➔' : 'View Podium & Winner ➔'}
                 </button>
               ) : (
                 <button
@@ -805,7 +821,13 @@ export const DuelGame: React.FC<DuelGameProps> = ({
                       : 'bg-gradient-to-r from-[#e8c84a] to-[#ffd700] text-black hover:brightness-110 gold-glow'
                   }`}
                 >
-                  <span>{isMyDrinking ? (isChug ? '🔥 Am băut groapa! ➔ Runda Următoare' : '🍺 Am băut! ➔ Runda Următoare') : '⚔️ Următoarea Rundă ➔'}</span>
+                  <span>
+                    {isMyDrinking
+                      ? (isChug
+                          ? (language === 'ro' ? '🔥 Am băut groapa! ➔ Runda Următoare' : '🔥 I finished the chug! ➔ Next Round')
+                          : (language === 'ro' ? '🍺 Am băut! ➔ Runda Următoare' : '🍺 I drank! ➔ Next Round'))
+                      : (language === 'ro' ? '⚔️ Următoarea Rundă ➔' : '⚔️ Next Round ➔')}
+                  </span>
                 </button>
               )}
             </div>
@@ -822,7 +844,9 @@ export const DuelGame: React.FC<DuelGameProps> = ({
               {t('endDuelConfirm')}
             </h3>
             <p className="text-xs text-gray-300 font-barlow">
-              Duelul se va încheia pentru ambii jucători, iar rezultatele vor fi salvate pe podium și în profiluri.
+              {language === 'ro'
+                ? 'Duelul se va încheia pentru ambii jucători, iar rezultatele vor fi salvate pe podium și în profiluri.'
+                : 'The duel will end for both players, and results will be recorded on the podium and profiles.'}
             </p>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
