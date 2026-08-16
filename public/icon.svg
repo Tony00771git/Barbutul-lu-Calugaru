@@ -18,38 +18,23 @@
     </linearGradient>
   </defs>
 
-  <!-- Solid background for any maskable / rounded crop -->
   <rect width="512" height="512" fill="url(#bgGrad)"/>
-  
-  <!-- Outer Gold Border -->
   <rect width="472" height="472" x="20" y="20" rx="64" fill="none" stroke="url(#goldGrad)" stroke-width="8" opacity="0.85"/>
-  
-  <!-- Golden Circular Arch -->
   <circle cx="256" cy="256" r="180" fill="none" stroke="url(#goldGrad)" stroke-width="4" stroke-dasharray="8 6" opacity="0.6"/>
 
-  <!-- Beer Stein Mug -->
   <g transform="translate(0, 10)">
-    <!-- Handle -->
     <path d="M 330 210 C 410 210, 410 350, 330 350" fill="none" stroke="url(#goldGrad)" stroke-width="26" stroke-linecap="round"/>
-
-    <!-- Stein Body -->
     <path d="M 170 180 L 180 390 C 180 405, 330 405, 330 390 L 340 180 Z" fill="url(#beerGrad)" stroke="url(#goldGrad)" stroke-width="12" stroke-linejoin="round"/>
-
-    <!-- Foam Head -->
     <path d="M 155 180 C 145 150, 185 130, 205 150 C 220 125, 260 120, 280 145 C 300 125, 345 135, 345 160 C 365 160, 370 195, 340 200 C 310 200, 170 200, 155 180 Z" fill="#ffffff" stroke="#f0ebe0" stroke-width="6"/>
-
-    <!-- Foam Drips -->
     <path d="M 190 195 C 190 230, 205 230, 205 195" fill="#ffffff"/>
     <path d="M 270 195 C 270 245, 285 245, 285 195" fill="#ffffff"/>
 
-    <!-- Celtic / Monastery Cross on Mug -->
     <g transform="translate(255, 295)" stroke="#ffe680" stroke-width="6" stroke-linecap="round" fill="none">
       <circle cx="0" cy="0" r="22" stroke="#ffe680" stroke-width="4" opacity="0.7"/>
       <line x1="0" y1="-32" x2="0" y2="32"/>
       <line x1="-30" y1="0" x2="30" y2="0"/>
     </g>
 
-    <!-- Dice details -->
     <g transform="translate(135, 350) rotate(-15)">
       <rect width="60" height="60" rx="12" fill="#241408" stroke="url(#goldGrad)" stroke-width="4"/>
       <circle cx="30" cy="30" r="5" fill="#ffe680"/>
