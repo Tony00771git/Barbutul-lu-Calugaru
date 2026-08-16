@@ -14,10 +14,61 @@
   --color-parchment: #f0ebe0;
 }
 
+html {
+  overscroll-behavior-y: contain;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   font-family: 'Barlow Condensed', sans-serif;
   background-color: #0d0d0d;
   color: #f0ebe0;
+  overscroll-behavior-y: contain;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Allow text selection inside inputs and textareas */
+input,
+textarea,
+[contenteditable="true"] {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
+/* Safe Area Inset Support for Notch and Bottom Gesture Bar */
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+.safe-top-padding {
+  padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+}
+
+.safe-bottom-padding {
+  padding-bottom: max(2rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem));
+}
+
+.safe-left-padding {
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+}
+
+.safe-right-padding {
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+.safe-horizontal-padding {
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
 }
 
 .font-cinzel {

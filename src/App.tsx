@@ -121,17 +121,17 @@ function MainAppContent() {
   };
 
   return (
-    <div className={`min-h-screen w-full relative transition-colors duration-500 ${getThemeBackgroundClass(theme)} text-[#f0ebe0] font-body pb-10`}>
+    <div className={`min-h-screen w-full relative transition-colors duration-500 ${getThemeBackgroundClass(theme)} text-[#f0ebe0] font-body safe-bottom-padding`}>
       {/* Dynamic Themed Visual Background */}
       <ThemeBackground theme={theme} />
 
-      {/* Persistent Navigation Header Bar */}
-      <header className="w-full bg-[#161616]/80 border-b border-[#2a2a2a] backdrop-blur-md sticky top-0 z-40 px-3 sm:px-4 py-2 flex items-center justify-between">
+      {/* Persistent Navigation Header Bar with notch safe-area support */}
+      <header className="w-full bg-[#161616]/85 border-b border-[#2a2a2a] backdrop-blur-md sticky top-0 z-40 px-3 sm:px-4 py-2 safe-top-padding flex items-center justify-between shadow-md">
         <button
           onClick={() => {
             handleLeaveDuel();
           }}
-          className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity active:scale-95"
         >
           <span className="text-xl">🍺</span>
           <span className="font-cinzel font-bold text-sm text-[#e8c84a] gold-text-glow">
@@ -143,7 +143,7 @@ function MainAppContent() {
           {/* Cloud Account & Leaderboard Button */}
           <button
             onClick={() => setShowCloudModal(true)}
-            className={`py-1.5 px-2.5 sm:px-3 rounded-xl border text-xs font-cinzel font-bold flex items-center gap-1.5 shadow transition-all ${
+            className={`py-1.5 px-2.5 sm:px-3 rounded-xl border text-xs font-cinzel font-bold flex items-center gap-1.5 shadow transition-all active:scale-95 ${
               user
                 ? 'bg-gradient-to-r from-emerald-950 to-[#122415] border-emerald-500/50 text-emerald-300 hover:brightness-110'
                 : 'bg-gradient-to-r from-[#2a1708] to-[#1a1005] border-[#ffd700]/40 text-[#ffd700] hover:brightness-110'
@@ -159,7 +159,7 @@ function MainAppContent() {
           {/* Live Score Button */}
           <button
             onClick={() => setShowScoreModal(true)}
-            className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-[#2e1f13] to-[#1c140d] border border-[#e8c84a] text-xs font-cinzel font-bold text-[#ffd700] hover:brightness-110 flex items-center gap-1 shadow"
+            className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-[#2e1f13] to-[#1c140d] border border-[#e8c84a] text-xs font-cinzel font-bold text-[#ffd700] hover:brightness-110 flex items-center gap-1 shadow active:scale-95"
             title="Tabel Scor & Cronică"
           >
             <span>📊</span>
@@ -168,7 +168,7 @@ function MainAppContent() {
 
           <button
             onClick={() => setShowRulesModal(true)}
-            className="p-2 rounded-xl bg-[#1e1e1e] border border-[#2a2a2a] hover:border-[#e8c84a] text-xs font-cinzel text-gray-300"
+            className="p-2 rounded-xl bg-[#1e1e1e] border border-[#2a2a2a] hover:border-[#e8c84a] text-xs font-cinzel text-gray-300 active:scale-95 transition-all"
             title={t('tabRules')}
           >
             📜
@@ -176,7 +176,7 @@ function MainAppContent() {
 
           <button
             onClick={() => setShowCustomizeModal(true)}
-            className="p-2 rounded-xl bg-[#1e1e1e] border border-[#2a2a2a] hover:border-[#e8c84a] text-xs font-cinzel text-gray-300"
+            className="p-2 rounded-xl bg-[#1e1e1e] border border-[#2a2a2a] hover:border-[#e8c84a] text-xs font-cinzel text-gray-300 active:scale-95 transition-all"
             title={t('tabCustomize')}
           >
             🎨
@@ -185,7 +185,7 @@ function MainAppContent() {
       </header>
 
       {/* Main Screen Router */}
-      <main className="container mx-auto relative z-10 px-2 sm:px-4">
+      <main className="container mx-auto relative z-10 px-2 sm:px-4 safe-horizontal-padding">
         {currentScreen === 'setup' && (
           <SetupScreen
             onStartGame={handleStartGame}
