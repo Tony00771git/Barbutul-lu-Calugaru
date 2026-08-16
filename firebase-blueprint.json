@@ -232,6 +232,11 @@
           "description": "ID of player currently locked out after a wrong answer",
           "maxLength": 128
         },
+        "answeredBy": {
+          "type": "string",
+          "description": "Player ID who first locked in the correct answer atomically",
+          "maxLength": 128
+        },
         "roundResult": {
           "type": "object",
           "description": "Resolution result of current round"
@@ -265,6 +270,10 @@
     "/duel_rooms/{roomCode}": {
       "schema": "DuelRoom",
       "description": "Real-time synced duel room document"
+    },
+    "/time_sync/{syncId}": {
+      "schema": "object",
+      "description": "Device clock calibration document"
     }
   }
 }

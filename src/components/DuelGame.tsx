@@ -6,6 +6,7 @@ import { MonkMascot } from './MonkMascot';
 import { UseDuelSocketReturn } from '../hooks/useDuelSocket';
 import { recordDuelMatchHistory } from '../lib/firestoreService';
 import { auth } from '../lib/firebase';
+import { getSyncedServerNow, syncServerClock } from '../lib/duelFirestoreService';
 
 interface DuelGameProps {
   socket: UseDuelSocketReturn;
@@ -40,9 +41,11 @@ export const DuelGame: React.FC<DuelGameProps> = ({
 
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
-  const [revealTimeLeft, setRevealTimeLeft] = useState<number>(5);
   const [showEndConfirm, setShowEndConfirm] = useState<boolean>(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+
+  // Synchronized server clock timestamp updated continuously
+  const [syncedNow, setSyncedNow] = useState<number>(() => getSyncedServerNow());
 
   // 10-Second Drinking countdown timer state synced with server
   const [drinkCountdownTimeLeft, setDrinkCountdownTimeLeft] = useState<number>(10);
@@ -54,27 +57,35 @@ export const DuelGame: React.FC<DuelGameProps> = ({
   const myScores = (me && room && room.scores[me.id]) || { sipsTotal: 0, chugsTotal: 0, roundsWon: 0 };
   const opponentScores = (opponent && room && room.scores[opponent.id]) || { sipsTotal: 0, chugsTotal: 0, roundsWon: 0 };
 
-  // Sync Reveal Countdown timer based on room.revealEndsAt
+  // Calibrate server clock offset on mount
   useEffect(() => {
-    if (!room || room.status !== 'in_game' || room.phase !== 'reveal') {
-      return;
-    }
+    syncServerClock().catch(() => {});
+  }, []);
 
-    setSelectedOption(null);
+  // Continuous high-precision local clock synchronization interval
+  useEffect(() => {
+    if (!room || room.status !== 'in_game') return;
 
-    const updateTimer = () => {
-      const remaining = Math.max(0, Math.ceil((room.revealEndsAt - Date.now()) / 1000));
-      setRevealTimeLeft(remaining);
+    const interval = setInterval(() => {
+      setSyncedNow(getSyncedServerNow());
+    }, 50);
 
-      if (remaining <= 0 && room.hostPlayer.id === playerId) {
-        skipReveal();
-      }
-    };
-
-    updateTimer();
-    const interval = setInterval(updateTimer, 300);
     return () => clearInterval(interval);
-  }, [room?.phase, room?.revealEndsAt, room?.status, room?.hostPlayer.id, playerId, skipReveal]);
+  }, [room?.status]);
+
+  // Reset selected answer on new round or question change
+  useEffect(() => {
+    setSelectedOption(null);
+  }, [room?.currentRound, room?.currentQuestion?.id]);
+
+  // Determine synchronized phase states independently on each device
+  const isCountdownActive =
+    Boolean(room && room.status === 'in_game' && room.phase === 'reveal' && (room.revealEndsAt || 0) > syncedNow);
+
+  const isRaceActive =
+    Boolean(room && room.status === 'in_game' && (room.phase === 'race' || (room.phase === 'reveal' && syncedNow >= (room.revealEndsAt || 0))) && room.phase !== 'resolution');
+
+  const revealTimeLeft = Math.max(0, Math.ceil(((room?.revealEndsAt || 0) - syncedNow) / 1000));
 
   // Synchronized 10-Second Drinking Countdown Interval
   useEffect(() => {
@@ -243,8 +254,9 @@ export const DuelGame: React.FC<DuelGameProps> = ({
   };
 
   const handleSelectAnswer = (index: number) => {
-    if (room.phase !== 'race') return;
+    if (!isRaceActive || room.phase === 'resolution') return;
     if (room.lockedOutPlayerId === playerId) return;
+    if (room.answeredBy) return;
     setSelectedOption(index);
     submitAnswer(index);
   };
@@ -563,8 +575,8 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           </h2>
         </div>
 
-        {/* Phase 1: Reveal Phase (5s Countdown) */}
-        {room.phase === 'reveal' && (
+        {/* Phase 1: Reveal Phase (5s Countdown synchronized with Firestore Server Clock) */}
+        {isCountdownActive && (
           <div className="bg-[#1e140c]/90 border-2 border-[#e8c84a]/60 rounded-2xl p-5 text-center space-y-3 shadow-lg animate-fade-in">
             <div className="text-xs sm:text-sm font-cinzel text-[#ffd700]">
               {t('revealCountdown')} <span className="font-bebas text-2xl sm:text-3xl text-[#e05c3a] font-bold">{revealTimeLeft}s</span>
@@ -573,7 +585,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
             {/* Animated Progress Bar */}
             <div className="w-full bg-black/60 rounded-full h-2.5 overflow-hidden border border-[#e8c84a]/40">
               <div
-                className="bg-gradient-to-r from-[#ffd700] to-[#e05c3a] h-full transition-all duration-300 ease-linear"
+                className="bg-gradient-to-r from-[#ffd700] to-[#e05c3a] h-full transition-all duration-100 ease-linear"
                 style={{ width: `${Math.min(100, Math.max(0, (revealTimeLeft / 5) * 100))}%` }}
               />
             </div>
@@ -584,15 +596,15 @@ export const DuelGame: React.FC<DuelGameProps> = ({
 
             <button
               onClick={skipReveal}
-              className="mt-2 px-5 py-2 rounded-xl bg-gradient-to-r from-[#e8c84a] to-[#ffd700] text-black font-cinzel font-black text-xs sm:text-sm shadow hover:brightness-110 active:scale-95 transition-all"
+              className="mt-2 px-5 py-2 rounded-xl bg-gradient-to-r from-[#e8c84a] to-[#ffd700] text-black font-cinzel font-black text-xs sm:text-sm shadow hover:brightness-110 active:scale-95 transition-all cursor-pointer"
             >
               ⚡ GATA! Afișează Opțiunile Acum ➔
             </button>
           </div>
         )}
 
-        {/* Phase 2: Race / Speed Answering Phase */}
-        {room.phase === 'race' && (
+        {/* Phase 2: Race / Speed Answering Phase (Independently unlocked on target timestamp) */}
+        {isRaceActive && (
           <div className="space-y-3 animate-fade-in">
             {/* Lockout status alerts */}
             {isLockedOut && (

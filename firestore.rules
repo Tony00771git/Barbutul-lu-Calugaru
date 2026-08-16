@@ -122,5 +122,10 @@ service cloud.firestore {
       allow create, update: if isValidId(roomCode);
       allow delete: if isValidId(roomCode);
     }
+
+    // Device Clock Synchronization
+    match /time_sync/{syncId} {
+      allow get, set, create, update, delete: if isValidId(syncId);
+    }
   }
 }

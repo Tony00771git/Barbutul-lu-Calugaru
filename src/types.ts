@@ -36,6 +36,7 @@ export interface DuelRoomState {
   phase: 'reveal' | 'race' | 'resolution';
   revealEndsAt: number;
   lockedOutPlayerId: string | null;
+  answeredBy?: string | null;
   roundResult: {
     winnerId: string | null;
     loserIds: string[];

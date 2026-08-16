@@ -11,6 +11,8 @@ import {
   nextDuelRound,
   endDuelGame,
   subscribeToDuelRoom,
+  syncServerClock,
+  getSyncedServerNow,
 } from '../lib/duelFirestoreService';
 import { getDuelQuestionPool } from '../data/duelQuestions';
 
@@ -50,6 +52,11 @@ export function useDuelSocket(): UseDuelSocketReturn {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const activeRoomCodeRef = useRef<string | null>(null);
   const botTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Synchronize device clock with server on mount
+  useEffect(() => {
+    syncServerClock().catch(() => {});
+  }, []);
 
   // Clean up existing Firestore listener
   const stopListening = useCallback(() => {
@@ -115,11 +122,21 @@ export function useDuelSocket(): UseDuelSocketReturn {
       botTimeoutRef.current = null;
     }
 
-    // 1. Bot answers when in race phase
-    if (room.status === 'in_game' && room.phase === 'race' && room.lockedOutPlayerId !== 'bot_onufrie') {
-      const delay = room.lockedOutPlayerId === room.hostPlayer.id
-        ? 1400 + Math.random() * 1200 // Faster rebound
-        : 2600 + Math.random() * 2200; // Normal race
+    const currentServerNow = getSyncedServerNow();
+    const isRevealed =
+      room.phase === 'race' || (room.phase === 'reveal' && currentServerNow >= (room.revealEndsAt || 0));
+
+    // 1. Bot answers when in game and not locked out
+    if (room.status === 'in_game' && room.phase !== 'resolution' && room.lockedOutPlayerId !== 'bot_onufrie') {
+      const remainingUntilReveal = isRevealed
+        ? 0
+        : Math.max(0, (room.revealEndsAt || 0) - currentServerNow);
+
+      const delay =
+        remainingUntilReveal +
+        (room.lockedOutPlayerId === room.hostPlayer.id
+          ? 1200 + Math.random() * 1000 // Faster rebound
+          : 2200 + Math.random() * 2000); // Normal race
 
       botTimeoutRef.current = setTimeout(async () => {
         if (!room.currentQuestion) return;

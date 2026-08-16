@@ -3,6 +3,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   onSnapshot,
   runTransaction,
   serverTimestamp,
@@ -16,6 +17,64 @@ import {
   DuelRoomState,
   DuelSubmode,
 } from '../types';
+
+let serverClockOffset = 0;
+let isClockSynced = false;
+
+/**
+ * Synchronizes client device clock with Firestore server clock.
+ * Measures round-trip time and calculates the exact clock offset.
+ */
+export async function syncServerClock(): Promise<number> {
+  try {
+    const syncId = `sync_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`;
+    const syncRef = doc(db, 'time_sync', syncId);
+
+    const t0 = Date.now();
+    await setDoc(syncRef, {
+      clientSendTime: t0,
+      serverTimestamp: serverTimestamp(),
+    });
+
+    const snap = await getDoc(syncRef);
+    const t1 = Date.now();
+
+    if (snap.exists()) {
+      const data = snap.data();
+      const rawTs = data.serverTimestamp;
+      const serverMs =
+        typeof rawTs?.toMillis === 'function'
+          ? rawTs.toMillis()
+          : typeof rawTs?.seconds === 'number'
+          ? rawTs.seconds * 1000 + Math.floor((rawTs.nanoseconds || 0) / 1000000)
+          : null;
+
+      if (serverMs) {
+        const rtt = t1 - t0;
+        const estimatedLocalAtServerWrite = t0 + rtt / 2;
+        serverClockOffset = serverMs - estimatedLocalAtServerWrite;
+        isClockSynced = true;
+      }
+
+      // Cleanup calibration document asynchronously
+      deleteDoc(syncRef).catch(() => {});
+    }
+  } catch (e) {
+    console.warn('Clock sync warning, using local clock fallback:', e);
+  }
+  return serverClockOffset;
+}
+
+/**
+ * Returns current timestamp calibrated against the Firestore server clock.
+ */
+export function getSyncedServerNow(): number {
+  return Date.now() + serverClockOffset;
+}
+
+export function getServerClockOffset(): number {
+  return serverClockOffset;
+}
 
 export function generateRoomCode(): string {
   const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -57,6 +116,7 @@ export function sanitizeDuelRoom(rawRoom: any): DuelRoomState | null {
     phase: rawRoom.phase || 'reveal',
     revealEndsAt: rawRoom.revealEndsAt || 0,
     lockedOutPlayerId: rawRoom.lockedOutPlayerId || null,
+    answeredBy: rawRoom.answeredBy || null,
     roundResult: rawRoom.roundResult || null,
     scores: rawRoom.scores || {},
     stake: rawRoom.stake || { type: 'sips', count: 2 },
@@ -79,6 +139,10 @@ export async function createDuelRoom(
   difficulty: DuelDifficulty,
   targetPoints: number = 30
 ): Promise<string> {
+  if (!isClockSynced) {
+    await syncServerClock();
+  }
+
   const code = generateRoomCode();
   const deck = shuffleDeck(getDuelQuestionPool(submode, difficulty));
   const stake = calculateStake(difficulty);
@@ -111,6 +175,7 @@ export async function createDuelRoom(
     phase: 'reveal',
     revealEndsAt: 0,
     lockedOutPlayerId: null,
+    answeredBy: null,
     roundResult: null,
     scores: initialScores,
     createdAt: Date.now(),
@@ -130,6 +195,10 @@ export async function joinDuelRoom(
   roomCode: string,
   guestPlayer: { id: string; name: string; avatarIcon: string; color: string }
 ): Promise<void> {
+  if (!isClockSynced) {
+    await syncServerClock();
+  }
+
   const formattedCode = roomCode.toUpperCase().trim();
   const path = `duel_rooms/${formattedCode}`;
 
@@ -205,6 +274,10 @@ export async function addBotToDuelRoom(roomCode: string): Promise<void> {
 }
 
 export async function startDuelGame(roomCode: string, playerId: string): Promise<void> {
+  if (!isClockSynced) {
+    await syncServerClock();
+  }
+
   const formattedCode = roomCode.toUpperCase().trim();
   const path = `duel_rooms/${formattedCode}`;
 
@@ -220,14 +293,17 @@ export async function startDuelGame(roomCode: string, playerId: string): Promise
     }
 
     const stake = calculateStake(data.difficulty || 'easy');
+    // Synchronized absolute server target timestamp for option reveal (5 seconds countdown)
+    const revealEndsAt = getSyncedServerNow() + 5000;
 
     await updateDoc(roomRef, {
       status: 'in_game',
       currentRound: 1,
       currentCardIndex: 0,
       phase: 'reveal',
-      revealEndsAt: Date.now() + 5000,
+      revealEndsAt,
       lockedOutPlayerId: null,
+      answeredBy: null,
       roundResult: null,
       stake,
       updatedAt: Date.now(),
@@ -252,6 +328,10 @@ export async function skipDuelReveal(roomCode: string): Promise<void> {
   }
 }
 
+/**
+ * Submits player answer using an atomic Firestore transaction.
+ * Resolves race conditions on the server rather than trusting client-side timestamps.
+ */
 export async function submitDuelAnswer(
   roomCode: string,
   playerId: string,
@@ -268,8 +348,22 @@ export async function submitDuelAnswer(
       if (!snap.exists()) return;
 
       const data = snap.data();
-      if (data.status !== 'in_game' || data.phase !== 'race') return;
+      // Only process if active game and not yet resolved
+      if (data.status !== 'in_game' || data.phase === 'resolution') return;
+
+      // Check if reveal countdown has elapsed or phase is race
+      const currentServerNow = getSyncedServerNow();
+      const isRevealed =
+        data.phase === 'race' ||
+        (data.phase === 'reveal' && currentServerNow >= (data.revealEndsAt || 0));
+
+      if (!isRevealed) return;
+
+      // If this player is locked out from a previous wrong attempt in this round, ignore
       if (data.lockedOutPlayerId === playerId) return;
+
+      // If an answer has already been claimed and locked atomically, reject further submissions
+      if (data.answeredBy) return;
 
       const deck: DuelQuestion[] = data.deck || [];
       const currentCardIndex: number = data.currentCardIndex || 0;
@@ -292,7 +386,7 @@ export async function submitDuelAnswer(
       const targetPoints = data.targetPoints || 30;
 
       if (isCorrect) {
-        // Correct answer!
+        // CORRECT ANSWER: Atomically claim answeredBy and transition round to resolution
         const winnerId = playerId;
         const loserId = otherPlayerId || '';
 
@@ -337,24 +431,25 @@ export async function submitDuelAnswer(
         };
 
         transaction.update(roomRef, {
+          answeredBy: playerId,
           phase: 'resolution',
           scores,
           roundResult,
           updatedAt: Date.now(),
         });
       } else {
-        // Wrong answer
+        // WRONG ANSWER
         scores[playerId].wrong += 1;
 
         if (!data.lockedOutPlayerId) {
-          // First wrong answer -> lock out
+          // First player wrong -> atomically lock out this player and give opponent rebound opportunity
           transaction.update(roomRef, {
             lockedOutPlayerId: playerId,
             scores,
             updatedAt: Date.now(),
           });
         } else {
-          // Both wrong!
+          // Second player also answered wrong -> both players wrong!
           const loserIds = [data.hostPlayer.id, data.guestPlayer?.id].filter(Boolean) as string[];
 
           loserIds.forEach((pId) => {
@@ -397,6 +492,7 @@ export async function submitDuelAnswer(
           };
 
           transaction.update(roomRef, {
+            answeredBy: null,
             phase: 'resolution',
             scores,
             roundResult,
@@ -437,6 +533,10 @@ export async function startDuelDrinkTimer(roomCode: string): Promise<void> {
 }
 
 export async function nextDuelRound(roomCode: string): Promise<void> {
+  if (!isClockSynced) {
+    await syncServerClock();
+  }
+
   const formattedCode = roomCode.toUpperCase().trim();
   const path = `duel_rooms/${formattedCode}`;
 
@@ -449,13 +549,16 @@ export async function nextDuelRound(roomCode: string): Promise<void> {
     if (data.status !== 'in_game') return;
 
     const stake = calculateStake(data.difficulty || 'easy');
+    // Synchronized absolute server target timestamp for option reveal
+    const revealEndsAt = getSyncedServerNow() + 5000;
 
     await updateDoc(roomRef, {
       currentRound: (data.currentRound || 1) + 1,
       currentCardIndex: (data.currentCardIndex || 0) + 1,
       phase: 'reveal',
-      revealEndsAt: Date.now() + 5000,
+      revealEndsAt,
       lockedOutPlayerId: null,
+      answeredBy: null,
       roundResult: null,
       stake,
       updatedAt: Date.now(),
