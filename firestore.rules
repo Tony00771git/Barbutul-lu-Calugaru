@@ -115,5 +115,12 @@ service cloud.firestore {
         incoming().createdAt == request.time;
       allow update, delete: if false; // Completed duel history is immutable
     }
+
+    // Realtime Duel Rooms Collection
+    match /duel_rooms/{roomCode} {
+      allow get, list: if true; // Players can lookup and join duel rooms
+      allow create, update: if isValidId(roomCode);
+      allow delete: if isValidId(roomCode);
+    }
   }
 }

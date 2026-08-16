@@ -164,6 +164,89 @@
         }
       },
       "required": ["matchId", "roomCode", "submode", "difficulty", "hostPlayerName", "guestPlayerName", "roundsTotal", "creatorUid", "createdAt"]
+    },
+    "DuelRoom": {
+      "title": "DuelRoom",
+      "description": "Real-time 1v1 tavern duel room synchronizing game state",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Room 4-letter code",
+          "maxLength": 10
+        },
+        "submode": {
+          "type": "string",
+          "description": "Submode (general, football)",
+          "enum": ["general", "football"]
+        },
+        "difficulty": {
+          "type": "string",
+          "description": "Difficulty (easy, medium, hard)",
+          "enum": ["easy", "medium", "hard"]
+        },
+        "targetPoints": {
+          "type": "number",
+          "description": "Target drink points limit"
+        },
+        "hostPlayer": {
+          "type": "object",
+          "description": "Host player details"
+        },
+        "guestPlayer": {
+          "type": "object",
+          "description": "Guest player details or null"
+        },
+        "status": {
+          "type": "string",
+          "description": "Room state: lobby, in_game, finished",
+          "enum": ["lobby", "in_game", "finished"]
+        },
+        "currentRound": {
+          "type": "number",
+          "description": "Active round index"
+        },
+        "currentCardIndex": {
+          "type": "number",
+          "description": "Index in deck"
+        },
+        "deck": {
+          "type": "array",
+          "description": "Shuffled list of question objects for the match"
+        },
+        "stake": {
+          "type": "object",
+          "description": "Current round stake details"
+        },
+        "phase": {
+          "type": "string",
+          "description": "Active phase: reveal, race, resolution",
+          "enum": ["reveal", "race", "resolution"]
+        },
+        "revealEndsAt": {
+          "type": "number",
+          "description": "Timestamp ms when question reveal countdown ends"
+        },
+        "lockedOutPlayerId": {
+          "type": "string",
+          "description": "ID of player currently locked out after a wrong answer",
+          "maxLength": 128
+        },
+        "roundResult": {
+          "type": "object",
+          "description": "Resolution result of current round"
+        },
+        "scores": {
+          "type": "object",
+          "description": "Scores keyed by player ID"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last room state change"
+        }
+      },
+      "required": ["code", "submode", "difficulty", "hostPlayer", "status", "currentRound", "phase", "scores"]
     }
   },
   "firestore": {
@@ -178,6 +261,10 @@
     "/duel_histories/{matchId}": {
       "schema": "DuelHistory",
       "description": "Publicly readable duel game history record"
+    },
+    "/duel_rooms/{roomCode}": {
+      "schema": "DuelRoom",
+      "description": "Real-time synced duel room document"
     }
   }
 }

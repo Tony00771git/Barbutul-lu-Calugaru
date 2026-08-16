@@ -1,5 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { DuelRoomState, DuelPlayerInfo, DuelSubmode, DuelDifficulty } from '../types';
+import { DuelRoomState, DuelSubmode, DuelDifficulty, DuelPlayerInfo } from '../types';
+import {
+  createDuelRoom,
+  joinDuelRoom,
+  addBotToDuelRoom,
+  startDuelGame,
+  skipDuelReveal,
+  submitDuelAnswer,
+  startDuelDrinkTimer,
+  nextDuelRound,
+  endDuelGame,
+  subscribeToDuelRoom,
+} from '../lib/duelFirestoreService';
+import { getDuelQuestionPool } from '../data/duelQuestions';
 
 export interface UseDuelSocketReturn {
   room: DuelRoomState | null;
@@ -34,208 +47,260 @@ export function useDuelSocket(): UseDuelSocketReturn {
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const savedRoomCodeRef = useRef<string | null>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+  const activeRoomCodeRef = useRef<string | null>(null);
+  const botTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const getWsUrl = () => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${window.location.host}`;
-  };
-
-  const connectSocket = useCallback((onOpenCallback?: (socket: WebSocket) => void) => {
-    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
-      if (wsRef.current.readyState === WebSocket.OPEN && onOpenCallback) {
-        onOpenCallback(wsRef.current);
-      }
-      return;
+  // Clean up existing Firestore listener
+  const stopListening = useCallback(() => {
+    if (unsubscribeRef.current) {
+      unsubscribeRef.current();
+      unsubscribeRef.current = null;
     }
+    if (botTimeoutRef.current) {
+      clearTimeout(botTimeoutRef.current);
+      botTimeoutRef.current = null;
+    }
+  }, []);
 
-    setIsConnecting(true);
-    const wsUrl = getWsUrl();
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setIsConnected(true);
-      setIsConnecting(false);
+  // Start listening to a Firestore room document
+  const startListening = useCallback(
+    (roomCode: string) => {
+      stopListening();
+      setIsConnecting(true);
       setErrorMessage(null);
+      activeRoomCodeRef.current = roomCode;
 
-      // Check if we need to reconnect to an existing room
-      const savedCode = savedRoomCodeRef.current || sessionStorage.getItem('duel_room_code');
-      const savedPId = playerId || sessionStorage.getItem('duel_player_id');
-      if (savedCode && savedPId) {
-        ws.send(JSON.stringify({ type: 'reconnect', roomCode: savedCode, playerId: savedPId }));
-      }
-
-      if (onOpenCallback) {
-        onOpenCallback(ws);
-      }
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'room_created') {
-          setRoom(data.room);
-          setPlayerId(data.playerId);
-          savedRoomCodeRef.current = data.room.code;
-          sessionStorage.setItem('duel_room_code', data.room.code);
-          sessionStorage.setItem('duel_player_id', data.playerId);
-        } else if (data.room) {
-          setRoom(data.room);
-        } else if (data.type === 'error') {
-          setErrorMessage(data.message || 'A apărut o eroare.');
+      const unsub = subscribeToDuelRoom(
+        roomCode,
+        (updatedRoom) => {
+          setIsConnecting(false);
+          if (updatedRoom) {
+            setRoom(updatedRoom);
+            setIsConnected(true);
+          } else {
+            setIsConnected(false);
+            setErrorMessage('Camera a fost închisă sau nu mai există.');
+          }
+        },
+        (error) => {
+          setIsConnecting(false);
+          setIsConnected(false);
+          setErrorMessage(error.message || 'Eroare la conectarea la camera Firestore.');
         }
-      } catch (e) {
-        console.error('Error parsing WS message:', e);
-      }
-    };
+      );
 
-    ws.onclose = () => {
-      setIsConnected(false);
-      setIsConnecting(false);
-      // Auto-reconnect if we were in an active room
-      if (savedRoomCodeRef.current) {
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectSocket();
-        }, 2000);
-      }
-    };
+      unsubscribeRef.current = unsub;
+    },
+    [stopListening]
+  );
 
-    ws.onerror = (err) => {
-      console.warn('WS Error:', err);
-      setIsConnecting(false);
-    };
-  }, [playerId]);
-
-  const send = useCallback((payload: any) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(payload));
-    } else {
-      connectSocket((socket) => {
-        socket.send(JSON.stringify(payload));
-      });
+  // Resume subscription on page refresh if saved in sessionStorage
+  useEffect(() => {
+    const savedCode = sessionStorage.getItem('duel_room_code');
+    const savedPId = sessionStorage.getItem('duel_player_id');
+    if (savedCode && savedPId && !unsubscribeRef.current) {
+      startListening(savedCode);
     }
-  }, [connectSocket]);
+  }, [startListening]);
 
-  const createRoom = useCallback((
-    hostPlayer: { id: string; name: string; avatarIcon: string; color: string },
-    submode: DuelSubmode,
-    difficulty: DuelDifficulty,
-    targetPoints: number = 30
-  ) => {
-    setPlayerId(hostPlayer.id);
-    sessionStorage.setItem('duel_player_id', hostPlayer.id);
-    send({
-      type: 'create_room',
-      hostPlayer,
-      submode,
-      difficulty,
-      targetPoints,
-    });
-  }, [send]);
+  // Host bot automation coordinator
+  useEffect(() => {
+    if (!room || room.guestPlayer?.id !== 'bot_onufrie') return;
+    const isHost = room.hostPlayer.id === playerId;
+    if (!isHost) return;
 
-  const joinRoom = useCallback((
-    roomCode: string,
-    guestPlayer: { id: string; name: string; avatarIcon: string; color: string }
-  ) => {
-    const formattedCode = roomCode.toUpperCase().trim();
-    setPlayerId(guestPlayer.id);
-    savedRoomCodeRef.current = formattedCode;
-    sessionStorage.setItem('duel_room_code', formattedCode);
-    sessionStorage.setItem('duel_player_id', guestPlayer.id);
+    if (botTimeoutRef.current) {
+      clearTimeout(botTimeoutRef.current);
+      botTimeoutRef.current = null;
+    }
 
-    send({
-      type: 'join_room',
-      roomCode: formattedCode,
-      guestPlayer,
-    });
-  }, [send]);
+    // 1. Bot answers when in race phase
+    if (room.status === 'in_game' && room.phase === 'race' && room.lockedOutPlayerId !== 'bot_onufrie') {
+      const delay = room.lockedOutPlayerId === room.hostPlayer.id
+        ? 1400 + Math.random() * 1200 // Faster rebound
+        : 2600 + Math.random() * 2200; // Normal race
 
-  const addBot = useCallback(() => {
+      botTimeoutRef.current = setTimeout(async () => {
+        if (!room.currentQuestion) return;
+
+        // Retrieve current question to determine correct answer
+        const pool = getDuelQuestionPool(room.submode, room.difficulty);
+        const matched = pool.find((q) => q.id === room.currentQuestion?.id);
+        const correctIdx = matched ? matched.correct : 0;
+
+        // 75% accuracy for AI monk
+        let chosenOption = correctIdx;
+        if (Math.random() > 0.75) {
+          const wrongOptions = [0, 1, 2, 3].filter((idx) => idx !== correctIdx);
+          chosenOption = wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
+        }
+
+        try {
+          await submitDuelAnswer(room.code, 'bot_onufrie', chosenOption);
+        } catch (err: any) {
+          console.warn('Bot answer submission error:', err);
+        }
+      }, delay);
+    }
+
+    // 2. Auto-start drinking countdown if bot lost
+    if (
+      room.status === 'in_game' &&
+      room.phase === 'resolution' &&
+      room.roundResult &&
+      !room.roundResult.drinkCountdownEndsAt &&
+      (room.roundResult.winnerId === room.hostPlayer.id || room.roundResult.reason === 'both_wrong')
+    ) {
+      botTimeoutRef.current = setTimeout(async () => {
+        try {
+          await startDuelDrinkTimer(room.code);
+        } catch (e) {
+          console.warn('Bot timer trigger error:', e);
+        }
+      }, 1200);
+    }
+
+    return () => {
+      if (botTimeoutRef.current) {
+        clearTimeout(botTimeoutRef.current);
+      }
+    };
+  }, [room, playerId]);
+
+  const createRoom = useCallback(
+    async (
+      hostPlayer: { id: string; name: string; avatarIcon: string; color: string },
+      submode: DuelSubmode,
+      difficulty: DuelDifficulty,
+      targetPoints: number = 30
+    ) => {
+      try {
+        setIsConnecting(true);
+        setErrorMessage(null);
+        setPlayerId(hostPlayer.id);
+        sessionStorage.setItem('duel_player_id', hostPlayer.id);
+
+        const newCode = await createDuelRoom(hostPlayer, submode, difficulty, targetPoints);
+        sessionStorage.setItem('duel_room_code', newCode);
+        startListening(newCode);
+      } catch (err: any) {
+        setIsConnecting(false);
+        setErrorMessage(err.message || 'Eroare la crearea camerei!');
+      }
+    },
+    [startListening]
+  );
+
+  const joinRoom = useCallback(
+    async (
+      roomCode: string,
+      guestPlayer: { id: string; name: string; avatarIcon: string; color: string }
+    ) => {
+      const formattedCode = roomCode.toUpperCase().trim();
+      try {
+        setIsConnecting(true);
+        setErrorMessage(null);
+        setPlayerId(guestPlayer.id);
+        sessionStorage.setItem('duel_player_id', guestPlayer.id);
+        sessionStorage.setItem('duel_room_code', formattedCode);
+
+        await joinDuelRoom(formattedCode, guestPlayer);
+        startListening(formattedCode);
+      } catch (err: any) {
+        setIsConnecting(false);
+        setErrorMessage(err.message || 'Eroare la intrarea în cameră!');
+      }
+    },
+    [startListening]
+  );
+
+  const addBot = useCallback(async () => {
     if (!room) return;
-    send({
-      type: 'add_bot',
-      roomCode: room.code,
-    });
-  }, [room, send]);
+    try {
+      await addBotToDuelRoom(room.code);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Eroare la adăugarea botului!');
+    }
+  }, [room]);
 
-  const startGame = useCallback(() => {
+  const startGame = useCallback(async () => {
     if (!room || !playerId) return;
-    send({
-      type: 'start_game',
-      roomCode: room.code,
-      playerId,
-    });
-  }, [room, playerId, send]);
+    try {
+      await startDuelGame(room.code, playerId);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Eroare la pornirea jocului!');
+    }
+  }, [room, playerId]);
 
-  const skipReveal = useCallback(() => {
+  const skipReveal = useCallback(async () => {
     if (!room || !playerId) return;
-    send({
-      type: 'skip_reveal',
-      roomCode: room.code,
-      playerId,
-    });
-  }, [room, playerId, send]);
+    try {
+      await skipDuelReveal(room.code);
+    } catch (err: any) {
+      console.warn('Skip reveal error:', err);
+    }
+  }, [room, playerId]);
 
-  const submitAnswer = useCallback((optionIndex: number) => {
-    if (!room || !playerId) return;
-    send({
-      type: 'submit_answer',
-      roomCode: room.code,
-      playerId,
-      optionIndex,
-    });
-  }, [room, playerId, send]);
+  const submitAnswer = useCallback(
+    async (optionIndex: number) => {
+      if (!room || !playerId) return;
+      try {
+        await submitDuelAnswer(room.code, playerId, optionIndex);
+      } catch (err: any) {
+        console.warn('Submit answer error:', err);
+      }
+    },
+    [room, playerId]
+  );
 
-  const nextRound = useCallback(() => {
+  const nextRound = useCallback(async () => {
     if (!room) return;
-    send({
-      type: 'next_round',
-      roomCode: room.code,
-    });
-  }, [room, send]);
+    try {
+      await nextDuelRound(room.code);
+    } catch (err: any) {
+      console.warn('Next round error:', err);
+    }
+  }, [room]);
 
-  const startDrinkTimer = useCallback(() => {
+  const startDrinkTimer = useCallback(async () => {
     if (!room || !playerId) return;
-    send({
-      type: 'start_drink_timer',
-      roomCode: room.code,
-      playerId,
-    });
-  }, [room, playerId, send]);
+    try {
+      await startDuelDrinkTimer(room.code);
+    } catch (err: any) {
+      console.warn('Start drink timer error:', err);
+    }
+  }, [room, playerId]);
 
-  const endGame = useCallback(() => {
+  const endGame = useCallback(async () => {
     if (!room) return;
-    send({
-      type: 'end_game',
-      roomCode: room.code,
-    });
-  }, [room, send]);
+    try {
+      await endDuelGame(room.code);
+    } catch (err: any) {
+      console.warn('End game error:', err);
+    }
+  }, [room]);
 
   const clearError = useCallback(() => {
     setErrorMessage(null);
   }, []);
 
   const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    savedRoomCodeRef.current = null;
+    stopListening();
+    activeRoomCodeRef.current = null;
     sessionStorage.removeItem('duel_room_code');
     sessionStorage.removeItem('duel_player_id');
     setRoom(null);
     setIsConnected(false);
-  }, []);
+    setIsConnecting(false);
+    setErrorMessage(null);
+  }, [stopListening]);
 
   useEffect(() => {
     return () => {
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      stopListening();
     };
-  }, []);
+  }, [stopListening]);
 
   return {
     room,
