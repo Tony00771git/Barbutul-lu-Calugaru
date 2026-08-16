@@ -775,78 +775,28 @@ export const DuelGame: React.FC<DuelGameProps> = ({
               </div>
             </div>
 
-            {/* Stage 1 vs Stage 2: Click OK to launch 10s Timer */}
-            {!isDrinkingTimerActive ? (
-              <div className="pt-1">
-                {isTargetReached ? (
-                  <button
-                    onClick={endGame}
-                    className="w-full py-3.5 rounded-2xl font-cinzel font-black text-sm bg-gradient-to-r from-[#e8c84a] via-[#ffd700] to-[#e8c84a] text-black hover:brightness-110 active:scale-95 shadow-xl gold-glow"
-                  >
-                    🏆 Vezi Podiumul & Câștigătorul ➔
-                  </button>
-                ) : isMyDrinking ? (
-                  <button
-                    onClick={startDrinkTimer}
-                    className={`w-full py-3.5 rounded-2xl font-cinzel font-black text-sm transition-all duration-200 active:scale-95 shadow-xl flex items-center justify-center gap-2 ${
-                      isChug
-                        ? 'bg-gradient-to-r from-red-600 to-orange-600 text-white hover:brightness-110 flame-glow animate-pulse'
-                        : 'bg-gradient-to-r from-[#e8c84a] to-[#ffd700] text-black hover:brightness-110 gold-glow'
-                    }`}
-                  >
-                    <span>{isChug ? '🔥 Am băut groapa! Pornește Timer-ul (10s) ➔' : '🍺 Am băut! Pornește Timer-ul (10s) ➔'}</span>
-                  </button>
-                ) : (
-                  <div className="bg-[#1a140d] border border-emerald-500/40 rounded-2xl p-3.5 text-center space-y-1.5 animate-pulse">
-                    <div className="text-xs font-cinzel font-bold text-emerald-400 flex items-center justify-center gap-2">
-                      <span className="text-base">⏳</span>
-                      <span>Se așteaptă ca {opponent?.name || 'adversarul'} să bea...</span>
-                    </div>
-                    <p className="text-[11px] font-barlow text-gray-400">
-                      Doar {opponent?.name || 'jucătorul care bea'} poate confirma pentru a activa cronometrul de 10s.
-                    </p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Stage 2: 10-Second Drinking Countdown Screen */
-              <div className="pt-1 space-y-3 animate-fade-in">
-                <div className="bg-[#24170c] border-2 border-[#ffd700] rounded-2xl p-4 text-center space-y-2 gold-glow">
-                  <div className="text-xs font-cinzel text-gray-300 uppercase tracking-wider">
-                    ⏳ Timp pentru băut:
-                  </div>
-
-                  <div className="font-bebas text-5xl sm:text-6xl text-[#ffd700] gold-text-glow font-black animate-pulse">
-                    {drinkCountdownTimeLeft}s
-                  </div>
-
-                  {/* Animated Progress Bar for 10 seconds */}
-                  <div className="w-full bg-black/60 rounded-full h-3 overflow-hidden border border-[#ffd700]/50">
-                    <div
-                      className="bg-gradient-to-r from-[#ffd700] via-[#ffaa00] to-[#e05c3a] h-full transition-all duration-300 ease-linear"
-                      style={{ width: `${Math.max(0, (drinkCountdownTimeLeft / 10) * 100)}%` }}
-                    />
-                  </div>
-
-                  <p className="text-xs text-gray-300 font-barlow">
-                    🍺 Se bea acum! Oricare dintre voi poate da skip pentru a începe runda următoare.
-                  </p>
-                </div>
-
+            {/* Stage 1 vs Stage 2: Action Button for Next Round or Ending Duel */}
+            <div className="pt-1">
+              {isTargetReached ? (
                 <button
-                  onClick={() => {
-                    if (isTargetReached) {
-                      endGame();
-                    } else {
-                      nextRound();
-                    }
-                  }}
-                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black font-cinzel font-black text-xs sm:text-sm hover:brightness-110 active:scale-95 shadow transition-all flex items-center justify-center gap-1.5"
+                  onClick={endGame}
+                  className="w-full py-3.5 rounded-2xl font-cinzel font-black text-sm bg-gradient-to-r from-[#e8c84a] via-[#ffd700] to-[#e8c84a] text-black hover:brightness-110 active:scale-95 shadow-xl gold-glow cursor-pointer"
                 >
-                  <span>⚡ Skip Timer ➔ Următoarea Rundă</span>
+                  🏆 Vezi Podiumul & Câștigătorul ➔
                 </button>
-              </div>
-            )}
+              ) : (
+                <button
+                  onClick={nextRound}
+                  className={`w-full py-3.5 rounded-2xl font-cinzel font-black text-sm transition-all duration-200 active:scale-95 shadow-xl flex items-center justify-center gap-2 cursor-pointer ${
+                    isChug
+                      ? 'bg-gradient-to-r from-red-600 to-orange-600 text-white hover:brightness-110 flame-glow animate-pulse'
+                      : 'bg-gradient-to-r from-[#e8c84a] to-[#ffd700] text-black hover:brightness-110 gold-glow'
+                  }`}
+                >
+                  <span>{isMyDrinking ? (isChug ? '🔥 Am băut groapa! ➔ Runda Următoare' : '🍺 Am băut! ➔ Runda Următoare') : '⚔️ Următoarea Rundă ➔'}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
