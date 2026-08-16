@@ -141,8 +141,8 @@ export const footballMediumQuestions: DuelQuestion[] = [
     id: 2118,
     q_ro: "Ce stadion găzduiește meciurile de acasă atât pentru AC Milan, cât și pentru Inter Milano?",
     q_en: "What is the iconic Milanese stadium shared as home ground by both AC Milan and Inter Milan?",
-    a_ro: ["Stadio Olimpico", "San Siro (Giuseppe Meazza)", "Allianz Stadium", "Stadio Diego Armando Maradona"],
-    a_en: ["Stadio Olimpico", "San Siro (Giuseppe Meazza)", "Allianz Stadium", "Stadio Diego Armando Maradona"],
+    a_ro: ["Stadio Olimpico","San Siro","Allianz Stadium","Stadio Diego Armando Maradona"],
+    a_en: ["Stadio Olimpico","San Siro","Allianz Stadium","Stadio Diego Armando Maradona"],
     correct: 1,
   },
   {
@@ -221,8 +221,8 @@ export const footballMediumQuestions: DuelQuestion[] = [
     id: 2128,
     q_ro: "Care a fost primul club de fotbal din cariera profesionistă de seniori a lui Cristiano Ronaldo?",
     q_en: "Which Portuguese club was Cristiano Ronaldo's first professional senior club?",
-    a_ro: ["Nacional da Madeira", "Sporting Lisabona (Sporting CP)", "FC Porto", "Benfica"],
-    a_en: ["Nacional da Madeira", "Sporting CP (Lisbon)", "FC Porto", "Benfica"],
+    a_ro: ["Nacional da Madeira","Sporting Lisabona","FC Porto","Benfica"],
+    a_en: ["Nacional da Madeira","Sporting CP","FC Porto","Benfica"],
     correct: 1,
   },
   {
@@ -299,7 +299,7 @@ export const footballMediumQuestions: DuelQuestion[] = [
   },
   {
     id: 2138,
-    q_ro: "În ce an a marcat Ilie Dumitrescu o dublă memorabilă împotriva Argentinei la World Cup 1994?",
+    q_ro: "În ce an a învins România echipa Argentinei cu scorul de 3-2 în optimile de finală ale Cupei Mondiale?",
     q_en: "In what year did Romania defeat Argentina 3-2 with a famous Ilie Dumitrescu brace in the World Cup round of 16?",
     a_ro: ["1990", "1994", "1998", "2002"],
     a_en: ["1990", "1994", "1998", "2002"],
@@ -325,8 +325,8 @@ export const footballMediumQuestions: DuelQuestion[] = [
     id: 2141,
     q_ro: "Ce națiune a fost prima campioană europeană la fotbal, câștigând turneul inaugural din 1960 din Franța?",
     q_en: "Which national team won the inaugural UEFA European Championship in 1960?",
-    a_ro: ["Iugoslavia", "URSS (Uniunea Sovietică)", "Spania", "Cehoslovacia"],
-    a_en: ["Yugoslavia", "Soviet Union (USSR)", "Spain", "Czechoslovakia"],
+    a_ro: ["Iugoslavia","Uniunea Sovietică","Spania","Cehoslovacia"],
+    a_en: ["Yugoslavia","Soviet Union","Spain","Czechoslovakia"],
     correct: 1,
   },
   {
@@ -365,8 +365,8 @@ export const footballMediumQuestions: DuelQuestion[] = [
     id: 2146,
     q_ro: "Ce club a învins Steaua București cu 4-0 în finala Cupei Campionilor Europeni din 1989 la Barcelona?",
     q_en: "Which legendary Italian side defeated Steaua Bucharest 4-0 in the 1989 European Cup final?",
-    a_ro: ["Juventus", "AC Milan (condus de Sacchi cu Gullit & Van Basten)", "Inter Milano", "Napoli"],
-    a_en: ["Juventus", "AC Milan (under Arrigo Sacchi)", "Inter Milan", "Napoli"],
+    a_ro: ["Juventus","AC Milan","Inter Milano","Napoli"],
+    a_en: ["Juventus","AC Milan","Inter Milan","Napoli"],
     correct: 1,
   },
   {

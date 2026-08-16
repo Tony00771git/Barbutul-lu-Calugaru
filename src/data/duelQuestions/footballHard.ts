@@ -5,8 +5,8 @@ export const footballHardQuestions: DuelQuestion[] = [
     id: 2201,
     q_ro: "Cine a marcat cel mai rapid gol din istoria Campionatelor Europene (în secunda 23, la Euro 2024)?",
     q_en: "Who scored the fastest goal in European Championship history (23 seconds, at Euro 2024)?",
-    a_ro: ["Dmitri Kirichenko", "Nedim Bajrami (Albania)", "Emil Forsberg", "Merih Demiral"],
-    a_en: ["Dmitri Kirichenko", "Nedim Bajrami (Albania)", "Emil Forsberg", "Merih Demiral"],
+    a_ro: ["Dmitri Kirichenko","Nedim Bajrami","Emil Forsberg","Merih Demiral"],
+    a_en: ["Dmitri Kirichenko","Nedim Bajrami","Emil Forsberg","Merih Demiral"],
     correct: 1,
   },
   {
@@ -355,8 +355,8 @@ export const footballHardQuestions: DuelQuestion[] = [
   },
   {
     id: 2245,
-    q_ro: "Ce echipă națională a obținut cea mai mare victorie din istoria fazelor finale de Cupă Mondială (Ungaria 10-1 El Salvador în 1982)?",
-    q_en: "Which nation recorded the highest ever scoreline in a FIFA World Cup finals match (10-1 against El Salvador in 1982)?",
+    q_ro: "Ce echipă națională a obținut victoria cu scorul record de 10-1 într-un meci din faza finală a Cupei Mondiale din 1982?",
+    q_en: "Which nation recorded the highest ever scoreline in a FIFA World Cup finals match (10-1 in 1982)?",
     a_ro: ["Brazilia", "Ungaria", "Germania", "Iugoslavia"],
     a_en: ["Brazil", "Hungary", "Germany", "Yugoslavia"],
     correct: 1,
@@ -387,10 +387,10 @@ export const footballHardQuestions: DuelQuestion[] = [
   },
   {
     id: 2249,
-    q_ro: "Ce jucător deține recordul de a fi fost cel mai vârstnic fotbalist care a jucat la o Cupă Mondială (Essam El-Hadary la 45 de ani și 161 zile în 2018)?",
-    q_en: "Who is the oldest player to ever appear in a FIFA World Cup match (Egypt's Essam El-Hadary in 2018)?",
-    a_ro: ["Roger Milla", "Essam El-Hadary", "Faryd Mondragón", "Pat Jennings"],
-    a_en: ["Roger Milla", "Essam El-Hadary", "Faryd Mondragon", "Pat Jennings"],
+    q_ro: "Ce portar egiptean deține recordul de a fi cel mai vârstnic fotbalist care a jucat la o Cupă Mondială, la vârsta de 45 de ani?",
+    q_en: "Which Egyptian goalkeeper holds the record as the oldest player to appear in a FIFA World Cup match, at age 45?",
+    a_ro: ["Roger Milla","Essam El-Hadary","Faryd Mondragón","Pat Jennings"],
+    a_en: ["Roger Milla","Essam El-Hadary","Faryd Mondragon","Pat Jennings"],
     correct: 1,
   },
   {

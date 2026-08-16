@@ -38,17 +38,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearAuthError = () => setAuthError(null);
 
   const fetchProfile = async (uid: string) => {
+    if (!auth.currentUser || auth.currentUser.uid !== uid) {
+      return;
+    }
     try {
       const p = await getUserProfile(uid);
       if (p) {
         setCloudProfile(p);
-      } else {
+      } else if (auth.currentUser && auth.currentUser.uid === uid) {
         // Initial setup for new user
         const initial: CloudUserProfile = {
           userId: uid,
-          displayName: auth.currentUser?.displayName || 'Călugăr Pelerin',
+          displayName: auth.currentUser.displayName || 'Călugăr Pelerin',
           avatarIcon: 'monk_drunk',
-          email: auth.currentUser?.email || '',
+          email: auth.currentUser.email || '',
           gamesPlayed: 0,
           totalSips: 0,
           totalChugs: 0,

@@ -1,4 +1,5 @@
 {
+  "id": "/?source=pwa",
   "name": "Barbutul lu' Călugăru",
   "short_name": "Barbutul",
   "description": "Joc de băut cu temă medievală mănăstirească - Modurile Normal, Boardgame și Duel 1v1 Trivia",
@@ -8,13 +9,78 @@
   "orientation": "portrait-primary",
   "background_color": "#0d0d0d",
   "theme_color": "#0d0d0d",
+  "lang": "ro",
+  "dir": "ltr",
   "categories": ["games", "entertainment"],
+  "prefer_related_applications": false,
   "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Meniul principal și modurile de joc pe mobil"
+    },
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Barbutul lu' Călugăru - Versiunea completă"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Duel 1v1 Trivia",
+      "short_name": "Duel",
+      "description": "Intră direct în duel 1v1 online",
+      "url": "/?mode=duel",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Tabla Mănăstirii",
+      "short_name": "Board",
+      "description": "Pornește tabla de joc cu 30 chilii",
+      "url": "/?mode=board",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

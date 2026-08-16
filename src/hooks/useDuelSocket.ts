@@ -111,6 +111,43 @@ export function useDuelSocket(): UseDuelSocketReturn {
     }
   }, [startListening]);
 
+  // Mobile Network auto-reconnection on network state changes (online/offline & visibility)
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('[Duel] Dispozitivul este din nou ONLINE. Se încearcă reconectarea...');
+      syncServerClock().catch(() => {});
+      const activeCode = activeRoomCodeRef.current || sessionStorage.getItem('duel_room_code');
+      if (activeCode) {
+        startListening(activeCode);
+      }
+    };
+
+    const handleOffline = () => {
+      console.warn('[Duel] Dispozitivul a pierdut conexiunea la internet (OFFLINE).');
+      setIsConnected(false);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const activeCode = activeRoomCodeRef.current || sessionStorage.getItem('duel_room_code');
+        if (activeCode && !isConnected) {
+          syncServerClock().catch(() => {});
+          startListening(activeCode);
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isConnected, startListening]);
+
   // Host bot automation coordinator
   useEffect(() => {
     if (!room || room.guestPlayer?.id !== 'bot_onufrie') return;

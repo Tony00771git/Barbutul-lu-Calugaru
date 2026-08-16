@@ -51,6 +51,10 @@ export interface CloudDuelHistory {
 }
 
 export async function getUserProfile(userId: string): Promise<CloudUserProfile | null> {
+  // If user is not authenticated or the ID doesn't match current user, do not attempt to read private doc
+  if (!auth.currentUser || auth.currentUser.uid !== userId) {
+    return null;
+  }
   const path = `users/${userId}`;
   try {
     const snap = await getDoc(doc(db, 'users', userId));

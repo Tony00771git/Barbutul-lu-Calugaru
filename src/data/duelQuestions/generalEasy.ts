@@ -21,8 +21,8 @@ export const generalEasyQuestions: DuelQuestion[] = [
     id: 1003,
     q_ro: "Ce culoare obții amestecând roșu și albastru?",
     q_en: "What color do you get by mixing red and blue?",
-    a_ro: ["Verde", "Violet (Mov)", "Portocaliu", "Maro"],
-    a_en: ["Green", "Purple / Violet", "Orange", "Brown"],
+    a_ro: ["Verde","Violet","Portocaliu","Maro"],
+    a_en: ["Green","Violet","Orange","Brown"],
     correct: 1,
   },
   {
@@ -211,8 +211,8 @@ export const generalEasyQuestions: DuelQuestion[] = [
   },
   {
     id: 1027,
-    q_ro: "În ce an a început noul mileniu (anul 2000)?",
-    q_en: "In what year did the year 2000 occur?",
+    q_ro: "Ce an a marcat trecerea festivă în noul mileniu și celebrarea fenomenului 'Y2K'?",
+    q_en: "Which year marked the turn of the millennium and global 'Y2K' celebrations?",
     a_ro: ["1999", "2000", "2001", "2010"],
     a_en: ["1999", "2000", "2001", "2010"],
     correct: 1,

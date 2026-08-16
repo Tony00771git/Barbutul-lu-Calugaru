@@ -99,8 +99,8 @@ export const footballEasyQuestions: DuelQuestion[] = [
   },
   {
     id: 2013,
-    q_ro: "În ce oraș din Anglia joacă echipele Liverpool FC și Everton FC?",
-    q_en: "In which English city do Liverpool FC and Everton FC play?",
+    q_ro: "În ce oraș din Anglia are loc celebrul 'Merseyside Derby' disputat pe Anfield și Goodison Park?",
+    q_en: "In which English city does the 'Merseyside Derby' between the Reds and the Toffees take place?",
     a_ro: ["Manchester", "Londra", "Liverpool", "Birmingham"],
     a_en: ["Manchester", "London", "Liverpool", "Birmingham"],
     correct: 2,
@@ -237,8 +237,8 @@ export const footballEasyQuestions: DuelQuestion[] = [
     id: 2030,
     q_ro: "Ce trofeu individual acordat de revista France Football recompensează cel mai bun fotbalist al anului?",
     q_en: "Which individual award presented by France Football honors the best male footballer of the year?",
-    a_ro: ["Gheata de Aur", "Balonul de Aur (Ballon d'Or)", "Trofeul Puskás", "Cupa Mondială"],
-    a_en: ["Golden Shoe", "Ballon d'Or (Golden Ball)", "Puskas Award", "World Cup"],
+    a_ro: ["Gheata de Aur","Balonul de Aur","Trofeul Puskás","Cupa Mondială"],
+    a_en: ["Golden Shoe","Ballon d'Or","Puskas Award","World Cup"],
     correct: 1,
   },
   {
@@ -275,10 +275,10 @@ export const footballEasyQuestions: DuelQuestion[] = [
   },
   {
     id: 2035,
-    q_ro: "La ce distanță față de poartă se află punctul de la 11 metri (penalty)?",
-    q_en: "From what distance is a standard penalty kick taken?",
-    a_ro: ["9.15 metri", "11 metri (12 yarzi)", "16.5 metri", "7.32 metri"],
-    a_en: ["9.15 meters", "11 meters (12 yards)", "16.5 meters", "7.32 meters"],
+    q_ro: "De la ce distanță față de linia porții se execută lovitura de pedeapsă (penalty)?",
+    q_en: "From what distance to the goal line is a standard penalty kick taken?",
+    a_ro: ["9.15 metri","11 metri","16.5 metri","7.32 metri"],
+    a_en: ["9.15 meters","11 meters","16.5 meters","7.32 meters"],
     correct: 1,
   },
   {
@@ -365,8 +365,8 @@ export const footballEasyQuestions: DuelQuestion[] = [
     id: 2046,
     q_ro: "Care este cel mai vechi club de fotbal din lume recunoscut oficial de FIFA?",
     q_en: "Which is officially recognized by FIFA as the oldest existing association football club in the world?",
-    a_ro: ["Notts County", "Sheffield FC (fondat 1857)", "Stoke City", "Aston Villa"],
-    a_en: ["Notts County", "Sheffield FC (founded 1857)", "Stoke City", "Aston Villa"],
+    a_ro: ["Notts County","Sheffield FC","Stoke City","Aston Villa"],
+    a_en: ["Notts County","Sheffield FC","Stoke City","Aston Villa"],
     correct: 1,
   },
   {
@@ -381,8 +381,8 @@ export const footballEasyQuestions: DuelQuestion[] = [
     id: 2048,
     q_ro: "Ce premiu primește golgheterul unui turneu final de Cupă Mondială?",
     q_en: "What award is given to the top goalscorer of a FIFA World Cup tournament?",
-    a_ro: ["Balonul de Aur", "Gheata de Aur (Golden Boot)", "Mănușa de Aur", "Trofeul Fair Play"],
-    a_en: ["Golden Ball", "Golden Boot", "Golden Glove", "Fair Play Trophy"],
+    a_ro: ["Balonul de Aur","Gheata de Aur","Mănușa de Aur","Trofeul Fair Play"],
+    a_en: ["Golden Ball","Golden Boot","Golden Glove","Fair Play Trophy"],
     correct: 1,
   },
   {

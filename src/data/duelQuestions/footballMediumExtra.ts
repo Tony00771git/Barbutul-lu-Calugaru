@@ -165,8 +165,8 @@ export const footballMediumExtraQuestions: DuelQuestion[] = [
     id: 2321,
     q_ro: "Ce stadion găzduiește meciurile de acasă ale echipei Borussia Dortmund cu celebrul 'Zid Galben'?",
     q_en: "Which stadium hosts Borussia Dortmund's famous standing terrace 'The Yellow Wall'?",
-    a_ro: ["Allianz Arena", "Signal Iduna Park (Westfalenstadion)", "Veltins Arena", "Olympiastadion"],
-    a_en: ["Allianz Arena", "Signal Iduna Park (Westfalenstadion)", "Veltins Arena", "Olympiastadion"],
+    a_ro: ["Allianz Arena","Signal Iduna Park","Veltins Arena","Olympiastadion"],
+    a_en: ["Allianz Arena","Signal Iduna Park","Veltins Arena","Olympiastadion"],
     correct: 1,
   },
   {
@@ -245,8 +245,8 @@ export const footballMediumExtraQuestions: DuelQuestion[] = [
     id: 2331,
     q_ro: "Ce club din Ligue 1 este numit 'Les Parisiens'?",
     q_en: "Which French Ligue 1 giant is nicknamed 'Les Parisiens'?",
-    a_ro: ["Olympique Marseille", "Paris Saint-Germain (PSG)", "AS Monaco", "Olympique Lyon"],
-    a_en: ["Olympique Marseille", "Paris Saint-Germain (PSG)", "AS Monaco", "Olympique Lyon"],
+    a_ro: ["Olympique Marseille","Paris Saint-Germain","AS Monaco","Olympique Lyon"],
+    a_en: ["Olympique Marseille","Paris Saint-Germain","AS Monaco","Olympique Lyon"],
     correct: 1,
   },
   {
@@ -395,10 +395,10 @@ export const footballMediumExtraQuestions: DuelQuestion[] = [
   },
   {
     id: 2350,
-    q_ro: "Ce club a câștigat 'Treble'-ul european (Premier League, FA Cup, Champions League) în 1999 și 2023?",
-    q_en: "Which two English clubs achieved the continental Treble (1999 and 2023)?",
-    a_ro: ["Liverpool & Chelsea", "Man United (1999) & Man City (2023)", "Arsenal & Man United", "Chelsea & Man City"],
-    a_en: ["Liverpool & Chelsea", "Man United (1999) & Man City (2023)", "Arsenal & Man United", "Chelsea & Man City"],
+    q_ro: "Care sunt singurele două cluburi din Anglia care au reușit 'Treble'-ul continental (campionat, cupă, Champions League)?",
+    q_en: "Which are the only two English clubs to achieve the continental Treble?",
+    a_ro: ["Liverpool & Chelsea","Man United & Man City","Arsenal & Man United","Chelsea & Man City"],
+    a_en: ["Liverpool & Chelsea","Man United & Man City","Arsenal & Man United","Chelsea & Man City"],
     correct: 1,
   },
   {
@@ -667,8 +667,8 @@ export const footballMediumExtraQuestions: DuelQuestion[] = [
   },
   {
     id: 2384,
-    q_ro: "În ce oraș se joacă derby-ul 'Derby della Madonnina'?",
-    q_en: "In which city is the 'Derby della Madonnina' contested between Inter and Milan?",
+    q_ro: "În ce oraș se joacă 'Derby della Madonnina'?",
+    q_en: "In which Italian city is the famed 'Derby della Madonnina' between the Nerazzurri and the Rossoneri contested?",
     a_ro: ["Roma", "Milano", "Torino", "Genova"],
     a_en: ["Rome", "Milan", "Turin", "Genoa"],
     correct: 1,

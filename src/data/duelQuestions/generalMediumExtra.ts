@@ -533,8 +533,8 @@ export const generalMediumExtraQuestions: DuelQuestion[] = [
     id: 1367,
     q_ro: "Câte planete din sistemul solar sunt clasificate drept 'Giganți Gazoși'?",
     q_en: "How many planets in our solar system are classified as Gas Giants?",
-    a_ro: ["2 (Jupiter, Saturn)", "4", "1", "3"],
-    a_en: ["2 (Jupiter, Saturn)", "4", "1", "3"],
+    a_ro: ["2","4","1","3"],
+    a_en: ["2","4","1","3"],
     correct: 0,
   },
   {
@@ -597,8 +597,8 @@ export const generalMediumExtraQuestions: DuelQuestion[] = [
     id: 1375,
     q_ro: "Ce tip de sânge este considerat 'donator universal' de celule roșii?",
     q_en: "Which blood type is considered the 'universal red blood cell donor'?",
-    a_ro: ["A+", "AB+", "O- (O negativ)", "B-"],
-    a_en: ["A+", "AB+", "O- (O negative)", "B-"],
+    a_ro: ["A+","AB+","O-","B-"],
+    a_en: ["A+","AB+","O-","B-"],
     correct: 2,
   },
   {
@@ -677,8 +677,8 @@ export const generalMediumExtraQuestions: DuelQuestion[] = [
     id: 1385,
     q_ro: "Ce pasăre este simbolul național al Statelor Unite?",
     q_en: "Which bird is the national emblem of the United States?",
-    a_ro: ["Vulturul pleșuv (Bald Eagle)", "Șoimul călător", "Condorul", "Corbul"],
-    a_en: ["Bald Eagle", "Peregrine Falcon", "Condor", "Raven"],
+    a_ro: ["Vulturul pleșuv","Șoimul călător","Condorul","Corbul"],
+    a_en: ["Bald Eagle","Peregrine Falcon","Condor","Raven"],
     correct: 0,
   },
   {

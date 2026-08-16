@@ -117,8 +117,8 @@ export const generalMediumQuestions: DuelQuestion[] = [
     id: 1115,
     q_ro: "Ce tip de celule transportă oxigenul în sânge?",
     q_en: "Which type of cells carry oxygen in the bloodstream?",
-    a_ro: ["Leucocitele", "Eritrocitele (globulele roșii)", "Trombocitele", "Limfocitele"],
-    a_en: ["Leukocytes", "Erythrocytes (red blood cells)", "Platelets", "Lymphocytes"],
+    a_ro: ["Leucocitele","Eritrocitele","Trombocitele","Limfocitele"],
+    a_en: ["Leukocytes","Erythrocytes","Platelets","Lymphocytes"],
     correct: 1,
   },
   {
@@ -253,8 +253,8 @@ export const generalMediumQuestions: DuelQuestion[] = [
     id: 1132,
     q_ro: "Care este moneda oficială a Marii Britanii?",
     q_en: "What is the official currency of the United Kingdom?",
-    a_ro: ["Euro", "Lira Sterlină (GBP)", "Dolarul", "Coroana"],
-    a_en: ["Euro", "Pound Sterling (GBP)", "Dollar", "Krone"],
+    a_ro: ["Euro","Lira Sterlină","Dolarul","Coroana"],
+    a_en: ["Euro","Pound Sterling","Dollar","Krone"],
     correct: 1,
   },
   {
@@ -285,8 +285,8 @@ export const generalMediumQuestions: DuelQuestion[] = [
     id: 1136,
     q_ro: "Care este cel mai mic os din corpul uman?",
     q_en: "What is the smallest bone in the human body?",
-    a_ro: ["Ciocănelul", "Scărița (din urechea medie)", "Nicovala", "Falanga mică"],
-    a_en: ["Malleus", "Stapes (stirrup in middle ear)", "Incus", "Distal phalanx"],
+    a_ro: ["Ciocănelul","Scărița","Nicovala","Falanga mică"],
+    a_en: ["Malleus","Stapes","Incus","Distal phalanx"],
     correct: 1,
   },
   {
