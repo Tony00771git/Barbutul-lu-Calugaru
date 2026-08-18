@@ -7,6 +7,8 @@ import { getAvatarById } from '../data/avatars';
 import { getSyncedServerNow } from '../lib/duelFirestoreService';
 import { triggerBettingTimeout, analyzePlayerCasinoBets } from '../lib/casinoFirestoreService';
 import { CasinoDiceArena } from './CasinoDiceArena';
+import { HeadToHeadTracker } from './HeadToHeadTracker';
+import { recordHeadToHeadMatch } from '../lib/headToHeadService';
 
 interface CasinoGameProps {
   casinoSocket: UseCasinoSocketReturn;
@@ -175,6 +177,20 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
 
       if (updates.length > 0) {
         batchUpdateProfiles(updates);
+      }
+
+      // Record 1v1 head-to-head match if 2 players played
+      if (room.players.length === 2) {
+        const p1 = room.players[0];
+        const p2 = room.players[1];
+        const winner = room.players.find((p) => p.id === room.winnerId);
+        recordHeadToHeadMatch(
+          p1.name,
+          p2.name,
+          winner ? winner.name : null,
+          'casino',
+          !winner
+        );
       }
 
       // Check achievement for winner
@@ -394,7 +410,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="relative">
-                      <AvatarDisplay avatar={avatar} size="sm" isWinner={false} />
+                      <AvatarDisplay avatarId={p.avatarIcon} className="w-10 h-10" />
                       {p.isHost && (
                         <span className="absolute -top-1.5 -right-1.5 text-xs bg-[#e8c84a] text-black rounded-full px-1 font-bold shadow">
                           👑
@@ -446,6 +462,16 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
             </p>
           )}
         </div>
+
+        {/* 1v1 Head-to-Head Rivalry Banner if 2 players in casino lobby */}
+        {room.players.length === 2 && (
+          <HeadToHeadTracker
+            player1={room.players[0]}
+            player2={room.players[1]}
+            variant="banner"
+            currentMode="casino"
+          />
+        )}
 
         {/* Action Controls */}
         <div className="flex flex-col gap-2">
@@ -502,7 +528,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
 
           {winner && (
             <div className="mt-3 flex flex-col items-center gap-1.5">
-              <AvatarDisplay avatar={getAvatarById(winner.avatarIcon)} size="lg" isWinner={true} />
+              <AvatarDisplay avatarId={winner.avatarIcon} className="w-16 h-16" showBorder />
               <span className="text-lg font-bold font-cinzel text-[#f8e178]">
                 {winner.name}
               </span>
@@ -540,7 +566,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                     <span className="font-cinzel font-bold text-xs text-[#8c7860] w-4 text-center">
                       {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}.`}
                     </span>
-                    <AvatarDisplay avatar={getAvatarById(p.avatarIcon)} size="sm" isWinner={isWinner} />
+                    <AvatarDisplay avatarId={p.avatarIcon} className="w-8 h-8" />
                     <div>
                       <div className="font-bold text-xs text-[#f0ebe0] flex items-center gap-1.5">
                         <span style={{ color: p.color || '#e8c84a' }}>{p.name}</span>
@@ -690,6 +716,18 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 1V1 RIVALRY TRACKER (IF EXACTLY 2 PLAYERS AT TABLE)           */}
+      {/* ------------------------------------------------------------- */}
+      {room.players.length === 2 && (
+        <HeadToHeadTracker
+          player1={room.players[0]}
+          player2={room.players[1]}
+          variant="compact"
+          currentMode="casino"
+        />
       )}
 
       {/* ------------------------------------------------------------- */}
@@ -1184,7 +1222,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-1.5 truncate">
-                        <AvatarDisplay avatar={getAvatarById(p.avatarIcon)} size="xs" isWinner={false} />
+                        <AvatarDisplay avatarId={p.avatarIcon} className="w-5 h-5" />
                         <span className="font-bold truncate text-[11px]" style={{ color: p.color || '#e8c84a' }}>
                           {p.name}
                         </span>
@@ -1265,7 +1303,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                     : 'bg-[#18120c]/60 border-[#2e2116]'
                 }`}
               >
-                <AvatarDisplay avatar={getAvatarById(p.avatarIcon)} size="xs" isWinner={false} />
+                <AvatarDisplay avatarId={p.avatarIcon} className="w-5 h-5" />
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1">
                     <span className="font-bold text-[10px] truncate max-w-[70px]" style={{ color: p.color || '#e8c84a' }}>

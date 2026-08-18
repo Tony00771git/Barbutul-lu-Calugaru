@@ -22,6 +22,7 @@ import {
 } from './Popups';
 import { ScoreModal } from './ScoreModal';
 import { AvatarDisplay } from './AvatarDisplay';
+import { HeadToHeadTracker } from './HeadToHeadTracker';
 
 interface BoardGameProps {
   initialPlayers: Player[];
@@ -565,6 +566,19 @@ export const BoardGame: React.FC<BoardGameProps> = ({
           <span className={`text-lg font-cinzel font-black ${floatingNotification.color}`}>
             {floatingNotification.text}
           </span>
+        </div>
+      )}
+
+      {/* 1v1 Rivalry Live Tracker when exactly 2 players are playing boardgame */}
+      {players.length === 2 && (
+        <div className="w-full mb-1">
+          <HeadToHeadTracker
+            player1={players[0]}
+            player2={players[1]}
+            variant="compact"
+            currentMode="boardgame"
+            className="w-full justify-center"
+          />
         </div>
       )}
 

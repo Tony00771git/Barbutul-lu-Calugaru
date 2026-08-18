@@ -109,10 +109,13 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
   return (
     <div
       id="avatar-modal-overlay"
-      className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in select-none"
+      onClick={onClose}
+      style={{ zIndex: 99995 }}
+      className="fixed inset-0 z-[99995] bg-black/85 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 animate-fade-in select-none"
     >
       <div
         id="avatar-modal-container"
+        onClick={(e) => e.stopPropagation()}
         className="bg-gradient-to-b from-[#1b1510] via-[#120e0a] to-[#0c0906] border-2 border-[#e8c84a] rounded-3xl p-4 sm:p-5 max-w-xl w-full max-h-[92vh] flex flex-col shadow-[0_0_40px_rgba(232,200,74,0.25)] space-y-3 relative"
       >
         {/* Header */}

@@ -23,7 +23,11 @@ export const ProfilePickerModal: React.FC<ProfilePickerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+    <div
+      onClick={onClose}
+      style={{ zIndex: 99992 }}
+      className="fixed inset-0 z-[99992] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-fade-in"
+    >
       <div
         className="w-full max-w-sm bg-gradient-to-b from-[#1c140d] via-[#140e08] to-[#0d0905] border-2 border-[#ffd700] rounded-2xl p-4 shadow-[0_15px_50px_rgba(0,0,0,0.9)] space-y-3 relative text-left"
         onClick={(e) => e.stopPropagation()}

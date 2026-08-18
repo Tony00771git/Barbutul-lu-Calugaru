@@ -1,4 +1,5 @@
 import { Profile } from '../types';
+import { getAchievementTierInfo, getAchievementXp } from '../lib/progression';
 
 export type AchievementRarity = 'common' | 'rare' | 'legendary';
 
@@ -628,6 +629,9 @@ export const getAchievementsWithProgress = (profile: Profile) => {
   return ACHIEVEMENTS.map(ach => {
     const isUnlocked = unlocked.has(ach.id);
     const progress = ach.getCurrentProgress ? ach.getCurrentProgress(profile) : { current: isUnlocked ? 1 : 0, max: 1 };
+    const tierInfo = getAchievementTierInfo(ach.id);
+    const xpValue = getAchievementXp(ach.id);
+
     return {
       ...ach,
       titleRo: ach.nameRo,
@@ -635,6 +639,9 @@ export const getAchievementsWithProgress = (profile: Profile) => {
       unlocked: isUnlocked,
       current: progress.current,
       target: ach.targetCount || progress.max,
+      difficulty: tierInfo.difficulty,
+      xpValue,
+      tierInfo,
     };
   });
 };

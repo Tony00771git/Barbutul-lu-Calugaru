@@ -1,10 +1,96 @@
-export type GameMode = 'normal' | 'boardgame' | 'duel' | 'casino';
+export type GameMode = 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple';
 export type Language = 'ro' | 'en';
 export type ThemeId = 'tavern' | 'cellar' | 'great_hall' | 'dungeon';
 export type DiceSkin = 'gold' | 'bone' | 'wood';
 export type Difficulty = 'weak' | 'medium' | 'extreme' | 'nightmare';
 export type DuelSubmode = 'general' | 'football';
 export type DuelDifficulty = 'easy' | 'medium' | 'hard';
+
+// Pineapple Poker (Open Face Chinese Poker 1v1) Types
+export type PlayingCardSuit = 's' | 'h' | 'd' | 'c';
+export type PlayingCardRank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | 'T' | 'J' | 'Q' | 'K' | 'A';
+
+export interface PlayingCard {
+  id: string; // e.g. "As", "Kh", "Td"
+  rank: PlayingCardRank;
+  suit: PlayingCardSuit;
+}
+
+export interface PineappleBoard {
+  top: PlayingCard[];    // max 3
+  middle: PlayingCard[]; // max 5
+  bottom: PlayingCard[]; // max 5
+}
+
+export interface PineapplePlayerState {
+  id: string;
+  name: string;
+  avatarIcon: string;
+  color: string;
+  isHost: boolean;
+  isBot?: boolean;
+  connected: boolean;
+  board: PineappleBoard;
+  currentHandCards: PlayingCard[]; // Cards in hand waiting to be placed/discarded
+  discarded: PlayingCard[];        // Burned cards
+  inFantasyLand: boolean;          // Playing in Fantasy Land this hand
+  qualifiesNextFantasyLand: boolean; // True if requirement met this hand
+  sipsAccumulated: number;         // Float, exact decimal value
+  handLocked: boolean;             // Finished current round placement
+  isReadyNextHand: boolean;
+}
+
+export interface PineappleHandResult {
+  handNumber: number;
+  playerAId: string;
+  playerBId: string;
+  foulA: boolean;
+  foulB: boolean;
+  topWinner: 'A' | 'B' | 'tie';
+  middleWinner: 'A' | 'B' | 'tie';
+  bottomWinner: 'A' | 'B' | 'tie';
+  scoopWinner: 'A' | 'B' | null;
+  topScoreA: number;
+  middleScoreA: number;
+  bottomScoreA: number;
+  scoopScoreA: number;
+  rowPointsA: number;
+  rowPointsB: number;
+  royaltiesTopA: number;
+  royaltiesMiddleA: number;
+  royaltiesBottomA: number;
+  royaltiesTopB: number;
+  royaltiesMiddleB: number;
+  royaltiesBottomB: number;
+  totalRoyaltiesA: number;
+  totalRoyaltiesB: number;
+  netScoreA: number;
+  netScoreB: number;
+  sipsAddedA: number;
+  sipsAddedB: number;
+  handDescriptionA: { top: string; middle: string; bottom: string };
+  handDescriptionB: { top: string; middle: string; bottom: string };
+}
+
+export interface PineappleMatchSettings {
+  sipsPerPoint: number; // e.g. 0.5
+  sipsToEndGame: number; // e.g. 30
+}
+
+export interface PineappleRoomState {
+  code: string;
+  hostPlayerId: string;
+  players: PineapplePlayerState[];
+  settings: PineappleMatchSettings;
+  status: 'lobby' | 'in_hand' | 'hand_scoring' | 'finished';
+  currentHand: number;
+  currentRoundInHand: number; // 1 = 5 cards, 2..5 = 3 cards (2 place, 1 discard)
+  deck: PlayingCard[];
+  lastHandResult?: PineappleHandResult | null;
+  winnerId?: string | null;
+  loserId?: string | null;
+  updatedAt?: any;
+}
 
 // Casino Mode Types
 export type CasinoBetType = 'over7' | 'under7' | 'even' | 'odd' | 'number';
@@ -149,9 +235,15 @@ export interface Profile {
   gamesPlayed: number;
   totalSips: number;
   totalChugs: number;
+  totalXP?: number;
+  drunkenCoins?: number; // Ingame currency: Drunken Coins (Bănuți Turmentați 🍺🪙)
+  currentLevel?: number;
+  currentTitle_ro?: string;
+  currentTitle_en?: string;
   winsBoardgame?: number;
   winsDuel?: number;
   winsCasino?: number;
+  winsPineapple?: number;
   unlockedAchievements?: string[];
   createdAt: number;
 }

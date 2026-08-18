@@ -11,7 +11,7 @@ interface PodiumProps {
 }
 
 export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHome }) => {
-  const { t, language, batchUpdateProfiles } = useApp();
+  const { t, language, batchUpdateProfiles, awardMatchXp } = useApp();
 
   // Sort players depending on mode
   const sortedPlayers = [...players].sort((a, b) => {
@@ -32,9 +32,23 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
     }
   });
 
-  // Save profile stats once on render
+  // Calculate turns played estimate for formula
+  const getTurnsEstimate = (p: Player) => {
+    if (mode === 'normal') {
+      return Math.max(5, Math.floor((p.sipsTotal + (p.passesCount || 0) + 4) / 1.4));
+    } else if (mode === 'boardgame') {
+      return Math.max(8, (p.properties?.length || 0) * 3 + Math.floor((p.gold || 0) / 15) + 6);
+    } else if (mode === 'duel') {
+      return Math.max(4, p.sipsTotal + p.chugsTotal * 2 + 3);
+    }
+    return 6;
+  };
+
+  // Save profile stats and award XP & Drunken Coins on mount
   useEffect(() => {
-    const boardWinnerName = (mode === 'boardgame' && sortedPlayers[0] && !sortedPlayers[0].hasGivenUp) ? sortedPlayers[0].name : null;
+    const isNormalOrBoard = mode === 'boardgame' || mode === 'normal';
+    const topPlayer = sortedPlayers[0];
+    const boardWinnerName = (mode === 'boardgame' && topPlayer && !topPlayer.hasGivenUp) ? topPlayer.name : null;
 
     const stats = players
       .filter(p => !!p.name)
@@ -48,6 +62,19 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
 
     if (stats.length > 0) {
       batchUpdateProfiles(stats);
+    }
+
+    // Award XP and Drunken Coins for top player / participants
+    if (topPlayer && topPlayer.name) {
+      const turns = getTurnsEstimate(topPlayer);
+      const isWinner = mode === 'boardgame' ? !topPlayer.hasGivenUp : true;
+      setTimeout(() => {
+        awardMatchXp(topPlayer.name, mode as any, isWinner, turns, [], {
+          sips: topPlayer.sipsTotal,
+          chugs: topPlayer.chugsTotal,
+          gold: topPlayer.gold,
+        });
+      }, 400);
     }
   }, []);
 
@@ -255,6 +282,25 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
 
       {/* Action Buttons */}
       <div className="w-full space-y-2">
+        <button
+          onClick={() => {
+            const top = sortedPlayers[0];
+            if (top && top.name) {
+              const turns = getTurnsEstimate(top);
+              awardMatchXp(top.name, mode as any, mode === 'boardgame' ? !top.hasGivenUp : true, turns, [], {
+                sips: top.sipsTotal,
+                chugs: top.chugsTotal,
+                gold: top.gold,
+              });
+            }
+          }}
+          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-950 via-[#2e1d0f] to-amber-950 border-2 border-[#ffd700] text-[#ffd700] font-cinzel font-black text-sm hover:brightness-125 transition-all active:scale-98 shadow-lg flex items-center justify-center gap-2"
+        >
+          <span>⚡</span>
+          <span>{language === 'ro' ? 'Vezi Progresul XP & Bănuți Turmentați' : 'View Match XP & Drunken Coins Progress'}</span>
+          <span>🍺🪙</span>
+        </button>
+
         <button
           onClick={onPlayAgain}
           className="w-full py-4 rounded-xl bg-gradient-to-r from-[#e8c84a] to-[#ffd700] text-black font-cinzel font-black text-xl hover:brightness-110 gold-glow transition-all active:scale-98 shadow-lg uppercase"

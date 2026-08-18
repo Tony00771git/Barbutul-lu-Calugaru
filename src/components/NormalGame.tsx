@@ -7,6 +7,7 @@ import { ParticleOverlay } from './ParticleOverlay';
 import { TurnEndDrinkModal } from './Popups';
 import { ScoreModal } from './ScoreModal';
 import { AvatarDisplay } from './AvatarDisplay';
+import { HeadToHeadTracker } from './HeadToHeadTracker';
 
 interface NormalGameProps {
   initialPlayers: Player[];
@@ -294,6 +295,19 @@ export const NormalGame: React.FC<NormalGameProps> = ({
   return (
     <div className="flex flex-col items-center justify-between min-h-[90vh] px-4 py-4 max-w-lg mx-auto relative select-none">
       <ParticleOverlay type={particleType} onComplete={() => setParticleType(null)} />
+
+      {/* 1v1 Head-to-Head Tracker when 2 players in normal game */}
+      {players.length === 2 && (
+        <div className="w-full mb-2">
+          <HeadToHeadTracker
+            player1={players[0]}
+            player2={players[1]}
+            variant="compact"
+            currentMode="normal"
+            className="w-full justify-center"
+          />
+        </div>
+      )}
 
       {/* Header Info */}
       <div className="w-full flex items-center justify-between bg-[#161616] border border-[#2a2a2a] rounded-2xl p-3 shadow-lg">

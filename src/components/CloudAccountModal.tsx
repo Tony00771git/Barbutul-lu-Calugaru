@@ -9,6 +9,7 @@ import {
   CloudLeaderboardEntry,
   CloudDuelHistory,
 } from '../lib/firestoreService';
+import { calculateProgression } from '../lib/progression';
 
 interface CloudAccountModalProps {
   isOpen: boolean;
@@ -91,37 +92,46 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
     }
   };
 
-  // Sort and filter leaderboard based on active category
-  const sortedLeaderboard = [...leaderboard].sort((a, b) => {
-    if (leaderboardCategory === 'monopoly') {
-      const winsA = a.winsBoardgame || 0;
-      const winsB = b.winsBoardgame || 0;
-      if (winsB !== winsA) return winsB - winsA;
-      return (b.totalScore || 0) - (a.totalScore || 0);
-    }
-    if (leaderboardCategory === 'duel') {
-      const winsA = a.winsDuel || (a.duelWins || 0);
-      const winsB = b.winsDuel || (b.duelWins || 0);
-      if (winsB !== winsA) return winsB - winsA;
-      return (b.totalScore || 0) - (a.totalScore || 0);
-    }
-    if (leaderboardCategory === 'casino') {
-      const winsA = a.winsCasino || 0;
-      const winsB = b.winsCasino || 0;
-      if (winsB !== winsA) return winsB - winsA;
-      return (b.totalScore || 0) - (a.totalScore || 0);
-    }
-    // 'totalScore' (sips + chugs * 25)
-    const scoreA = a.totalScore ?? (a.totalSips + 25 * a.totalChugs);
-    const scoreB = b.totalScore ?? (b.totalSips + 25 * b.totalChugs);
-    return scoreB - scoreA;
-  });
+  // Sort and filter leaderboard based on active category (strictly individual subprofiles)
+  const sortedLeaderboard = [...leaderboard]
+    .filter((entry) => entry.profileId && entry.profileId !== entry.userId)
+    .sort((a, b) => {
+      if (leaderboardCategory === 'monopoly') {
+        const winsA = a.winsBoardgame || 0;
+        const winsB = b.winsBoardgame || 0;
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
+      if (leaderboardCategory === 'duel') {
+        const winsA = a.winsDuel || (a.duelWins || 0);
+        const winsB = b.winsDuel || (b.duelWins || 0);
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
+      if (leaderboardCategory === 'casino') {
+        const winsA = a.winsCasino || 0;
+        const winsB = b.winsCasino || 0;
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
+      // 'totalScore' (sips + chugs * 25)
+      const scoreA = a.totalScore ?? (a.totalSips + 25 * a.totalChugs);
+      const scoreB = b.totalScore ?? (b.totalSips + 25 * b.totalChugs);
+      return scoreB - scoreA;
+    });
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in">
-      <div className="bg-gradient-to-b from-[#1c140d] via-[#120d08] to-[#0a0704] border-2 border-[#e8c84a] rounded-3xl p-4 sm:p-6 max-w-lg w-full shadow-[0_0_50px_rgba(232,200,74,0.25)] flex flex-col max-h-[90vh] space-y-4">
+    <div
+      onClick={onClose}
+      style={{ zIndex: 99990 }}
+      className="fixed inset-0 z-[99990] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-fade-in"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-gradient-to-b from-[#1c140d] via-[#120d08] to-[#0a0704] border-2 border-[#e8c84a] rounded-3xl p-4 sm:p-6 max-w-lg w-full shadow-[0_0_50px_rgba(232,200,74,0.25)] flex flex-col max-h-[90vh] space-y-4"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#2e2216] pb-3">
           <div className="flex items-center gap-2.5">
@@ -504,21 +514,35 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                             {rankBadge}
                           </div>
 
-                          <div className="w-8 h-8 rounded-xl bg-[#22180f] border border-[#e8c84a]/50 flex-shrink-0 overflow-hidden">
+                          <div className="w-8 h-8 rounded-xl bg-[#22180f] border border-[#e8c84a]/50 flex-shrink-0 overflow-hidden relative">
                             <AvatarDisplay avatarId={item.avatarIcon || 'monk_drunk'} className="w-full h-full" />
                           </div>
 
                           <div className="min-w-0">
-                            <div className="font-cinzel font-bold text-xs text-gray-200 flex items-center gap-1.5 truncate">
+                            <div className="font-cinzel font-bold text-xs text-gray-200 flex flex-wrap items-center gap-1.5 truncate">
                               <span className="truncate">{item.profileName || item.displayName}</span>
+                              <span className="bg-amber-600/90 text-white font-cinzel font-bold text-[9px] px-1.5 py-0.2 rounded-full border border-amber-400/40">
+                                Nv. {item.currentLevel || calculateProgression(item.totalXP || 0).currentLevel}
+                              </span>
                               {isMe && (
                                 <span className="text-[9px] bg-[#ffd700] text-black font-black px-1.5 py-0.2 rounded-full flex-shrink-0">
                                   TU
                                 </span>
                               )}
                             </div>
-                            <div className="text-[10px] text-gray-400 font-barlow truncate">
-                              {item.accountDisplayName ? `${item.accountDisplayName}` : ''}
+                            <div className="text-[10px] text-gray-400 font-barlow truncate flex items-center gap-1.5">
+                              {(() => {
+                                const prog = calculateProgression(item.totalXP || 0);
+                                const titleStr = language === 'ro' ? (item.currentTitle_ro || prog.titleRo) : (item.currentTitle_en || prog.titleEn);
+                                return (
+                                  <span className={`text-[9px] font-cinzel font-bold ${prog.titleColor}`}>
+                                    {prog.titleIcon} {titleStr}
+                                  </span>
+                                );
+                              })()}
+                              {item.accountDisplayName ? (
+                                <span className="text-gray-500">• {item.accountDisplayName}</span>
+                              ) : null}
                             </div>
                           </div>
                         </div>

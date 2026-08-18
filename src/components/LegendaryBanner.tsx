@@ -36,8 +36,8 @@ export const LegendaryBanner: React.FC<LegendaryBannerProps> = ({
   return (
     <div
       onClick={handleDismiss}
-      className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[94%] max-w-md cursor-pointer animate-bounce-in select-none"
-      style={{ animationDuration: '0.6s' }}
+      style={{ animationDuration: '0.6s', zIndex: 999999 }}
+      className="fixed top-4 left-1/2 -translate-x-1/2 z-[999999] w-[94%] max-w-md cursor-pointer animate-bounce-in select-none"
     >
       <div className="bg-gradient-to-r from-[#2a1705] via-[#4d2f0a] to-[#2a1705] border-2 border-[#ffd700] rounded-2xl p-4 shadow-[0_0_35px_rgba(255,215,0,0.6)] flex items-center gap-3.5 relative overflow-hidden backdrop-blur-md">
         

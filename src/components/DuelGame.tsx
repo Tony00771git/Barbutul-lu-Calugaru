@@ -7,6 +7,8 @@ import { UseDuelSocketReturn } from '../hooks/useDuelSocket';
 import { recordDuelMatchHistory } from '../lib/firestoreService';
 import { auth } from '../lib/firebase';
 import { getSyncedServerNow, syncServerClock } from '../lib/duelFirestoreService';
+import { HeadToHeadTracker } from './HeadToHeadTracker';
+import { recordHeadToHeadMatch } from '../lib/headToHeadService';
 
 interface DuelGameProps {
   socket: UseDuelSocketReturn;
@@ -207,6 +209,16 @@ export const DuelGame: React.FC<DuelGameProps> = ({
       const guestPts = (p2Scores.sipsTotal || 0) + 25 * (p2Scores.chugsTotal || 0);
       const winner = hostPts < guestPts ? host.name : (guestPts < hostPts ? (guest ? guest.name : 'Jucător 2') : 'Egalitate');
 
+      // Record head-to-head match stats
+      const isTie = winner === 'Egalitate';
+      recordHeadToHeadMatch(
+        host.name,
+        guest ? guest.name : 'Jucător 2',
+        isTie ? null : winner,
+        'duel',
+        isTie
+      );
+
       // Batch update profiles with duel win tracking
       [player1, player2].forEach(p => {
         const isWinner = winner !== 'Egalitate' && p.name === winner;
@@ -392,6 +404,16 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           </div>
         </div>
 
+        {/* 1v1 Head-to-Head Score Tracker Banner when Guest is present */}
+        {room.guestPlayer && (
+          <HeadToHeadTracker
+            player1={room.hostPlayer}
+            player2={room.guestPlayer}
+            variant="banner"
+            currentMode="duel"
+          />
+        )}
+
         {/* Action Button */}
         {isHost ? (
           <div className="space-y-2">
@@ -475,6 +497,14 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           {language === 'ro' ? '1 gură = ' : '1 sip = '}<strong className="text-[#ffd700]">1p</strong> | {language === 'ro' ? '1 groapă = ' : '1 chug = '}<strong className="text-red-400">25p</strong>
         </div>
       </div>
+
+      {/* 1v1 Rivalry Live Tracker in-game */}
+      <HeadToHeadTracker
+        player1={room.hostPlayer}
+        player2={room.guestPlayer || (opponent ? { name: opponent.name, avatarIcon: opponent.avatarIcon } : { name: 'Oponent', avatarIcon: 'knight' })}
+        variant="compact"
+        currentMode="duel"
+      />
 
       {/* Top Bar: My Player vs Opponent Bar */}
       <div className="bg-[#18120a]/95 border-2 border-[#e8c84a] rounded-2xl p-3 shadow-xl gold-glow flex flex-col gap-2.5">

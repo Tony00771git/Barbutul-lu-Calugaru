@@ -39,6 +39,11 @@ service cloud.firestore {
         (!('winsBoardgame' in data) || (data.winsBoardgame is number && data.winsBoardgame >= 0)) &&
         (!('winsDuel' in data) || (data.winsDuel is number && data.winsDuel >= 0)) &&
         (!('winsCasino' in data) || (data.winsCasino is number && data.winsCasino >= 0)) &&
+        (!('winsPineapple' in data) || (data.winsPineapple is number && data.winsPineapple >= 0)) &&
+        (!('totalXP' in data) || (data.totalXP is number && data.totalXP >= 0)) &&
+        (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
+        (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100)) &&
+        (!('currentTitle_en' in data) || (data.currentTitle_en is string && data.currentTitle_en.size() <= 100)) &&
         (!('unlockedAchievements' in data) || (data.unlockedAchievements is list && data.unlockedAchievements.size() <= 50)) &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -55,7 +60,12 @@ service cloud.firestore {
         (!('winsBoardgame' in data) || (data.winsBoardgame is number && data.winsBoardgame >= 0)) &&
         (!('winsDuel' in data) || (data.winsDuel is number && data.winsDuel >= 0)) &&
         (!('winsCasino' in data) || (data.winsCasino is number && data.winsCasino >= 0)) &&
+        (!('winsPineapple' in data) || (data.winsPineapple is number && data.winsPineapple >= 0)) &&
         (!('totalScore' in data) || (data.totalScore is number && data.totalScore >= 0)) &&
+        (!('totalXP' in data) || (data.totalXP is number && data.totalXP >= 0)) &&
+        (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
+        (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100)) &&
+        (!('currentTitle_en' in data) || (data.currentTitle_en is string && data.currentTitle_en.size() <= 100)) &&
         (!('duelWins' in data) || (data.duelWins is number && data.duelWins >= 0)) &&
         (!('duelPlayed' in data) || (data.duelPlayed is number && data.duelPlayed >= 0)) &&
         (!('gamesPlayed' in data) || (data.gamesPlayed is number && data.gamesPlayed >= 0)) &&
@@ -139,6 +149,13 @@ service cloud.firestore {
     // Realtime Casino Rooms Collection (2-6 Players Craps)
     match /casino_rooms/{roomCode} {
       allow get, list: if true; // Players can lookup and join casino rooms
+      allow create, update: if isValidId(roomCode);
+      allow delete: if isValidId(roomCode);
+    }
+
+    // Realtime Pineapple Poker Rooms Collection (2 Players OFC Pineapple)
+    match /pineapple_rooms/{roomCode} {
+      allow get, list: if true; // Players can lookup and join pineapple rooms
       allow create, update: if isValidId(roomCode);
       allow delete: if isValidId(roomCode);
     }

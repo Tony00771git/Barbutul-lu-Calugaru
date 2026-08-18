@@ -10,8 +10,10 @@ import {
 import {
   getUserProfile,
   saveUserProfile,
+  resetAccountCloudDataAndLeaderboard,
   CloudUserProfile,
 } from '../lib/firestoreService';
+import { Profile } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -24,6 +26,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateCloudProfile: (data: Partial<CloudUserProfile>) => Promise<void>;
+  resetCloudAccount: (cleanProfiles: Profile[]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -141,6 +144,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await refreshProfile();
   };
 
+  const resetCloudAccount = async (cleanProfiles: Profile[]) => {
+    if (!user) return;
+    await resetAccountCloudDataAndLeaderboard(user.uid, cleanProfiles);
+    await refreshProfile();
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -154,6 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signOut,
         refreshProfile,
         updateCloudProfile,
+        resetCloudAccount,
       }}
     >
       {children}

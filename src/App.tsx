@@ -7,6 +7,7 @@ import { NormalGame } from './components/NormalGame';
 import { BoardGame } from './components/BoardGame';
 import { DuelGame } from './components/DuelGame';
 import { CasinoGame } from './components/CasinoGame';
+import { PineappleGame } from './components/PineappleGame';
 import { Podium } from './components/Podium';
 import { ScoreModal } from './components/ScoreModal';
 import { CustomizeTab } from './components/CustomizeTab';
@@ -14,13 +15,27 @@ import { RulesModal } from './components/RulesModal';
 import { CloudAccountModal } from './components/CloudAccountModal';
 import { ThemeBackground } from './components/ThemeBackground';
 import { LegendaryBanner } from './components/LegendaryBanner';
+import { XpGainModal } from './components/XpGainModal';
+import { DrunkenCoinsShopModal } from './components/DrunkenCoinsShopModal';
 import { useDuelSocket } from './hooks/useDuelSocket';
 import { useCasinoSocket } from './hooks/useCasinoSocket';
+import { createPineappleRoom, joinPineappleRoom, addPineappleBot } from './lib/pineappleFirestoreService';
+import { recordHeadToHeadMatch } from './lib/headToHeadService';
+import { PineappleMatchSettings } from './types';
 
-type AppScreen = 'setup' | 'normal' | 'boardgame' | 'duel' | 'casino' | 'podium';
+type AppScreen = 'setup' | 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'podium';
 
 function MainAppContent() {
-  const { theme, t, language, activeLegendaryAchievement, dismissLegendaryAchievement } = useApp();
+  const {
+    theme,
+    t,
+    language,
+    profiles,
+    activeLegendaryAchievement,
+    dismissLegendaryAchievement,
+    activeXpBreakdown,
+    dismissXpBreakdown,
+  } = useApp();
   const { user, cloudProfile } = useAuth();
 
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('setup');
@@ -51,6 +66,16 @@ function MainAppContent() {
     color: '#e8c84a',
   });
 
+  // Local player info for pineapple mode
+  const [pineappleLocalPlayer, setPineappleLocalPlayer] = useState<{ id: string; name: string; avatarIcon: string; color: string }>({
+    id: 'pn1',
+    name: 'Fratele Vasile',
+    avatarIcon: 'monk_drunk',
+    color: '#e8c84a',
+  });
+  const [pineappleRoomCode, setPineappleRoomCode] = useState<string>('');
+  const [pineappleIsHost, setPineappleIsHost] = useState<boolean>(true);
+
   // Duel and Casino hooks
   const duelSocket = useDuelSocket();
   const casinoSocket = useCasinoSocket();
@@ -61,6 +86,7 @@ function MainAppContent() {
   const [showCustomizeModal, setShowCustomizeModal] = useState<boolean>(false);
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
   const [showCloudModal, setShowCloudModal] = useState<boolean>(false);
+  const [showCoinsModal, setShowCoinsModal] = useState<boolean>(false);
 
   const handleStartGame = (
     mode: GameMode,
@@ -122,8 +148,61 @@ function MainAppContent() {
     setCurrentScreen('casino');
   };
 
+  const handleStartPineapple = async (
+    role: 'host' | 'join',
+    localPlayer: { id: string; name: string; avatarIcon: string; color: string },
+    settings: PineappleMatchSettings,
+    roomCode?: string,
+    autoAddBot?: boolean
+  ) => {
+    setGameMode('pineapple');
+    setPineappleLocalPlayer(localPlayer);
+    setPineappleIsHost(role === 'host');
+
+    if (role === 'host') {
+      try {
+        const code = await createPineappleRoom(localPlayer, settings);
+        if (autoAddBot) {
+          await addPineappleBot(code);
+        }
+        setPineappleRoomCode(code);
+        setCurrentScreen('pineapple');
+      } catch (err: any) {
+        alert(err.message || 'Eroare la crearea camerei Pineapple!');
+      }
+    } else if (role === 'join' && roomCode) {
+      try {
+        const res = await joinPineappleRoom(roomCode, localPlayer);
+        if (res.success) {
+          setPineappleRoomCode(roomCode.trim().toUpperCase());
+          setCurrentScreen('pineapple');
+        } else {
+          alert(res.error || 'Eroare la conectare!');
+        }
+      } catch (err: any) {
+        alert(err.message || 'Eroare la conectare!');
+      }
+    }
+  };
+
+  const handleLeavePineapple = () => {
+    try {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (e) {}
+    setCurrentScreen('setup');
+  };
+
   const handleEndGame = (finalPlayers: Player[]) => {
     setActivePlayers(finalPlayers);
+    if (finalPlayers.length === 2 && (gameMode === 'boardgame' || gameMode === 'normal')) {
+      const p1 = finalPlayers[0];
+      const p2 = finalPlayers[1];
+      const score1 = p1.hasGivenUp ? 999999 : (p1.sipsTotal + 25 * p1.chugsTotal);
+      const score2 = p2.hasGivenUp ? 999999 : (p2.sipsTotal + 25 * p2.chugsTotal);
+      const isTie = score1 === score2;
+      const winnerName = isTie ? null : (score1 < score2 ? p1.name : p2.name);
+      recordHeadToHeadMatch(p1.name, p2.name, winnerName, gameMode, isTie);
+    }
     setCurrentScreen('podium');
   };
 
@@ -186,6 +265,18 @@ function MainAppContent() {
         </button>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Drunken Coins Treasury & Balance Button */}
+          <button
+            onClick={() => setShowCoinsModal(true)}
+            className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-amber-950 via-[#261509] to-[#1a0e05] border border-[#ffd700]/70 text-xs font-cinzel font-bold text-[#ffd700] hover:brightness-125 flex items-center gap-1.5 shadow-md active:scale-95 transition-all"
+            title={language === 'ro' ? 'Bazarul Călugăresc (Bănuți Turmentați)' : 'Monastic Bazaar (Drunken Coins)'}
+          >
+            <span className="text-sm">🍺🪙</span>
+            <span className="font-mono font-bold text-[#ffd700]">
+              {(profiles[0]?.drunkenCoins ?? 50).toLocaleString()}
+            </span>
+          </button>
+
           {/* Cloud Account & Leaderboard Button */}
           <button
             onClick={() => setShowCloudModal(true)}
@@ -240,6 +331,7 @@ function MainAppContent() {
             onStartGame={handleStartGame}
             onStartDuel={handleStartDuel}
             onStartCasino={handleStartCasino}
+            onStartPineapple={handleStartPineapple}
             onOpenAchievements={() => {
               setScoreModalTab('achievements');
               setShowScoreModal(true);
@@ -251,6 +343,7 @@ function MainAppContent() {
             onOpenCustomize={() => setShowCustomizeModal(true)}
             onOpenRules={() => setShowRulesModal(true)}
             onOpenCloudModal={() => setShowCloudModal(true)}
+            onOpenCoinsModal={() => setShowCoinsModal(true)}
           />
         )}
 
@@ -291,6 +384,15 @@ function MainAppContent() {
           />
         )}
 
+        {currentScreen === 'pineapple' && (
+          <PineappleGame
+            roomCode={pineappleRoomCode}
+            localPlayer={pineappleLocalPlayer}
+            isHost={pineappleIsHost}
+            onHome={handleLeavePineapple}
+          />
+        )}
+
         {currentScreen === 'podium' && (
           <Podium
             mode={gameMode}
@@ -309,6 +411,10 @@ function MainAppContent() {
         gameMode={gameMode}
         initialTab={scoreModalTab}
         achievementsOnly={scoreModalTab === 'achievements'}
+        onOpenBazaar={() => {
+          setShowScoreModal(false);
+          setShowCoinsModal(true);
+        }}
       />
 
       <CloudAccountModal
@@ -317,8 +423,15 @@ function MainAppContent() {
       />
 
       {showCustomizeModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl p-4 max-w-xl w-full max-h-[90vh] overflow-y-auto gold-glow">
+        <div
+          onClick={() => setShowCustomizeModal(false)}
+          style={{ zIndex: 99990 }}
+          className="fixed inset-0 z-[99990] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl p-4 max-w-xl w-full max-h-[90vh] overflow-y-auto gold-glow"
+          >
             <CustomizeTab onClose={() => setShowCustomizeModal(false)} />
           </div>
         </div>
@@ -338,6 +451,23 @@ function MainAppContent() {
           onDismiss={dismissLegendaryAchievement}
         />
       )}
+
+      {/* Cross-Mode XP Gain & Level-Up Celebration Modal */}
+      {activeXpBreakdown && (
+        <XpGainModal
+          breakdown={activeXpBreakdown.breakdown}
+          playerName={activeXpBreakdown.playerName}
+          avatarIcon={activeXpBreakdown.avatarIcon}
+          isOpen={Boolean(activeXpBreakdown)}
+          onClose={dismissXpBreakdown}
+        />
+      )}
+
+      {/* Drunken Coins Bazaar & Treasury Modal */}
+      <DrunkenCoinsShopModal
+        isOpen={showCoinsModal}
+        onClose={() => setShowCoinsModal(false)}
+      />
     </div>
   );
 }

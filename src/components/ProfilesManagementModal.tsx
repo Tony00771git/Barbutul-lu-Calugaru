@@ -21,6 +21,7 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
     addProfile,
     deleteProfile,
     updateProfileAvatar,
+    resetAllStats,
     autoSaveNewProfiles,
     setAutoSaveNewProfiles,
     language,
@@ -33,6 +34,20 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
   const [newAvatarId, setNewAvatarId] = useState<string>('monk_drunk');
   const [avatarPickerProfileId, setAvatarPickerProfileId] = useState<string | 'new' | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
+  const [isResetting, setIsResetting] = useState<boolean>(false);
+
+  const handleReset = async () => {
+    setIsResetting(true);
+    try {
+      await resetAllStats();
+      setShowResetConfirm(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -50,7 +65,11 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-fade-in select-none">
+    <div
+      onClick={onClose}
+      style={{ zIndex: 99990 }}
+      className="fixed inset-0 z-[99990] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-fade-in select-none"
+    >
       <div
         className="w-full max-w-md bg-gradient-to-b from-[#1b140c] via-[#130d07] to-[#0a0704] border-2 border-[#ffd700] rounded-2xl p-4 sm:p-5 shadow-[0_15px_50px_rgba(0,0,0,0.9)] flex flex-col max-h-[90vh] space-y-3.5 relative text-left gold-glow"
         onClick={(e) => e.stopPropagation()}
@@ -275,10 +294,51 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
           )}
         </div>
 
+        {/* Reset stats option */}
+        {showResetConfirm ? (
+          <div className="p-2.5 bg-red-950/50 border border-red-500/50 rounded-xl flex flex-col gap-2">
+            <p className="text-[11px] text-red-200 font-cinzel font-bold text-center">
+              {language === 'ro'
+                ? '⚠️ Resetezi toate statisticile, XP-ul, nivelurile și realizările la 0 (Local & Cloud)?'
+                : '⚠️ Reset all stats, XP, levels & achievements to 0 (Local & Cloud)?'}
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={isResetting}
+                className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-cinzel font-black text-[11px] shadow disabled:opacity-50"
+              >
+                {isResetting
+                  ? (language === 'ro' ? 'Se resetează...' : 'Resetting...')
+                  : (language === 'ro' ? 'Da, resetează la 0' : 'Yes, reset to 0')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="px-3 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-gray-300 font-cinzel text-[11px]"
+              >
+                {language === 'ro' ? 'Anulează' : 'Cancel'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-between items-center px-1">
+            <button
+              type="button"
+              onClick={() => setShowResetConfirm(true)}
+              className="text-[11px] text-red-400/80 hover:text-red-300 font-cinzel underline underline-offset-2 flex items-center gap-1"
+            >
+              <span>🗑️</span>
+              <span>{language === 'ro' ? 'Resetează toate statisticile la 0' : 'Reset all stats to 0'}</span>
+            </button>
+          </div>
+        )}
+
         {/* Footer info & Close */}
         <div className="pt-1 border-t border-[#2a1d10] flex items-center justify-between text-xs font-barlow text-gray-400">
           <span>
-            {language === 'ro' ? 'Profilurile sunt păstrate local și în cloud' : 'Profiles saved locally & synced to cloud'}
+            {language === 'ro' ? 'Păstrat local & cloud' : 'Saved locally & cloud'}
           </span>
           <button
             onClick={onClose}

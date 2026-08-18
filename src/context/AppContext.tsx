@@ -4,6 +4,13 @@ import { translations } from '../i18n/translations';
 import { ACHIEVEMENTS, Achievement } from '../data/achievements';
 import { useAuth } from './AuthContext';
 import { syncAccountProfilesToCloud } from '../lib/firestoreService';
+import { resetAllHeadToHead } from '../lib/headToHeadService';
+import {
+  calculateProgression,
+  calculateMatchXpGain,
+  MatchXpBreakdown,
+  getAchievementXp,
+} from '../lib/progression';
 
 export interface AchievementEvent {
   sipsDelta?: number;
@@ -60,10 +67,22 @@ interface AppContextType {
   updateProfileStats: (playerName: string, sips: number, chugs: number, avatarIcon?: string, winMode?: 'boardgame' | 'duel' | 'casino') => void;
   batchUpdateProfiles: (playerStats: Array<{ name: string; sips: number; chugs: number; avatarIcon?: string; winMode?: 'boardgame' | 'duel' | 'casino' }>) => void;
   recordWin: (playerName: string, mode: 'boardgame' | 'duel' | 'casino') => void;
-  checkAchievement: (playerName: string, event: AchievementEvent) => void;
+  checkAchievement: (playerName: string, event: AchievementEvent) => string[];
+  awardMatchXp: (
+    playerName: string,
+    mode: 'normal' | 'boardgame' | 'duel' | 'casino',
+    isWinner: boolean,
+    turnsPlayed?: number,
+    newAchievements?: string[],
+    extraStats?: { sips?: number; chugs?: number; gold?: number; chips?: number; flawless?: boolean }
+  ) => MatchXpBreakdown | null;
+  spendDrunkenCoins: (profileId: string, amount: number) => boolean;
+  addDrunkenCoins: (profileId: string, amount: number) => void;
+  activeXpBreakdown: { breakdown: MatchXpBreakdown; playerName: string; avatarIcon: string } | null;
+  dismissXpBreakdown: () => void;
   activeLegendaryAchievement: { achievement: Achievement; playerName: string } | null;
   dismissLegendaryAchievement: () => void;
-  resetAllStats: () => void;
+  resetAllStats: () => Promise<void> | void;
   customThemeBackgrounds: Record<ThemeId, string>;
   setCustomThemeBackground: (themeId: ThemeId, url: string) => void;
   resetCustomThemeBackground: (themeId: ThemeId) => void;
@@ -90,7 +109,7 @@ export const generateUniqueId = (prefix = 'id'): string => {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, cloudProfile } = useAuth();
+  const { user, cloudProfile, resetCloudAccount } = useAuth();
 
   const [customThemeBackgrounds, setCustomThemeBackgrounds] = useState<Record<ThemeId, string>>(() => {
     try {
@@ -154,6 +173,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [profiles, setProfiles] = useState<Profile[]>(() => {
+    const freshStartFlag = localStorage.getItem('barbut_monk_stats_v7_total_backend_reset');
+    const progDefault = calculateProgression(0);
+
+    // If the fresh reset migration has not been applied yet, wipe all accumulated test stats to 0
+    if (!freshStartFlag) {
+      localStorage.setItem('barbut_monk_stats_v7_total_backend_reset', 'true');
+      resetAllHeadToHead();
+      const saved = localStorage.getItem(STORAGE_KEYS.PROFILES);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const cleanProfiles: Profile[] = parsed.map((p, idx) => ({
+              id: p.id || generateUniqueId(`profile_${idx}`),
+              name: p.name || 'Călugăr',
+              avatarIcon: p.avatarIcon || 'monk_drunk',
+              gamesPlayed: 0,
+              totalSips: 0,
+              totalChugs: 0,
+              totalXP: 0,
+              currentLevel: 1,
+              currentTitle_ro: progDefault.titleRo,
+              currentTitle_en: progDefault.titleEn,
+              winsBoardgame: 0,
+              winsDuel: 0,
+              winsCasino: 0,
+              unlockedAchievements: [],
+              createdAt: p.createdAt || Date.now(),
+            }));
+            localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(cleanProfiles));
+            return cleanProfiles;
+          }
+        } catch (e) {
+          console.error('Failed to migrate saved profiles', e);
+        }
+      }
+
+      const defaultClean: Profile[] = [
+        { id: 'profile_default_1', name: 'Călugărul Vasile', avatarIcon: 'monk_drunk', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 1000000 },
+        { id: 'profile_default_2', name: 'Fratele Onufrie', avatarIcon: 'knight', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 500000 },
+      ];
+      localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(defaultClean));
+      return defaultClean;
+    }
+
     const saved = localStorage.getItem(STORAGE_KEYS.PROFILES);
     if (saved) {
       try {
@@ -166,6 +230,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               uniqueId = generateUniqueId(`profile_${idx}`);
             }
             seenIds.add(uniqueId);
+            const rawXP = Math.max(0, p.totalXP || 0);
+            const prog = calculateProgression(rawXP);
+
             return {
               id: uniqueId,
               name: p.name || 'Călugăr',
@@ -173,6 +240,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               gamesPlayed: p.gamesPlayed || 0,
               totalSips: p.totalSips || 0,
               totalChugs: p.totalChugs || 0,
+              totalXP: rawXP,
+              currentLevel: p.currentLevel || prog.currentLevel,
+              currentTitle_ro: p.currentTitle_ro || prog.titleRo,
+              currentTitle_en: p.currentTitle_en || prog.titleEn,
               winsBoardgame: p.winsBoardgame || 0,
               winsDuel: p.winsDuel || 0,
               winsCasino: p.winsCasino || 0,
@@ -186,59 +257,103 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error('Failed to parse saved profiles', e);
       }
     }
+
     return [
-      { id: 'profile_default_1', name: 'Călugărul Vasile', avatarIcon: 'monk_drunk', gamesPlayed: 5, totalSips: 42, totalChugs: 3, winsBoardgame: 2, winsDuel: 1, winsCasino: 1, createdAt: Date.now() - 1000000 },
-      { id: 'profile_default_2', name: 'Fratele Onufrie', avatarIcon: 'knight', gamesPlayed: 3, totalSips: 28, totalChugs: 1, winsBoardgame: 1, winsDuel: 0, winsCasino: 0, createdAt: Date.now() - 500000 },
+      { id: 'profile_default_1', name: 'Călugărul Vasile', avatarIcon: 'monk_drunk', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 1000000 },
+      { id: 'profile_default_2', name: 'Fratele Onufrie', avatarIcon: 'knight', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 500000 },
     ];
   });
+
+  // Active XP Breakdown modal state
+  const [activeXpBreakdown, setActiveXpBreakdown] = useState<{
+    breakdown: MatchXpBreakdown;
+    playerName: string;
+    avatarIcon: string;
+  } | null>(null);
+
+  const dismissXpBreakdown = () => {
+    setActiveXpBreakdown(null);
+  };
 
   // Track initial cloud sync per user UID so we merge cloud profiles when user logs in on a new device
   const hasMergedCloudRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (user && cloudProfile?.profiles && cloudProfile.profiles.length > 0) {
-      if (hasMergedCloudRef.current !== user.uid) {
-        hasMergedCloudRef.current = user.uid;
-        // Merge cloud profiles with local profiles
-        setProfiles(prev => {
-          const merged = [...prev];
-          cloudProfile.profiles!.forEach(cp => {
-            const matchIdx = merged.findIndex(p => p.id === cp.id || p.name.trim().toLowerCase() === cp.name.trim().toLowerCase());
-            if (matchIdx >= 0) {
-              // Take highest stats
-              const local = merged[matchIdx];
-              merged[matchIdx] = {
-                ...local,
-                id: cp.id || local.id,
-                name: cp.name || local.name,
-                avatarIcon: cp.avatarIcon || local.avatarIcon,
-                gamesPlayed: Math.max(local.gamesPlayed, cp.gamesPlayed || 0),
-                totalSips: Math.max(local.totalSips, cp.totalSips || 0),
-                totalChugs: Math.max(local.totalChugs, cp.totalChugs || 0),
-                winsBoardgame: Math.max(local.winsBoardgame || 0, cp.winsBoardgame || 0),
-                winsDuel: Math.max(local.winsDuel || 0, cp.winsDuel || 0),
-                winsCasino: Math.max(local.winsCasino || 0, cp.winsCasino || 0),
-                unlockedAchievements: Array.from(new Set([...(local.unlockedAchievements || []), ...(cp.unlockedAchievements || [])])),
-              };
-            } else {
-              merged.push({
-                id: cp.id || generateUniqueId('profile'),
-                name: cp.name,
-                avatarIcon: cp.avatarIcon || 'monk_drunk',
-                gamesPlayed: cp.gamesPlayed || 0,
-                totalSips: cp.totalSips || 0,
-                totalChugs: cp.totalChugs || 0,
-                winsBoardgame: cp.winsBoardgame || 0,
-                winsDuel: cp.winsDuel || 0,
-                winsCasino: cp.winsCasino || 0,
-                unlockedAchievements: cp.unlockedAchievements || [],
-                createdAt: cp.createdAt || Date.now(),
-              });
-            }
-          });
-          return merged;
+    if (!user) return;
+    if (hasMergedCloudRef.current === user.uid) return;
+
+    // Check if cloud document contains legacy test stats/achievements while local has been wiped fresh to 0
+    const hasLegacyCloudStats =
+      Boolean((cloudProfile?.totalSips && cloudProfile.totalSips > 0) ||
+      (cloudProfile?.totalChugs && cloudProfile.totalChugs > 0) ||
+      (cloudProfile?.unlockedAchievements && cloudProfile.unlockedAchievements.length > 0) ||
+      (cloudProfile?.profiles && cloudProfile.profiles.some(cp => (cp.totalSips && cp.totalSips > 0) || (cp.unlockedAchievements && cp.unlockedAchievements.length > 0))));
+
+    const localIsFresh = profiles.every(
+      p => (p.totalSips || 0) === 0 && (p.totalChugs || 0) === 0 && (!p.unlockedAchievements || p.unlockedAchievements.length === 0)
+    );
+
+    if (hasLegacyCloudStats && localIsFresh) {
+      hasMergedCloudRef.current = user.uid;
+      // Overwrite backend Firestore with clean 0 stats immediately!
+      resetCloudAccount(profiles).catch(err => {
+        console.warn('Auto backend clean reset failed:', err);
+      });
+      return;
+    }
+
+    if (cloudProfile?.profiles && cloudProfile.profiles.length > 0) {
+      hasMergedCloudRef.current = user.uid;
+      // Merge cloud profiles with local profiles
+      setProfiles(prev => {
+        const merged = [...prev];
+        cloudProfile.profiles!.forEach(cp => {
+          const matchIdx = merged.findIndex(p => p.id === cp.id || p.name.trim().toLowerCase() === cp.name.trim().toLowerCase());
+          const highestXp = Math.max(cp.totalXP || 0, matchIdx >= 0 ? (merged[matchIdx].totalXP || 0) : 0);
+          const prog = calculateProgression(highestXp);
+
+          if (matchIdx >= 0) {
+            // Take highest stats
+            const local = merged[matchIdx];
+            merged[matchIdx] = {
+              ...local,
+              id: cp.id || local.id,
+              name: cp.name || local.name,
+              avatarIcon: cp.avatarIcon || local.avatarIcon,
+              gamesPlayed: Math.max(local.gamesPlayed, cp.gamesPlayed || 0),
+              totalSips: Math.max(local.totalSips, cp.totalSips || 0),
+              totalChugs: Math.max(local.totalChugs, cp.totalChugs || 0),
+              totalXP: highestXp,
+              currentLevel: prog.currentLevel,
+              currentTitle_ro: prog.titleRo,
+              currentTitle_en: prog.titleEn,
+              winsBoardgame: Math.max(local.winsBoardgame || 0, cp.winsBoardgame || 0),
+              winsDuel: Math.max(local.winsDuel || 0, cp.winsDuel || 0),
+              winsCasino: Math.max(local.winsCasino || 0, cp.winsCasino || 0),
+              unlockedAchievements: Array.from(new Set([...(local.unlockedAchievements || []), ...(cp.unlockedAchievements || [])])),
+            };
+          } else {
+            merged.push({
+              id: cp.id || generateUniqueId('profile'),
+              name: cp.name,
+              avatarIcon: cp.avatarIcon || 'monk_drunk',
+              gamesPlayed: cp.gamesPlayed || 0,
+              totalSips: cp.totalSips || 0,
+              totalChugs: cp.totalChugs || 0,
+              totalXP: highestXp,
+              currentLevel: prog.currentLevel,
+              currentTitle_ro: prog.titleRo,
+              currentTitle_en: prog.titleEn,
+              winsBoardgame: cp.winsBoardgame || 0,
+              winsDuel: cp.winsDuel || 0,
+              winsCasino: cp.winsCasino || 0,
+              unlockedAchievements: cp.unlockedAchievements || [],
+              createdAt: cp.createdAt || Date.now(),
+            });
+          }
         });
-      }
+        return merged;
+      });
     }
   }, [user, cloudProfile]);
 
@@ -295,10 +410,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveLegendaryAchievement(null);
   };
 
-  const checkAchievement = (playerName: string, event: AchievementEvent) => {
+  const checkAchievement = (playerName: string, event: AchievementEvent): string[] => {
     const trimmed = playerName.trim();
-    if (!trimmed) return;
+    if (!trimmed) return [];
     const lowerName = trimmed.toLowerCase();
+    const newUnlockedList: string[] = [];
 
     setProfiles(prev => {
       let targetProfile = prev.find(p => p.name.trim().toLowerCase() === lowerName);
@@ -319,7 +435,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const unlocked = new Set<string>(targetProfile.unlockedAchievements || []);
-      const newUnlockedList: string[] = [];
 
       const currSips = targetProfile.totalSips + (event.sipsDelta || 0);
       const currChugs = targetProfile.totalChugs + (event.chugsDelta || 0);
@@ -405,9 +520,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       });
 
+      // Calculate newly gained achievement XP if any
+      const newlyEarnedXp = newUnlockedList.reduce((acc, achId) => acc + getAchievementXp(achId), 0);
+      const newTotalXp = (targetProfile.totalXP || 0) + newlyEarnedXp;
+      const prog = calculateProgression(newTotalXp);
+
       const updatedProfile: Profile = {
         ...targetProfile,
         unlockedAchievements: Array.from(unlocked),
+        totalXP: newTotalXp,
+        currentLevel: prog.currentLevel,
+        currentTitle_ro: prog.titleRo,
+        currentTitle_en: prog.titleEn,
       };
 
       const existsIdx = prev.findIndex(p => p.name.trim().toLowerCase() === lowerName);
@@ -419,6 +543,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return [...prev, updatedProfile];
       }
     });
+
+    return newUnlockedList;
   };
 
   const addProfile = (name: string, avatarIcon: string = 'monk_drunk'): Profile | undefined => {
@@ -427,6 +553,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const existing = profiles.find(p => p.name.toLowerCase() === trimmed.toLowerCase());
     if (existing) return existing;
 
+    const prog = calculateProgression(0);
+
     const newProfile: Profile = {
       id: generateUniqueId('profile'),
       name: trimmed,
@@ -434,6 +562,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       gamesPlayed: 0,
       totalSips: 0,
       totalChugs: 0,
+      totalXP: 0,
+      drunkenCoins: 50, // Welcome bonus of 50 Drunken Coins 🍺🪙
+      currentLevel: 1,
+      currentTitle_ro: prog.titleRo,
+      currentTitle_en: prog.titleEn,
       winsBoardgame: 0,
       winsDuel: 0,
       winsCasino: 0,
@@ -457,6 +590,92 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       return prev.map(p => (p.id === id ? { ...p, avatarIcon } : p));
     });
+  };
+
+  const spendDrunkenCoins = (profileId: string, amount: number): boolean => {
+    let success = false;
+    setProfiles(prev => {
+      const target = prev.find(p => p.id === profileId);
+      if (!target || (target.drunkenCoins || 0) < amount) {
+        return prev;
+      }
+      success = true;
+      return prev.map(p => (p.id === profileId ? { ...p, drunkenCoins: (p.drunkenCoins || 0) - amount } : p));
+    });
+    return success;
+  };
+
+  const addDrunkenCoins = (profileId: string, amount: number) => {
+    setProfiles(prev => {
+      return prev.map(p => (p.id === profileId ? { ...p, drunkenCoins: (p.drunkenCoins || 0) + amount } : p));
+    });
+  };
+
+  const awardMatchXp = (
+    playerName: string,
+    mode: 'normal' | 'boardgame' | 'duel' | 'casino',
+    isWinner: boolean,
+    turnsPlayed: number = 5,
+    newAchievements: string[] = [],
+    extraStats?: { sips?: number; chugs?: number; gold?: number; chips?: number; flawless?: boolean }
+  ): MatchXpBreakdown | null => {
+    const trimmed = playerName.trim();
+    if (!trimmed) return null;
+    const lowerName = trimmed.toLowerCase();
+
+    const existingProfile = profiles.find(p => p.name.trim().toLowerCase() === lowerName) || {
+      id: generateUniqueId('profile'),
+      name: trimmed,
+      avatarIcon: 'monk_drunk',
+      gamesPlayed: 0,
+      totalSips: 0,
+      totalChugs: 0,
+      totalXP: 0,
+      drunkenCoins: 50,
+      currentLevel: 1,
+      currentTitle_ro: 'Ucenic de Tavernă',
+      currentTitle_en: 'Tavern Apprentice',
+      createdAt: Date.now(),
+    };
+
+    const breakdown = calculateMatchXpGain(existingProfile, mode, isWinner, turnsPlayed, newAchievements, extraStats);
+
+    setProfiles(prev => {
+      const idx = prev.findIndex(p => p.name.trim().toLowerCase() === lowerName);
+      const prog = calculateProgression(breakdown.newTotalXP);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = {
+          ...next[idx],
+          totalXP: breakdown.newTotalXP,
+          drunkenCoins: (next[idx].drunkenCoins || 0) + breakdown.drunkenCoinsGained,
+          currentLevel: prog.currentLevel,
+          currentTitle_ro: prog.titleRo,
+          currentTitle_en: prog.titleEn,
+        };
+        return next;
+      } else {
+        return [
+          ...prev,
+          {
+            ...existingProfile,
+            totalXP: breakdown.newTotalXP,
+            drunkenCoins: (existingProfile.drunkenCoins || 50) + breakdown.drunkenCoinsGained,
+            currentLevel: prog.currentLevel,
+            currentTitle_ro: prog.titleRo,
+            currentTitle_en: prog.titleEn,
+          },
+        ];
+      }
+    });
+
+    setActiveXpBreakdown({
+      breakdown,
+      playerName: existingProfile.name,
+      avatarIcon: existingProfile.avatarIcon || 'monk_drunk',
+    });
+
+    return breakdown;
   };
 
   const recordWin = (playerName: string, mode: 'boardgame' | 'duel' | 'casino') => {
@@ -498,17 +717,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!trimmed) return;
     const lowerName = trimmed.toLowerCase();
 
+    // Base XP gained per session (10) + performance XP if won
+    let baseMatchXp = 10;
+    if (winMode === 'duel') baseMatchXp += 35;
+    else if (winMode === 'casino') baseMatchXp += 60;
+    else if (winMode === 'boardgame') baseMatchXp += 50;
+
     setProfiles(prev => {
       let matched = false;
       const updated = prev.map(p => {
         if (p.name.trim().toLowerCase() === lowerName) {
           matched = true;
+          const nextXP = (p.totalXP || 0) + baseMatchXp;
+          const prog = calculateProgression(nextXP);
           return {
             ...p,
             avatarIcon: avatarIcon || p.avatarIcon || 'monk_drunk',
             gamesPlayed: p.gamesPlayed + 1,
             totalSips: p.totalSips + sips,
             totalChugs: p.totalChugs + chugs,
+            totalXP: nextXP,
+            currentLevel: prog.currentLevel,
+            currentTitle_ro: prog.titleRo,
+            currentTitle_en: prog.titleEn,
             winsBoardgame: winMode === 'boardgame' ? (p.winsBoardgame || 0) + 1 : (p.winsBoardgame || 0),
             winsDuel: winMode === 'duel' ? (p.winsDuel || 0) + 1 : (p.winsDuel || 0),
             winsCasino: winMode === 'casino' ? (p.winsCasino || 0) + 1 : (p.winsCasino || 0),
@@ -518,6 +749,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
 
       if (!matched && lowerName.length > 0) {
+        const prog = calculateProgression(baseMatchXp);
         updated.push({
           id: generateUniqueId('profile'),
           name: trimmed,
@@ -525,6 +757,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           gamesPlayed: 1,
           totalSips: sips,
           totalChugs: chugs,
+          totalXP: baseMatchXp,
+          currentLevel: prog.currentLevel,
+          currentTitle_ro: prog.titleRo,
+          currentTitle_en: prog.titleEn,
           winsBoardgame: winMode === 'boardgame' ? 1 : 0,
           winsDuel: winMode === 'duel' ? 1 : 0,
           winsCasino: winMode === 'casino' ? 1 : 0,
@@ -560,20 +796,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!trimmed) return;
         const lower = trimmed.toLowerCase();
 
+        let baseMatchXp = 10;
+        if (stat.winMode === 'duel') baseMatchXp += 35;
+        else if (stat.winMode === 'casino') baseMatchXp += 60;
+        else if (stat.winMode === 'boardgame') baseMatchXp += 50;
+
         const existingIdx = updated.findIndex(p => p.name.trim().toLowerCase() === lower);
         if (existingIdx >= 0) {
           const current = updated[existingIdx];
+          const nextXP = (current.totalXP || 0) + baseMatchXp;
+          const prog = calculateProgression(nextXP);
+
           updated[existingIdx] = {
             ...current,
             avatarIcon: stat.avatarIcon || current.avatarIcon || 'monk_drunk',
             gamesPlayed: current.gamesPlayed + 1,
             totalSips: current.totalSips + stat.sips,
             totalChugs: current.totalChugs + stat.chugs,
+            totalXP: nextXP,
+            currentLevel: prog.currentLevel,
+            currentTitle_ro: prog.titleRo,
+            currentTitle_en: prog.titleEn,
             winsBoardgame: stat.winMode === 'boardgame' ? (current.winsBoardgame || 0) + 1 : (current.winsBoardgame || 0),
             winsDuel: stat.winMode === 'duel' ? (current.winsDuel || 0) + 1 : (current.winsDuel || 0),
             winsCasino: stat.winMode === 'casino' ? (current.winsCasino || 0) + 1 : (current.winsCasino || 0),
           };
         } else {
+          const prog = calculateProgression(baseMatchXp);
           updated.push({
             id: generateUniqueId('profile'),
             name: trimmed,
@@ -581,6 +830,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             gamesPlayed: 1,
             totalSips: stat.sips,
             totalChugs: stat.chugs,
+            totalXP: baseMatchXp,
+            currentLevel: prog.currentLevel,
+            currentTitle_ro: prog.titleRo,
+            currentTitle_en: prog.titleEn,
             winsBoardgame: stat.winMode === 'boardgame' ? 1 : 0,
             winsDuel: stat.winMode === 'duel' ? 1 : 0,
             winsCasino: stat.winMode === 'casino' ? 1 : 0,
@@ -605,16 +858,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 0);
   };
 
-  const resetAllStats = () => {
-    setProfiles(prev => prev.map(p => ({
+  const resetAllStats = async () => {
+    const defaultProg = calculateProgression(0);
+    const wiped: Profile[] = profiles.map(p => ({
       ...p,
       gamesPlayed: 0,
       totalSips: 0,
       totalChugs: 0,
+      totalXP: 0,
+      currentLevel: 1,
+      currentTitle_ro: defaultProg.titleRo,
+      currentTitle_en: defaultProg.titleEn,
       winsBoardgame: 0,
       winsDuel: 0,
       winsCasino: 0,
-    })));
+      unlockedAchievements: [],
+    }));
+
+    setProfiles(wiped);
+    localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(wiped));
+    resetAllHeadToHead();
+
+    if (user) {
+      hasMergedCloudRef.current = user.uid;
+      try {
+        await resetCloudAccount(wiped);
+      } catch (err) {
+        console.warn('Reset cloud failed:', err);
+      }
+    }
   };
 
   const t = (key: string, params?: Record<string, string | number>): string => {
@@ -646,6 +918,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       batchUpdateProfiles,
       recordWin,
       checkAchievement,
+      awardMatchXp,
+      spendDrunkenCoins,
+      addDrunkenCoins,
+      activeXpBreakdown,
+      dismissXpBreakdown,
       activeLegendaryAchievement,
       dismissLegendaryAchievement,
       resetAllStats,

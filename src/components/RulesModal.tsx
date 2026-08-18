@@ -12,8 +12,15 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6 gold-glow shadow-2xl flex flex-col gap-4 text-[#f0ebe0]">
+    <div
+      onClick={onClose}
+      style={{ zIndex: 99990 }}
+      className="fixed inset-0 z-[99990] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6 gold-glow shadow-2xl flex flex-col gap-4 text-[#f0ebe0]"
+      >
         <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-3">
           <h2 className="text-2xl font-cinzel font-bold text-[#e8c84a] gold-text-glow flex items-center gap-2">
             📜 {language === 'ro' ? 'Regulamentul Mănăstirii' : 'Monastery Rulebook'}
@@ -90,6 +97,22 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
               <li>{language === 'ro' ? '💀 ELIMINARE: dacă soldul tău ajunge la 0, bei CHUG IT ALL (groapă) și ești eliminat!' : '💀 ELIMINATION: if your balance reaches 0, drink CHUG IT ALL and get eliminated!'}</li>
               <li>{language === 'ro' ? '🥴 BĂUTURĂ RUNDĂ: călugărul cu cel mai mic sold la finalul rundei bea penalizarea rundei!' : '🥴 ROUND DRINK: the active monk with the lowest balance drinks the round penalty!'}</li>
               <li>{language === 'ro' ? '👑 CÂȘTIGĂTOR: ultimul călugăr rămas în viață cu fise de aur la masă!' : '👑 WINNER: the last monk standing with gold chips at the table!'}</li>
+            </ul>
+          </section>
+
+          {/* Pineapple Poker Section */}
+          <section className="bg-[#241708] border border-[#ffd700] rounded-xl p-4 space-y-2 gold-glow">
+            <h3 className="text-lg font-cinzel font-bold text-[#ffd700] flex items-center gap-2">
+              🍍 {language === 'ro' ? 'Modul Pineapple Poker (1v1 Online OFC)' : 'Pineapple Poker Mode (1v1 Online OFC)'}
+            </h3>
+            <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm">
+              <li>{language === 'ro' ? '1v1 Open Face Chinese Poker (Pineapple) cu cărți pe 3 rânduri: Top (3 cărți), Mijloc (5 cărți), Jos (5 cărți).' : '1v1 Open Face Chinese Poker (Pineapple) with 3 rows: Top (3 cards), Middle (5 cards), Bottom (5 cards).'}</li>
+              <li>{language === 'ro' ? 'Regula Ierarhiei (Evită FOUL): Rândul de Jos trebuie să fie cel mai puternic, urmat de Mijloc, iar Topul trebuie să fie cel mai slab (Top ≤ Mijloc ≤ Jos).' : 'Hierarchy Rule (Avoid FOUL): Bottom row must be strongest, Middle in-between, and Top the weakest (Top ≤ Middle ≤ Bottom).'}</li>
+              <li>{language === 'ro' ? 'Runda 1: Primești 5 cărți și le așezi pe rânduri. Rundele 2..5: Primești 3 cărți (pui 2 pe tablă, 1 o arunci în Discard).' : 'Round 1: Receive 5 cards and place them. Rounds 2..5: Receive 3 cards (place 2 on board, discard 1 to burn).'}</li>
+              <li>{language === 'ro' ? 'Punctaj: +1 pct per rând câștigat, +3 pct bonus Scoop (câștigi toate 3 rândurile).' : 'Scoring: +1 pt per won row, +3 pts Scoop bonus (win all 3 rows).'}</li>
+              <li>{language === 'ro' ? 'Royalties: bonusuri mari pentru mâini tari (ex: pereche de Ași pe Top +9 pct, Careu pe Jos +10 pct, Chintă Roială +25 pct).' : 'Royalties: massive bonuses for monster hands (e.g., Pair of Aces on Top +9 pts, Quads on Bottom +10 pts, Royal Flush +25 pts).'}</li>
+              <li>{language === 'ro' ? '✨ Fantasy Land: Dacă ai cel puțin QQ (damă-damă) pe Top fără Foul, mâna următoare primești toate cele 13 cărți deodată în privat!' : '✨ Fantasy Land: If you score QQ (pair of Queens) or better on Top without Foul, next hand you receive all 13 cards at once privately!'}</li>
+              <li>{language === 'ro' ? 'Conversie în Guri: Diferența netă de puncte se înmulțește cu raportul configurat (ex: 0.5 guri/pct). Cel cu scor negativ bea gurile acumulate până la atingerea pragului final!' : 'Sips Conversion: Net point difference multiplied by sips ratio (e.g. 0.5 sips/pt). The loser drinks accumulated sips until threshold is reached!'}</li>
             </ul>
           </section>
         </div>

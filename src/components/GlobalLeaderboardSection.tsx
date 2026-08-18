@@ -23,7 +23,8 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
   isFullView = true,
 }) => {
   const { user } = useAuth();
-  const { profiles, language } = useApp();
+  const { profiles, language, resetAllStats } = useApp();
+  const { resetCloudAccount } = useAuth();
 
   const [activeCategory, setActiveCategory] = useState<LeaderboardCategory>('totalScore');
   const [leaderboard, setLeaderboard] = useState<CloudLeaderboardEntry[]>([]);
@@ -74,8 +75,9 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
     setShowResetConfirm(false);
     setIsResetting(true);
     try {
+      await resetAllStats();
       await resetGlobalLeaderboard(user ? profiles : undefined);
-      setSyncNotice(language === 'ro' ? '🧹 Clasament resetat & curățat!' : '🧹 Leaderboard reset!');
+      setSyncNotice(language === 'ro' ? '🧹 Clasament & profiluri resetate la 0!' : '🧹 Leaderboard & profiles reset to 0!');
       await loadLeaderboardData();
       setTimeout(() => setSyncNotice(null), 3500);
     } catch (e) {
