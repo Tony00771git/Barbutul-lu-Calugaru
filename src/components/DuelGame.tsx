@@ -140,12 +140,18 @@ export const DuelGame: React.FC<DuelGameProps> = ({
 
     const res = room.roundResult;
     if (res.winnerId === playerId) {
-      checkAchievement(localPlayer.name, { isHeaven: true });
+      checkAchievement(localPlayer.name, {
+        isHeaven: true,
+        isDuelPlayed: true,
+        isDuelQuickReflex: true,
+        duelStreak: (myScores.roundsWon || 0) + 1,
+        isDuelRebound: Boolean(res.isRebound),
+      });
     } else if (res.loserIds.includes(playerId || '')) {
       if (res.stakeType === 'chug') {
-        checkAchievement(localPlayer.name, { isChug: true, chugsDelta: 1 });
+        checkAchievement(localPlayer.name, { isChug: true, chugsDelta: 1, isDuelPlayed: true });
       } else {
-        checkAchievement(localPlayer.name, { sipsDelta: res.stakeAmount });
+        checkAchievement(localPlayer.name, { sipsDelta: res.stakeAmount, isDuelPlayed: true });
       }
     }
   }, [room?.phase, room?.currentRound, room?.roundResult, playerId, localPlayer.name, checkAchievement]);
@@ -197,16 +203,21 @@ export const DuelGame: React.FC<DuelGameProps> = ({
         hasGivenUp: false,
       };
 
-      // Batch update profiles
+      const hostPts = (p1Scores.sipsTotal || 0) + 25 * (p1Scores.chugsTotal || 0);
+      const guestPts = (p2Scores.sipsTotal || 0) + 25 * (p2Scores.chugsTotal || 0);
+      const winner = hostPts < guestPts ? host.name : (guestPts < hostPts ? (guest ? guest.name : 'Jucător 2') : 'Egalitate');
+
+      // Batch update profiles with duel win tracking
       [player1, player2].forEach(p => {
-        updateProfileStats(p.name, p.sipsTotal, p.chugsTotal, p.avatarIcon);
+        const isWinner = winner !== 'Egalitate' && p.name === winner;
+        updateProfileStats(p.name, p.sipsTotal, p.chugsTotal, p.avatarIcon, isWinner ? 'duel' : undefined);
+        if (isWinner && p.sipsTotal === 0 && p.chugsTotal === 0) {
+          checkAchievement(p.name, { isDuelFlawless: true, isDuelWin: true });
+        }
       });
 
       // If authenticated, record match in Firestore
       if (auth.currentUser) {
-        const hostPts = (p1Scores.sipsTotal || 0) + 25 * (p1Scores.chugsTotal || 0);
-        const guestPts = (p2Scores.sipsTotal || 0) + 25 * (p2Scores.chugsTotal || 0);
-        const winner = hostPts < guestPts ? host.name : (guestPts < hostPts ? (guest ? guest.name : 'Jucător 2') : 'Egalitate');
         recordDuelMatchHistory({
           matchId: `match_${Date.now()}_${room.code}`,
           roomCode: room.code,

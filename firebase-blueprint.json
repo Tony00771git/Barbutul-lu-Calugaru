@@ -50,6 +50,22 @@
           "type": "array",
           "description": "List of unlocked achievement IDs"
         },
+        "profiles": {
+          "type": "array",
+          "description": "List of user profiles belonging to this Google account"
+        },
+        "winsBoardgame": {
+          "type": "number",
+          "description": "Total Monopoly wins across account"
+        },
+        "winsDuel": {
+          "type": "number",
+          "description": "Total 1v1 duel victories across account"
+        },
+        "winsCasino": {
+          "type": "number",
+          "description": "Total Casino duel victories across account"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",
@@ -65,7 +81,7 @@
     },
     "LeaderboardEntry": {
       "title": "LeaderboardEntry",
-      "description": "Public ranking entry for global tavern drinking and duel leaderboard",
+      "description": "Public ranking entry for global tavern drinking, monopoly, duel, and casino leaderboards per profile",
       "type": "object",
       "properties": {
         "userId": {
@@ -73,11 +89,21 @@
           "description": "Owner user UID",
           "maxLength": 128
         },
+        "profileId": {
+          "type": "string",
+          "description": "Profile identifier",
+          "maxLength": 128
+        },
+        "accountName": {
+          "type": "string",
+          "description": "Google account display name",
+          "maxLength": 100
+        },
         "displayName": {
           "type": "string",
-          "description": "Public player name",
+          "description": "Public player profile name",
           "minLength": 1,
-          "maxLength": 50
+          "maxLength": 100
         },
         "avatarIcon": {
           "type": "string",
@@ -92,13 +118,25 @@
           "type": "number",
           "description": "Total chugs consumed"
         },
-        "duelWins": {
+        "totalScore": {
           "type": "number",
-          "description": "Total duel matches won"
+          "description": "Calculated score: sips + chugs * 25"
         },
-        "duelPlayed": {
+        "winsBoardgame": {
           "type": "number",
-          "description": "Total duel matches played"
+          "description": "Total Monopoly / Boardgame matches won"
+        },
+        "winsDuel": {
+          "type": "number",
+          "description": "Total 1v1 trivia duel matches won"
+        },
+        "winsCasino": {
+          "type": "number",
+          "description": "Total Casino Barbut craps matches won"
+        },
+        "gamesPlayed": {
+          "type": "number",
+          "description": "Total games played by this profile"
         },
         "updatedAt": {
           "type": "string",
@@ -106,7 +144,7 @@
           "description": "Timestamp of last score update"
         }
       },
-      "required": ["userId", "displayName", "totalSips", "totalChugs", "duelWins", "duelPlayed", "updatedAt"]
+      "required": ["userId", "displayName", "totalSips", "totalChugs", "updatedAt"]
     },
     "DuelHistory": {
       "title": "DuelHistory",
@@ -252,6 +290,75 @@
         }
       },
       "required": ["code", "submode", "difficulty", "hostPlayer", "status", "currentRound", "phase", "scores"]
+    },
+    "CasinoRoom": {
+      "title": "CasinoRoom",
+      "description": "Real-time 2-6 player tavern casino craps room state",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Room 4-letter code",
+          "maxLength": 10
+        },
+        "startingChips": {
+          "type": "number",
+          "description": "Starting chip bankroll for each monk"
+        },
+        "hostPlayerId": {
+          "type": "string",
+          "description": "Host player ID",
+          "maxLength": 128
+        },
+        "players": {
+          "type": "array",
+          "description": "Array of 2-6 connected casino players"
+        },
+        "status": {
+          "type": "string",
+          "description": "Room status: lobby, in_game, finished",
+          "enum": ["lobby", "in_game", "finished"]
+        },
+        "currentRound": {
+          "type": "number",
+          "description": "Current round number"
+        },
+        "phase": {
+          "type": "string",
+          "description": "Round phase: penalty_reveal, betting, rolling, resolution",
+          "enum": ["penalty_reveal", "betting", "rolling", "resolution"]
+        },
+        "phaseEndsAt": {
+          "type": "number",
+          "description": "Timestamp ms when phase countdown ends"
+        },
+        "penalty": {
+          "type": "object",
+          "description": "Current round drinking penalty"
+        },
+        "bets": {
+          "type": "object",
+          "description": "Active bets keyed by player ID"
+        },
+        "dice": {
+          "type": "array",
+          "description": "Rolled dice results"
+        },
+        "roundResult": {
+          "type": "object",
+          "description": "Detailed resolution outcomes for the round"
+        },
+        "winnerPlayer": {
+          "type": "object",
+          "description": "Winning player when match is finished"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last room state change"
+        }
+      },
+      "required": ["code", "startingChips", "hostPlayerId", "players", "status", "currentRound", "phase", "bets"]
     }
   },
   "firestore": {
@@ -270,6 +377,10 @@
     "/duel_rooms/{roomCode}": {
       "schema": "DuelRoom",
       "description": "Real-time synced duel room document"
+    },
+    "/casino_rooms/{roomCode}": {
+      "schema": "CasinoRoom",
+      "description": "Real-time synced 2-6 player casino room document"
     },
     "/time_sync/{syncId}": {
       "schema": "object",

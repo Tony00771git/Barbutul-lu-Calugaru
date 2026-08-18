@@ -6,6 +6,7 @@ import { SetupScreen } from './components/SetupScreen';
 import { NormalGame } from './components/NormalGame';
 import { BoardGame } from './components/BoardGame';
 import { DuelGame } from './components/DuelGame';
+import { CasinoGame } from './components/CasinoGame';
 import { Podium } from './components/Podium';
 import { ScoreModal } from './components/ScoreModal';
 import { CustomizeTab } from './components/CustomizeTab';
@@ -14,11 +15,12 @@ import { CloudAccountModal } from './components/CloudAccountModal';
 import { ThemeBackground } from './components/ThemeBackground';
 import { LegendaryBanner } from './components/LegendaryBanner';
 import { useDuelSocket } from './hooks/useDuelSocket';
+import { useCasinoSocket } from './hooks/useCasinoSocket';
 
-type AppScreen = 'setup' | 'normal' | 'boardgame' | 'duel' | 'podium';
+type AppScreen = 'setup' | 'normal' | 'boardgame' | 'duel' | 'casino' | 'podium';
 
 function MainAppContent() {
-  const { theme, t, activeLegendaryAchievement, dismissLegendaryAchievement } = useApp();
+  const { theme, t, language, activeLegendaryAchievement, dismissLegendaryAchievement } = useApp();
   const { user, cloudProfile } = useAuth();
 
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('setup');
@@ -41,11 +43,21 @@ function MainAppContent() {
     color: '#e8c84a',
   });
 
-  // Duel WebSocket hook
+  // Local player info for casino mode
+  const [casinoLocalPlayer, setCasinoLocalPlayer] = useState<{ id: string; name: string; avatarIcon: string; color: string }>({
+    id: 'c1',
+    name: 'Călugărul Onufrie',
+    avatarIcon: 'monk_drunk',
+    color: '#e8c84a',
+  });
+
+  // Duel and Casino hooks
   const duelSocket = useDuelSocket();
+  const casinoSocket = useCasinoSocket();
 
   // Modals
   const [showScoreModal, setShowScoreModal] = useState<boolean>(false);
+  const [scoreModalTab, setScoreModalTab] = useState<'live' | 'alltime' | 'achievements'>('achievements');
   const [showCustomizeModal, setShowCustomizeModal] = useState<boolean>(false);
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
   const [showCloudModal, setShowCloudModal] = useState<boolean>(false);
@@ -92,6 +104,24 @@ function MainAppContent() {
     setCurrentScreen('duel');
   };
 
+  const handleStartCasino = (
+    role: 'host' | 'join',
+    localPlayer: { id: string; name: string; avatarIcon: string; color: string },
+    startingChips: number,
+    roomCode?: string
+  ) => {
+    setGameMode('casino');
+    setCasinoLocalPlayer(localPlayer);
+
+    if (role === 'host') {
+      casinoSocket.createRoom(localPlayer, startingChips);
+    } else if (role === 'join' && roomCode) {
+      casinoSocket.joinRoom(roomCode, localPlayer);
+    }
+
+    setCurrentScreen('casino');
+  };
+
   const handleEndGame = (finalPlayers: Player[]) => {
     setActivePlayers(finalPlayers);
     setCurrentScreen('podium');
@@ -105,18 +135,36 @@ function MainAppContent() {
     setCurrentScreen('setup');
   };
 
+  const handleLeaveCasino = () => {
+    casinoSocket.disconnect();
+    try {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (e) {}
+    setCurrentScreen('setup');
+  };
+
+  const handleHomeClick = () => {
+    if (currentScreen === 'duel') {
+      handleLeaveDuel();
+    } else if (currentScreen === 'casino') {
+      handleLeaveCasino();
+    } else {
+      setCurrentScreen('setup');
+    }
+  };
+
   const getThemeBackgroundClass = (tId: ThemeId) => {
     switch (tId) {
       case 'tavern':
         return 'bg-gradient-to-br from-[#1e130b] via-[#0d0d0d] to-[#080503]';
-      case 'spring':
-        return 'bg-gradient-to-br from-[#0e1c10] via-[#0d0d0d] to-[#050905]';
-      case 'winter':
-        return 'bg-gradient-to-br from-[#0e1724] via-[#0d0d0d] to-[#05080d]';
-      case 'sky':
-        return 'bg-gradient-to-br from-[#130f24] via-[#0d0d0d] to-[#06040e]';
-      case 'battlefield':
-        return 'bg-gradient-to-br from-[#240e0e] via-[#0d0d0d] to-[#0a0303]';
+      case 'cellar':
+        return 'bg-gradient-to-br from-[#1b1209] via-[#0d0d0d] to-[#080503]';
+      case 'great_hall':
+        return 'bg-gradient-to-br from-[#18130e] via-[#0d0d0d] to-[#060504]';
+      case 'dungeon':
+        return 'bg-gradient-to-br from-[#1a0f0a] via-[#0d0d0d] to-[#060403]';
+      default:
+        return 'bg-gradient-to-br from-[#1e130b] via-[#0d0d0d] to-[#080503]';
     }
   };
 
@@ -128,9 +176,7 @@ function MainAppContent() {
       {/* Persistent Navigation Header Bar with notch safe-area support */}
       <header className="w-full bg-[#161616]/85 border-b border-[#2a2a2a] backdrop-blur-md sticky top-0 z-40 px-3 sm:px-4 py-2 safe-top-padding flex items-center justify-between shadow-md">
         <button
-          onClick={() => {
-            handleLeaveDuel();
-          }}
+          onClick={handleHomeClick}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity active:scale-95"
         >
           <span className="text-xl">🍺</span>
@@ -156,14 +202,17 @@ function MainAppContent() {
             </span>
           </button>
 
-          {/* Live Score Button */}
+          {/* Achievements Button on Main Screen & Navbar */}
           <button
-            onClick={() => setShowScoreModal(true)}
+            onClick={() => {
+              setScoreModalTab('achievements');
+              setShowScoreModal(true);
+            }}
             className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-[#2e1f13] to-[#1c140d] border border-[#e8c84a] text-xs font-cinzel font-bold text-[#ffd700] hover:brightness-110 flex items-center gap-1 shadow active:scale-95"
-            title="Tabel Scor & Cronică"
+            title={language === 'ro' ? 'Realizări & Trofee' : 'Achievements & Trophies'}
           >
-            <span>📊</span>
-            <span>{t('tabProfiles')}</span>
+            <span>🏅</span>
+            <span>{language === 'ro' ? 'Realizări' : 'Achievements'}</span>
           </button>
 
           <button
@@ -190,9 +239,18 @@ function MainAppContent() {
           <SetupScreen
             onStartGame={handleStartGame}
             onStartDuel={handleStartDuel}
-            onOpenProfiles={() => setShowScoreModal(true)}
+            onStartCasino={handleStartCasino}
+            onOpenAchievements={() => {
+              setScoreModalTab('achievements');
+              setShowScoreModal(true);
+            }}
+            onOpenProfiles={() => {
+              setScoreModalTab('alltime');
+              setShowScoreModal(true);
+            }}
             onOpenCustomize={() => setShowCustomizeModal(true)}
             onOpenRules={() => setShowRulesModal(true)}
+            onOpenCloudModal={() => setShowCloudModal(true)}
           />
         )}
 
@@ -225,12 +283,20 @@ function MainAppContent() {
           />
         )}
 
+        {currentScreen === 'casino' && (
+          <CasinoGame
+            casinoSocket={casinoSocket}
+            localPlayer={casinoLocalPlayer}
+            onLeave={handleLeaveCasino}
+          />
+        )}
+
         {currentScreen === 'podium' && (
           <Podium
             mode={gameMode}
             players={activePlayers}
-            onPlayAgain={handleLeaveDuel}
-            onHome={handleLeaveDuel}
+            onPlayAgain={handleHomeClick}
+            onHome={handleHomeClick}
           />
         )}
       </main>
@@ -241,6 +307,8 @@ function MainAppContent() {
         onClose={() => setShowScoreModal(false)}
         activePlayers={activePlayers}
         gameMode={gameMode}
+        initialTab={scoreModalTab}
+        achievementsOnly={scoreModalTab === 'achievements'}
       />
 
       <CloudAccountModal

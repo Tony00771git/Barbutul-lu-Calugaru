@@ -231,6 +231,10 @@ export const BoardGame: React.FC<BoardGameProps> = ({
     // 2. Landing on ANOTHER PLAYER'S property -> Pay rent in sips!
     if (owner && owner.id !== activePlayer.id) {
       const sipsDue = tile.sipsCount || 3;
+      checkAchievement(activePlayer.name, {
+        isRentPaid: true,
+        sipsDelta: sipsDue,
+      });
       setTurnResult({
         title: '🍺 CHIRIE MĂNĂSTIREASCĂ!',
         reason: `Ai picat pe ${tileName} (Tile #${tile.index}), aflată în stăpânirea lui ${owner.name}!`,
@@ -871,6 +875,12 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               return p;
             }));
 
+            checkAchievement(activePlayer.name, {
+              boughtProperty: true,
+              currentBoardProps: activePlayer.properties.length + 1,
+              currentBoardGold: activePlayer.gold - price,
+            });
+
             addLog(
               language === 'ro'
                 ? `${activePlayer.name} a cumpărat ${tileName} pentru ${price} Galbeni 🏰!`
@@ -944,6 +954,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               }
               return p;
             }));
+            checkAchievement(activePlayer.name, { isJailEscape: true });
             setShowJailModal(false);
             addLog(
               language === 'ro'
@@ -989,6 +1000,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             setActiveTrivia(null);
             if (isCorrect) {
               setPlayers(prev => prev.map((p, idx) => idx === activePlayerIndex ? { ...p, pardonLetters: p.pardonLetters + 1, gold: p.gold + 5 } : p));
+              checkAchievement(activePlayer.name, { isTriviaCorrect: true });
               setTurnResult({
                 title: language === 'ro' ? '🧠 RĂSPUNS CORECT!' : '🧠 CORRECT ANSWER!',
                 reason: language === 'ro' ? 'Ai dat răspunsul corect la întrebarea de cultură!' : 'You answered the trivia question correctly!',

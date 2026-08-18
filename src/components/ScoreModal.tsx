@@ -11,6 +11,8 @@ interface ScoreModalProps {
   activePlayers?: Player[];
   activePlayerIndex?: number;
   gameMode?: GameMode;
+  initialTab?: 'live' | 'alltime' | 'achievements';
+  achievementsOnly?: boolean;
 }
 
 export const ScoreModal: React.FC<ScoreModalProps> = ({
@@ -19,6 +21,8 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
   activePlayers = [],
   activePlayerIndex = 0,
   gameMode,
+  initialTab,
+  achievementsOnly = false,
 }) => {
   const {
     profiles,
@@ -30,9 +34,21 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
     language,
   } = useApp();
 
+  const isOnlyAchievements = achievementsOnly || initialTab === 'achievements';
+
   const [activeTab, setActiveTab] = useState<'live' | 'alltime' | 'achievements'>(
-    activePlayers.length > 0 ? 'live' : 'alltime'
+    isOnlyAchievements ? 'achievements' : initialTab || (activePlayers.length > 0 ? 'live' : 'alltime')
   );
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (isOnlyAchievements) {
+        setActiveTab('achievements');
+      } else if (initialTab) {
+        setActiveTab(initialTab);
+      }
+    }
+  }, [isOpen, initialTab, isOnlyAchievements]);
   const [selectedProfileIdForAchievements, setSelectedProfileIdForAchievements] = useState<string>(
     profiles[0]?.id || ''
   );
@@ -132,13 +148,21 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
         {/* Header with Close */}
         <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-3">
           <div className="flex items-center gap-2.5">
-            <span className="text-2xl sm:text-3xl">📊</span>
+            <span className="text-2xl sm:text-3xl">{isOnlyAchievements ? '🏅' : '📊'}</span>
             <div>
               <h2 className="text-xl sm:text-2xl font-cinzel font-black text-[#ffd700] gold-text-glow">
-                TABEL DE SCOR & STATISTICI
+                {isOnlyAchievements
+                  ? (language === 'ro' ? 'REALIZĂRI & TROFEE' : 'ACHIEVEMENTS & TROPHIES')
+                  : (language === 'ro' ? 'TABEL DE SCOR & STATISTICI' : 'SCORE TABLE & STATS')}
               </h2>
               <p className="text-[11px] font-barlow text-gray-400">
-                Evidența completă • Gură = 1 punct | Groapă = 25 puncte
+                {isOnlyAchievements
+                  ? (language === 'ro'
+                      ? 'Toate cele 53 de trofee monahale • Deblochează-le jucând orice mod!'
+                      : 'All 53 monk achievements • Play any mode to unlock!')
+                  : (language === 'ro'
+                      ? 'Evidența completă • Gură = 1 punct | Groapă = 25 puncte'
+                      : 'Full stats • 1 Sip = 1 point | 1 Chug = 25 points')}
               </p>
             </div>
           </div>
@@ -150,44 +174,46 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Selector */}
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-[#0e0a06] p-1.5 rounded-2xl border border-[#2a2219]">
-          <button
-            onClick={() => setActiveTab('live')}
-            className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
-              activeTab === 'live'
-                ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <span>🏆</span>
-            <span className="truncate">Scor Meci {activePlayers.length > 0 && `(${activePlayers.length})`}</span>
-          </button>
+        {/* Tab Selector (Hidden if Achievements Only) */}
+        {!isOnlyAchievements && (
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-[#0e0a06] p-1.5 rounded-2xl border border-[#2a2219]">
+            <button
+              onClick={() => setActiveTab('live')}
+              className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
+                activeTab === 'live'
+                  ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <span>🏆</span>
+              <span className="truncate">Scor Meci {activePlayers.length > 0 && `(${activePlayers.length})`}</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('alltime')}
-            className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
-              activeTab === 'alltime'
-                ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <span>👤</span>
-            <span className="truncate">Profiluri ({profiles.length})</span>
-          </button>
+            <button
+              onClick={() => setActiveTab('alltime')}
+              className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
+                activeTab === 'alltime'
+                  ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <span>👤</span>
+              <span className="truncate">Profiluri ({profiles.length})</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('achievements')}
-            className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
-              activeTab === 'achievements'
-                ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <span>🏅</span>
-            <span className="truncate">Achievements</span>
-          </button>
-        </div>
+            <button
+              onClick={() => setActiveTab('achievements')}
+              className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
+                activeTab === 'achievements'
+                  ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <span>🏅</span>
+              <span className="truncate">Achievements</span>
+            </button>
+          </div>
+        )}
 
         {/* Scrollable Content Body */}
         <div className="flex-1 overflow-y-auto pr-1 space-y-3">
@@ -463,7 +489,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
                     >
                       {profiles.map(p => (
                         <option key={p.id} value={p.id}>
-                          {p.name} ({p.unlockedAchievements?.length || 0}/20)
+                          {p.name} ({p.unlockedAchievements?.length || 0}/{ACHIEVEMENTS.length})
                         </option>
                       ))}
                     </select>
@@ -480,51 +506,59 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
               </div>
 
               {/* Rarity Filter Strip */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-cinzel">
-                <button
-                  onClick={() => setRarityFilter('all')}
-                  className={`px-3 py-1 rounded-xl transition-all font-bold ${
-                    rarityFilter === 'all'
-                      ? 'bg-[#ffd700] text-black shadow'
-                      : 'bg-[#18120b] border border-[#2a2219] text-gray-400 hover:text-white'
-                  }`}
-                >
-                  Toate ({achievementProgressList.length})
-                </button>
-                <button
-                  onClick={() => setRarityFilter('common')}
-                  className={`px-3 py-1 rounded-xl transition-all font-bold flex items-center gap-1 ${
-                    rarityFilter === 'common'
-                      ? 'bg-amber-700 text-white shadow'
-                      : 'bg-[#18120b] border border-amber-900/50 text-amber-300/80 hover:text-amber-200'
-                  }`}
-                >
-                  <span>🥉</span>
-                  <span>Comun (8)</span>
-                </button>
-                <button
-                  onClick={() => setRarityFilter('rare')}
-                  className={`px-3 py-1 rounded-xl transition-all font-bold flex items-center gap-1 ${
-                    rarityFilter === 'rare'
-                      ? 'bg-sky-700 text-white shadow'
-                      : 'bg-[#18120b] border border-sky-900/50 text-sky-300/80 hover:text-sky-200'
-                  }`}
-                >
-                  <span>🥈</span>
-                  <span>Rar (7)</span>
-                </button>
-                <button
-                  onClick={() => setRarityFilter('legendary')}
-                  className={`px-3 py-1 rounded-xl transition-all font-bold flex items-center gap-1 ${
-                    rarityFilter === 'legendary'
-                      ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-black shadow-[0_0_10px_rgba(255,215,0,0.5)] font-black'
-                      : 'bg-[#18120b] border border-yellow-500/50 text-yellow-300 hover:text-yellow-100'
-                  }`}
-                >
-                  <span>👑</span>
-                  <span>Legendar (5)</span>
-                </button>
-              </div>
+              {(() => {
+                const commonCount = ACHIEVEMENTS.filter(a => a.rarity === 'common').length;
+                const rareCount = ACHIEVEMENTS.filter(a => a.rarity === 'rare').length;
+                const legendaryCount = ACHIEVEMENTS.filter(a => a.rarity === 'legendary').length;
+
+                return (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-cinzel">
+                    <button
+                      onClick={() => setRarityFilter('all')}
+                      className={`px-3 py-1 rounded-xl transition-all font-bold ${
+                        rarityFilter === 'all'
+                          ? 'bg-[#ffd700] text-black shadow'
+                          : 'bg-[#18120b] border border-[#2a2219] text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Toate ({achievementProgressList.length})
+                    </button>
+                    <button
+                      onClick={() => setRarityFilter('common')}
+                      className={`px-3 py-1 rounded-xl transition-all font-bold flex items-center gap-1 ${
+                        rarityFilter === 'common'
+                          ? 'bg-amber-700 text-white shadow'
+                          : 'bg-[#18120b] border border-amber-900/50 text-amber-300/80 hover:text-amber-200'
+                      }`}
+                    >
+                      <span>🥉</span>
+                      <span>Comun ({commonCount})</span>
+                    </button>
+                    <button
+                      onClick={() => setRarityFilter('rare')}
+                      className={`px-3 py-1 rounded-xl transition-all font-bold flex items-center gap-1 ${
+                        rarityFilter === 'rare'
+                          ? 'bg-sky-700 text-white shadow'
+                          : 'bg-[#18120b] border border-sky-900/50 text-sky-300/80 hover:text-sky-200'
+                      }`}
+                    >
+                      <span>🥈</span>
+                      <span>Rar ({rareCount})</span>
+                    </button>
+                    <button
+                      onClick={() => setRarityFilter('legendary')}
+                      className={`px-3 py-1 rounded-xl transition-all font-bold flex items-center gap-1 ${
+                        rarityFilter === 'legendary'
+                          ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-black shadow-[0_0_10px_rgba(255,215,0,0.5)] font-black'
+                          : 'bg-[#18120b] border border-yellow-500/50 text-yellow-300 hover:text-yellow-100'
+                      }`}
+                    >
+                      <span>👑</span>
+                      <span>Legendar ({legendaryCount})</span>
+                    </button>
+                  </div>
+                );
+              })()}
 
               {/* Achievements Grid */}
               <div className="space-y-2.5 max-h-[48vh] overflow-y-auto pr-1">

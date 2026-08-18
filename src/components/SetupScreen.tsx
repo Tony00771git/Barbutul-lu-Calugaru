@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { GameMode, Difficulty, CustomDoubles, Player, DuelSubmode, DuelDifficulty } from '../types';
+import { GameMode, Difficulty, CustomDoubles, Player, DuelSubmode, DuelDifficulty, Profile } from '../types';
 import { useApp, generateUniqueId } from '../context/AppContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { AvatarModal } from './AvatarModal';
-import { getAvatarById } from '../data/avatars';
+import { ProfilePickerModal } from './ProfilePickerModal';
+import { ProfilesManagementModal } from './ProfilesManagementModal';
+import { GlobalLeaderboardSection } from './GlobalLeaderboardSection';
 
 interface SetupScreenProps {
   onStartGame: (
@@ -23,9 +25,17 @@ interface SetupScreenProps {
     roomCode?: string,
     targetPoints?: number
   ) => void;
-  onOpenProfiles: () => void;
+  onStartCasino: (
+    role: 'host' | 'join',
+    localPlayer: { id: string; name: string; avatarIcon: string; color: string },
+    startingChips: number,
+    roomCode?: string
+  ) => void;
+  onOpenAchievements: () => void;
+  onOpenProfiles?: () => void;
   onOpenCustomize: () => void;
   onOpenRules: () => void;
+  onOpenCloudModal?: () => void;
 }
 
 const PLAYER_COLORS = [
@@ -49,18 +59,27 @@ const DEFAULT_AVATARS = [
 export const SetupScreen: React.FC<SetupScreenProps> = ({
   onStartGame,
   onStartDuel,
+  onStartCasino,
+  onOpenAchievements,
   onOpenProfiles,
   onOpenCustomize,
   onOpenRules,
+  onOpenCloudModal,
 }) => {
-  const { t, profiles, language } = useApp();
+  const { t, profiles, addProfile, autoSaveNewProfiles, language } = useApp();
+
+  // Screen View Switcher: 'play' (Game setup + profiles) vs 'leaderboard' (Dedicated Global Leaderboard)
+  const [mainTab, setMainTab] = useState<'play' | 'leaderboard'>('play');
+
+  // Pop-up modal for "Profilurile Tale" (hidden until button is clicked)
+  const [showProfilesModal, setShowProfilesModal] = useState<boolean>(false);
 
   const [mode, setMode] = useState<GameMode>('normal');
   const [playerCount, setPlayerCount] = useState<number>(3);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [boardDiceCount, setBoardDiceCount] = useState<1 | 2>(1);
 
-  // Duel mode specific state (Online 1v1 Room-based)
+  // Duel mode state
   const [duelRole, setDuelRole] = useState<'host' | 'join'>('host');
   const [duelSubmode, setDuelSubmode] = useState<DuelSubmode>('general');
   const [duelDifficulty, setDuelDifficulty] = useState<DuelDifficulty>('easy');
@@ -69,7 +88,12 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   const [isCustomTarget, setIsCustomTarget] = useState<boolean>(false);
   const [duelRoomCodeInput, setDuelRoomCodeInput] = useState<string>('');
 
-  // Player names state (for local modes)
+  // Casino mode state
+  const [casinoRole, setCasinoRole] = useState<'host' | 'join'>('host');
+  const [casinoStartingChips, setCasinoStartingChips] = useState<number>(500);
+  const [casinoRoomCodeInput, setCasinoRoomCodeInput] = useState<string>('');
+
+  // Player names & avatars
   const [playerNames, setPlayerNames] = useState<string[]>([
     'Fratele Vasile',
     'Călugărul Onufrie',
@@ -78,14 +102,13 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
     'Diaconul Gheorghe',
     'Fratele Matei',
   ]);
-
-  // Player avatars state (IDs of medieval characters)
   const [playerAvatars, setPlayerAvatars] = useState<string[]>(DEFAULT_AVATARS);
-
-  // Avatar Modal State
   const [avatarModalIndex, setAvatarModalIndex] = useState<number | null>(null);
 
-  // Custom doubles state
+  // Profile picker modal index for roster players (null = closed)
+  const [pickerPlayerIndex, setPickerPlayerIndex] = useState<number | null>(null);
+
+  // Custom doubles
   const [showCustomDoublesModal, setShowCustomDoublesModal] = useState<boolean>(false);
   const [customDoubles, setCustomDoubles] = useState<CustomDoubles>({
     '2-2': '',
@@ -94,29 +117,26 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
     '5-5': '',
   });
 
-  // Profile dropdown open state per player
-  const [openDropdownIndex, setOpenDropdownIndex] = useState<number | null>(null);
-
-  // Auto-detect ?room=XYZ in URL on load
+  // Auto-detect URL room params
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const roomParam = params.get('room');
-      if (roomParam) {
+      const casinoParam = params.get('casino_room');
+
+      if (casinoParam) {
+        setMode('casino');
+        setCasinoRole('join');
+        setCasinoRoomCodeInput(casinoParam.toUpperCase());
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (roomParam) {
         setMode('duel');
         setDuelRole('join');
         setDuelRoomCodeInput(roomParam.toUpperCase());
-        // Clean URL parameter so it doesn't persist across screen changes
         window.history.replaceState({}, document.title, window.location.pathname);
       }
-    } catch (e) {
-      // Ignore
-    }
+    } catch (e) {}
   }, []);
-
-  const handlePlayerCountChange = (count: number) => {
-    setPlayerCount(count);
-  };
 
   const handleNameChange = (index: number, val: string) => {
     const updated = [...playerNames];
@@ -125,26 +145,54 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   };
 
   const handleAvatarChange = (index: number, avatarId: string) => {
-    setPlayerAvatars(prev => {
+    setPlayerAvatars((prev) => {
       const next = [...prev];
       next[index] = avatarId;
       return next;
     });
   };
 
-  const selectProfileForPlayer = (index: number, profileName: string, avatarIcon?: string) => {
-    handleNameChange(index, profileName);
-    if (avatarIcon) {
-      handleAvatarChange(index, avatarIcon);
+  const selectProfileForPlayer = (index: number, profile: Profile) => {
+    handleNameChange(index, profile.name);
+    if (profile.avatarIcon) {
+      handleAvatarChange(index, profile.avatarIcon);
     }
-    setOpenDropdownIndex(null);
   };
 
   const handleStart = () => {
+    if (mode === 'casino') {
+      const myName = playerNames[0].trim() || (casinoRole === 'host' ? 'Gazda Cazino' : 'Jucător Cazino');
+      let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
+      const myAvatar = playerAvatars[0] || matchedProfile?.avatarIcon || 'monk_drunk';
+
+      if (!matchedProfile && autoSaveNewProfiles && myName.trim()) {
+        matchedProfile = addProfile(myName.trim(), myAvatar);
+      }
+
+      const localPlayer = {
+        id: generateUniqueId('casino_player'),
+        name: myName,
+        avatarIcon: myAvatar,
+        color: casinoRole === 'host' ? '#e8c84a' : '#4a90e2',
+      };
+
+      onStartCasino(
+        casinoRole,
+        localPlayer,
+        Math.max(50, casinoStartingChips),
+        casinoRoomCodeInput.trim().toUpperCase()
+      );
+      return;
+    }
+
     if (mode === 'duel') {
       const myName = playerNames[0].trim() || (duelRole === 'host' ? 'Gazda Duelului' : 'Luptătorul Oaspete');
-      const matchedProfile = profiles.find(p => p.name.trim().toLowerCase() === myName.toLowerCase());
+      let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
       const myAvatar = playerAvatars[0] || matchedProfile?.avatarIcon || 'monk_drunk';
+
+      if (!matchedProfile && autoSaveNewProfiles && myName.trim()) {
+        matchedProfile = addProfile(myName.trim(), myAvatar);
+      }
 
       const localPlayer = {
         id: generateUniqueId('duel_player'),
@@ -153,17 +201,28 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
         color: duelRole === 'host' ? '#e8c84a' : '#e05c3a',
       };
 
-      const finalTarget = isCustomTarget ? (parseInt(customTargetInput) || 30) : duelTargetPoints;
+      const finalTarget = isCustomTarget ? parseInt(customTargetInput) || 30 : duelTargetPoints;
 
-      onStartDuel(duelRole, localPlayer, duelSubmode, duelDifficulty, duelRoomCodeInput.trim().toUpperCase(), finalTarget);
+      onStartDuel(
+        duelRole,
+        localPlayer,
+        duelSubmode,
+        duelDifficulty,
+        duelRoomCodeInput.trim().toUpperCase(),
+        finalTarget
+      );
       return;
     }
 
     const activeNames = playerNames.slice(0, playerCount).map((n, idx) => n.trim() || `${t('playerPlaceholder')} ${idx + 1}`);
 
     const finalPlayers: Player[] = activeNames.map((name, idx) => {
-      const matchedProfile = profiles.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
+      let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === name.toLowerCase());
       const chosenAvatar = playerAvatars[idx] || matchedProfile?.avatarIcon || DEFAULT_AVATARS[idx % DEFAULT_AVATARS.length];
+
+      if (!matchedProfile && autoSaveNewProfiles && name.trim()) {
+        matchedProfile = addProfile(name.trim(), chosenAvatar);
+      }
 
       return {
         id: generateUniqueId(`player_${idx}`),
@@ -190,684 +249,541 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   };
 
   return (
-    <div className="w-full flex flex-col items-center py-4 sm:py-6 px-3 sm:px-4 max-w-xl mx-auto space-y-5">
-      {/* Title Header */}
-      <div className="text-center space-y-1 animate-fade-in">
-        <div className="text-4xl sm:text-5xl mb-0.5">🍺 🎲 ⚔️</div>
-        <h1 className="text-2xl sm:text-4xl font-cinzel font-black text-[#e8c84a] gold-text-glow tracking-wider uppercase">
-          Barbutul lu' Călugăru
-        </h1>
-        <p className="text-sm sm:text-base font-bebas text-[#e05c3a] tracking-widest uppercase">
-          drinking game
-        </p>
-      </div>
-
-      {/* Main Setup Card */}
-      <div className="w-full bg-[#18130d]/95 backdrop-blur-md border-2 border-[#e8c84a]/60 rounded-2xl p-4 sm:p-6 shadow-2xl gold-glow space-y-5">
-        
-        {/* Game Mode Selector - 3 Modes */}
-        <div className="space-y-2">
-          <label className="text-xs sm:text-sm font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
-            {t('selectMode')}
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => setMode('normal')}
-              className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all duration-200 ${
-                mode === 'normal'
-                  ? 'border-[#e8c84a] bg-[#221f18] text-[#e8c84a] gold-glow font-bold scale-[1.02]'
-                  : 'border-[#2a2a2a] bg-[#121212] text-gray-400 hover:border-gray-600'
-              }`}
-            >
-              <span className="text-2xl">🍺</span>
-              <span className="font-cinzel text-xs sm:text-sm">{t('normalMode')}</span>
-            </button>
-
-            <button
-              onClick={() => setMode('boardgame')}
-              className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all duration-200 ${
-                mode === 'boardgame'
-                  ? 'border-[#e8c84a] bg-[#221f18] text-[#e8c84a] gold-glow font-bold scale-[1.02]'
-                  : 'border-[#2a2a2a] bg-[#121212] text-gray-400 hover:border-gray-600'
-              }`}
-            >
-              <span className="text-2xl">🎲</span>
-              <span className="font-cinzel text-xs sm:text-sm">{t('boardgameMode')}</span>
-            </button>
-
-            <button
-              onClick={() => setMode('duel')}
-              className={`p-3 rounded-xl border-2 flex flex-col items-center gap-1 transition-all duration-200 ${
-                mode === 'duel'
-                  ? 'border-[#ffd700] bg-gradient-to-b from-[#2e1d0f] to-[#1c120a] text-[#ffd700] gold-glow font-bold scale-[1.02] shadow-[0_0_15px_rgba(255,215,0,0.3)]'
-                  : 'border-[#2a2a2a] bg-[#121212] text-gray-400 hover:border-gray-600'
-              }`}
-            >
-              <span className="text-2xl">⚔️</span>
-              <span className="font-cinzel text-xs sm:text-sm">{t('duelMode')}</span>
-            </button>
+    <div className="w-full flex flex-col items-center py-2 sm:py-3.5 px-2.5 sm:px-4 max-w-md mx-auto space-y-3 animate-fade-in pb-4">
+      {/* Top Header with Navigation Tabs (Play / Global Leaderboard) */}
+      <div className="w-full flex items-center justify-between bg-gradient-to-r from-[#1c140c]/95 via-[#26190f]/95 to-[#1c140c]/95 border border-[#e8c84a]/50 rounded-2xl px-3 py-2 shadow-md backdrop-blur-md">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-2xl flex-shrink-0 animate-bounce-short">🍺</span>
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-base font-cinzel font-black text-[#e8c84a] gold-text-glow tracking-wide uppercase leading-tight truncate">
+              Barbutul lu' Călugăru
+            </h1>
+            <span className="text-[10px] font-bebas text-[#e05c3a] tracking-widest uppercase block">
+              drinking game • medieval tavern
+            </span>
           </div>
         </div>
 
-        {/* ---------------------------------------------------- */}
-        {/* DUEL MODE DEDICATED SETUP (1v1 WiFi / Room Code)    */}
-        {/* ---------------------------------------------------- */}
-        {mode === 'duel' && (
-          <div className="space-y-4 border-t border-[#2a2a2a] pt-4 animate-fade-in">
-            {/* Instruction Banner */}
-            <div className="p-3 bg-[#24170c]/90 border border-[#ffd700]/40 rounded-xl text-center space-y-1">
-              <div className="text-xs sm:text-sm font-cinzel font-bold text-[#ffd700] flex items-center justify-center gap-1.5">
-                <span>📡</span>
-                <span>{language === 'ro' ? 'Duel 1v1 pe 2 Telefoane (WiFi/Online)' : '1v1 Dual-Device Duel (WiFi/Online)'}</span>
-              </div>
-              <p className="text-xs text-gray-300 font-barlow">
-                {t('duelInstruction')}
-              </p>
-            </div>
-
-            {/* Host vs Join Tab Switcher */}
-            <div className="grid grid-cols-2 gap-2 bg-[#120d08] p-1.5 rounded-xl border border-[#e8c84a]/30">
-              <button
-                type="button"
-                onClick={() => setDuelRole('host')}
-                className={`py-2.5 px-3 rounded-lg font-cinzel text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  duelRole === 'host'
-                    ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md font-black'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <span>👑</span>
-                <span>{t('duelCreateRoom')}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setDuelRole('join')}
-                className={`py-2.5 px-3 rounded-lg font-cinzel text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 ${
-                  duelRole === 'join'
-                    ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md font-black'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <span>🚪</span>
-                <span>{t('duelJoinRoom')}</span>
-              </button>
-            </div>
-
-            {/* If Host: Submode and Difficulty */}
-            {duelRole === 'host' && (
-              <div className="space-y-4 pt-1 animate-fade-in">
-                {/* Submode Selection */}
-                <div className="space-y-2">
-                  <label className="text-xs sm:text-sm font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
-                    {t('duelSubmode')}
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setDuelSubmode('general')}
-                      className={`py-2.5 px-3 rounded-xl border-2 flex items-center justify-center gap-2 transition-all ${
-                        duelSubmode === 'general'
-                          ? 'border-[#ffd700] bg-[#2a1e12] text-[#ffd700] font-bold gold-glow'
-                          : 'border-[#2a2a2a] bg-[#121212] text-gray-400 hover:border-gray-600'
-                      }`}
-                    >
-                      <span className="text-lg">🌍</span>
-                      <span className="font-cinzel text-xs sm:text-sm">{t('duelGeneral')}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setDuelSubmode('football')}
-                      className={`py-2.5 px-3 rounded-xl border-2 flex items-center justify-center gap-2 transition-all ${
-                        duelSubmode === 'football'
-                          ? 'border-[#ffd700] bg-[#2a1e12] text-[#ffd700] font-bold gold-glow'
-                          : 'border-[#2a2a2a] bg-[#121212] text-gray-400 hover:border-gray-600'
-                      }`}
-                    >
-                      <span className="text-lg">⚽</span>
-                      <span className="font-cinzel text-xs sm:text-sm">{t('duelFootball')}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Duel Difficulty Selection */}
-                <div className="space-y-2">
-                  <label className="text-xs sm:text-sm font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
-                    {t('duelDifficulty')}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: 'easy', label: t('duelEasy'), color: 'border-green-500/60 bg-green-950/30 text-green-400' },
-                      { id: 'medium', label: t('duelMedium'), color: 'border-orange-500/60 bg-orange-950/30 text-orange-400' },
-                      { id: 'hard', label: t('duelHard'), color: 'border-red-500/60 bg-red-950/30 text-red-400' },
-                    ].map(item => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setDuelDifficulty(item.id as DuelDifficulty)}
-                        className={`py-2 px-2 rounded-xl border-2 text-center transition-all ${
-                          duelDifficulty === item.id
-                            ? `${item.color} border-[#ffd700] ring-2 ring-[#ffd700]/50 font-bold scale-[1.02]`
-                            : 'border-[#2a2a2a] bg-[#121212] text-gray-400 hover:border-gray-600'
-                        }`}
-                      >
-                        <div className="font-cinzel text-xs sm:text-sm font-bold">{item.label}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Target Points Selection (Prag limită de guri/puncte) */}
-                <div className="space-y-2 pt-2 border-t border-[#2a2a2a]">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs sm:text-sm font-cinzel font-bold text-[#ffd700] uppercase tracking-wider block">
-                      🎯 {language === 'ro' ? 'Prag Limită Puncte / Guri' : 'Target Drink Points Limit'}
-                    </label>
-                    <span className="text-[11px] font-barlow text-orange-300 font-bold">
-                      {language === 'ro' ? 'Cine îl atinge PIERDE!' : 'First to reach LOSES!'}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { val: 15, label: '15p', desc: 'Rapid' },
-                      { val: 25, label: '25p', desc: '1 Groapă' },
-                      { val: 30, label: '30p', desc: 'Standard' },
-                      { val: 50, label: '50p', desc: 'Maraton' },
-                    ].map(preset => (
-                      <button
-                        key={preset.val}
-                        type="button"
-                        onClick={() => {
-                          setDuelTargetPoints(preset.val);
-                          setIsCustomTarget(false);
-                        }}
-                        className={`py-2 px-1.5 rounded-xl border-2 text-center transition-all ${
-                          !isCustomTarget && duelTargetPoints === preset.val
-                            ? 'border-[#ffd700] bg-[#2a1e12] text-[#ffd700] font-bold ring-2 ring-[#ffd700]/50 scale-[1.02]'
-                            : 'border-[#2a2a2a] bg-[#121212] text-gray-400 hover:border-gray-600'
-                        }`}
-                      >
-                        <div className="font-cinzel text-sm font-black">{preset.label}</div>
-                        <div className="text-[10px] font-barlow opacity-75">{preset.desc}</div>
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Custom Target Points Button / Input */}
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomTarget(true)}
-                      className={`w-full py-2 px-3 rounded-xl border flex items-center justify-between text-xs font-cinzel transition-all ${
-                        isCustomTarget
-                          ? 'border-[#ffd700] bg-[#2a1e12] text-[#ffd700]'
-                          : 'border-[#2a2a2a] bg-[#121212] text-gray-400 hover:border-gray-600'
-                      }`}
-                    >
-                      <span>⚙️ {language === 'ro' ? 'Număr Personalizat de Puncte' : 'Custom Points Target'}</span>
-                      {isCustomTarget && (
-                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                          <input
-                            type="number"
-                            min={5}
-                            max={500}
-                            value={customTargetInput}
-                            onChange={e => setCustomTargetInput(e.target.value)}
-                            className="w-16 bg-black border border-[#ffd700] rounded px-2 py-0.5 text-center text-sm font-bold text-[#ffd700] focus:outline-none"
-                          />
-                          <span className="text-[#ffd700] font-bold">puncte</span>
-                        </div>
-                      )}
-                    </button>
-                  </div>
-
-                  <p className="text-[11px] font-barlow text-gray-400 bg-black/40 p-2 rounded-lg border border-white/5">
-                    💡 <strong>{language === 'ro' ? 'Sistem de puncte' : 'Point system'}</strong>: 1 gură = 1 punct | 1 groapă = 25 puncte. Primul jucător care atinge sau depășește {isCustomTarget ? (parseInt(customTargetInput) || 30) : duelTargetPoints} puncte pierde meciul.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* If Join: Room Code Input */}
-            {duelRole === 'join' && (
-              <div className="space-y-2 animate-fade-in">
-                <label className="text-xs sm:text-sm font-cinzel font-bold text-[#ffd700] uppercase tracking-wider block">
-                  {t('duelRoomCode')} (4 caractere)
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={duelRoomCodeInput}
-                    onChange={e => setDuelRoomCodeInput(e.target.value.toUpperCase())}
-                    placeholder="ex: H84K"
-                    className="w-full bg-[#121212] border-2 border-[#ffd700] rounded-xl px-4 py-3 text-center text-2xl font-cinzel font-black tracking-widest text-[#ffd700] placeholder-gray-600 focus:outline-none shadow-[0_0_15px_rgba(255,215,0,0.2)] uppercase"
-                  />
-                </div>
-                <p className="text-[11px] font-barlow text-gray-400 text-center">
-                  Cere codul de 4 litere de la prietenul tău care a creat camera!
-                </p>
-              </div>
-            )}
-
-            {/* Your Fighter Identity (1 Player setup for this device) */}
-            <div className="space-y-2 border-t border-[#2a2a2a] pt-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs sm:text-sm font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
-                  {language === 'ro' ? 'Numele & Avatarul Tău' : 'Your Fighter Name & Avatar'}
-                </label>
-                <span className="text-[11px] font-barlow text-gray-400">
-                  Apasă pe pătrat <span className="text-[#ffd700] font-bold">[+]</span>
-                </span>
-              </div>
-
-              {/* Backdrop to dismiss profile dropdown */}
-              {openDropdownIndex !== null && (
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setOpenDropdownIndex(null)}
-                />
-              )}
-
-              <div className={`relative ${openDropdownIndex === 0 ? 'z-50' : 'z-10'}`}>
-                <div className="flex items-center gap-2">
-                  {/* Avatar Selector Square with [+] overlay */}
-                  <button
-                    type="button"
-                    onClick={() => setAvatarModalIndex(0)}
-                    className="w-12 h-12 rounded-2xl bg-[#1d140c] border-2 border-[#ffd700] hover:scale-105 active:scale-95 transition-all relative flex-shrink-0 flex items-center justify-center shadow-md overflow-hidden group"
-                  >
-                    <AvatarDisplay avatarId={playerAvatars[0] || 'monk_drunk'} className="w-full h-full p-0.5" />
-                    <div className="absolute -bottom-1 -right-1 bg-[#ffd700] text-black w-5 h-5 rounded-full flex items-center justify-center text-xs font-black shadow border border-black/50">
-                      +
-                    </div>
-                  </button>
-
-                  {/* Name Input & Profile Dropdown Button */}
-                  <div className="relative flex-1 flex items-center">
-                    <input
-                      type="text"
-                      value={playerNames[0] || ''}
-                      onChange={e => handleNameChange(0, e.target.value)}
-                      placeholder={duelRole === 'host' ? (language === 'ro' ? 'Numele tău (Gazdă)' : 'Your Name (Host)') : (language === 'ro' ? 'Numele tău (Luptător)' : 'Your Name (Fighter)')}
-                      className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ffd700] rounded-xl pl-3.5 pr-24 py-2.5 text-sm text-[#f0ebe0] focus:outline-none transition-all font-barlow"
-                    />
-
-                    {/* Dropdown Toggle Button */}
-                    <button
-                      type="button"
-                      onClick={() => setOpenDropdownIndex(openDropdownIndex === 0 ? null : 0)}
-                      className={`absolute right-1.5 py-1 px-2.5 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1 transition-all ${
-                        openDropdownIndex === 0
-                          ? 'bg-[#ffd700] text-black shadow'
-                          : 'bg-[#221a10] border border-[#e8c84a]/40 text-[#ffd700] hover:bg-[#2e2316]'
-                      }`}
-                    >
-                      <span>{language === 'ro' ? '👤 Profil' : '👤 Profile'}</span>
-                      <span className="text-[10px]">{openDropdownIndex === 0 ? '▲' : '▼'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Dropdown Menu for Saved Profiles */}
-                {openDropdownIndex === 0 && (
-                  <div className="absolute left-0 right-0 top-14 mt-1 z-50 bg-gradient-to-b from-[#1c150e] to-[#120d09] border-2 border-[#e8c84a] rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] max-h-56 overflow-y-auto p-2 animate-fade-in">
-                    <div className="flex items-center justify-between px-2 py-1 border-b border-[#2e2216] mb-1.5">
-                      <span className="text-[10px] text-[#ffd700] font-cinzel font-bold uppercase tracking-wider">
-                        📜 {language === 'ro' ? 'Profiluri Salvate' : 'Saved Profiles'}
-                      </span>
-                      <span className="text-[10px] text-gray-400 font-barlow">
-                        {profiles.length} {language === 'ro' ? 'înregistrate' : 'found'}
-                      </span>
-                    </div>
-
-                    {profiles.length === 0 ? (
-                      <div className="p-3 text-center text-xs text-gray-400 font-barlow">
-                        {language === 'ro' ? 'Nu ai profiluri salvate încă.' : 'No saved profiles yet.'}
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        {profiles.map(p => (
-                          <div
-                            key={p.id}
-                            onClick={() => selectProfileForPlayer(0, p.name, p.avatarIcon)}
-                            className="p-2 rounded-xl hover:bg-[#2c2014] cursor-pointer text-sm font-barlow text-[#e8c84a] flex items-center justify-between border border-transparent hover:border-[#ffd700]/30 transition-colors"
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-[#0d0a07] border border-[#e8c84a]/30">
-                                <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} className="w-full h-full" />
-                              </div>
-                              <div>
-                                <div className="font-cinzel font-bold text-xs text-[#f0ebe0]">{p.name}</div>
-                                <div className="text-[10px] text-gray-400">{language === 'ro' ? 'Jocuri' : 'Games'}: {p.gamesPlayed} | 🍺 {p.totalSips} {t('sipsUnit')}</div>
-                              </div>
-                            </div>
-                            <span className="text-xs bg-[#e8c84a]/20 text-[#ffd700] px-2 py-0.5 rounded font-cinzel font-bold">
-                              {language === 'ro' ? 'Alege ➔' : 'Select ➔'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ---------------------------------------------------- */}
-        {/* NORMAL & BOARDGAME PLAYER COUNT                      */}
-        {/* ---------------------------------------------------- */}
-        {mode !== 'duel' && (
-          <div className="space-y-2">
-            <label className="text-xs sm:text-sm font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
-              {t('playerCount')}
-            </label>
-            <div className="flex items-center justify-between gap-2">
-              {[2, 3, 4, 5, 6].map(num => (
-                <button
-                  key={num}
-                  onClick={() => handlePlayerCountChange(num)}
-                  className={`flex-1 py-2.5 rounded-xl border-2 font-bebas text-xl transition-all ${
-                    playerCount === num
-                      ? 'border-[#e8c84a] bg-[#e8c84a] text-black font-bold gold-glow'
-                      : 'border-[#2a2a2a] bg-[#121212] text-[#f0ebe0] hover:border-gray-600'
-                  }`}
-                >
-                  {num}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Options for Normal Mode */}
-        {mode === 'normal' && (
-          <div className="space-y-4 border-t border-[#2a2a2a] pt-4">
-            <div className="space-y-2">
-              <label className="text-xs sm:text-sm font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
-                {t('difficulty')}
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { id: 'weak', label: t('weak'), color: 'border-green-500/60 bg-green-950/30 text-green-400' },
-                  { id: 'medium', label: t('medium'), color: 'border-orange-500/60 bg-orange-950/30 text-orange-400' },
-                  { id: 'extreme', label: t('extreme'), color: 'border-red-500/60 bg-red-950/30 text-red-400' },
-                  { id: 'nightmare', label: t('nightmare'), color: 'border-purple-500/60 bg-purple-950/30 text-purple-400' },
-                ].map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => setDifficulty(item.id as Difficulty)}
-                    className={`p-2 rounded-xl border-2 text-center transition-all ${
-                      difficulty === item.id
-                        ? `${item.color} border-[#e8c84a] ring-2 ring-[#e8c84a]/50 font-bold`
-                        : 'border-[#2a2a2a] bg-[#121212] text-gray-400 hover:border-gray-600'
-                    }`}
-                  >
-                    <div className="font-cinzel text-sm">{item.label}</div>
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-gray-400 font-barlow italic">
-                {difficulty === 'weak' && t('weakDesc')}
-                {difficulty === 'medium' && t('mediumDesc')}
-                {difficulty === 'extreme' && t('extremeDesc')}
-                {difficulty === 'nightmare' && t('nightmareDesc')}
-              </p>
-            </div>
-
-            {/* Custom Doubles Button */}
-            <button
-              onClick={() => setShowCustomDoublesModal(true)}
-              className="w-full py-2.5 px-4 rounded-xl border border-[#e8c84a]/40 bg-[#1e1a12] text-[#e8c84a] font-cinzel text-sm hover:bg-[#282116] transition-all flex items-center justify-center gap-2"
-            >
-              <span>🎯 {t('customDoubles')}</span>
-              {Object.values(customDoubles).some(v => (v as string).trim() !== '') && (
-                <span className="text-xs bg-[#e8c84a] text-black px-2 py-0.5 rounded-full font-bold">
-                  Active
-                </span>
-              )}
-            </button>
-          </div>
-        )}
-
-        {/* Options for Boardgame Mode */}
-        {mode === 'boardgame' && (
-          <div className="space-y-3 border-t border-[#2a2a2a] pt-4">
-            <label className="text-xs sm:text-sm font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
-              {t('diceOnBoard')}
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setBoardDiceCount(1)}
-                className={`py-3 rounded-xl border-2 font-cinzel text-sm transition-all ${
-                  boardDiceCount === 1
-                    ? 'border-[#e8c84a] bg-[#221f18] text-[#e8c84a] gold-glow font-bold'
-                    : 'border-[#2a2a2a] bg-[#121212] text-gray-400'
-                }`}
-              >
-                {t('oneDie')}
-              </button>
-
-              <button
-                onClick={() => setBoardDiceCount(2)}
-                className={`py-3 rounded-xl border-2 font-cinzel text-sm transition-all ${
-                  boardDiceCount === 2
-                    ? 'border-[#e8c84a] bg-[#221f18] text-[#e8c84a] gold-glow font-bold'
-                    : 'border-[#2a2a2a] bg-[#121212] text-gray-400'
-                }`}
-              >
-                {t('twoDice')}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Player Name Inputs (For Normal & Boardgame) */}
-        {mode !== 'duel' && (
-          <div className="space-y-3 border-t border-[#2a2a2a] pt-4">
-            <div className="flex items-center justify-between">
-              <label className="text-xs sm:text-sm font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
-                {t('playerNames')} &amp; Avatare
-              </label>
-              <span className="text-[11px] font-barlow text-gray-400">
-                Apasă pe pătrat <span className="text-[#ffd700] font-bold">[+]</span> pt. avatar
-              </span>
-            </div>
-
-            {/* Backdrop to dismiss profile dropdown */}
-            {openDropdownIndex !== null && (
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setOpenDropdownIndex(null)}
-              />
-            )}
-
-            <div className="space-y-3">
-              {Array.from({ length: playerCount }).map((_, idx) => {
-                const currentAvatarId = playerAvatars[idx] || DEFAULT_AVATARS[idx % DEFAULT_AVATARS.length];
-                const isDropdownOpen = openDropdownIndex === idx;
-                const openUpwards = (idx >= playerCount - 1 && playerCount >= 2);
-
-                return (
-                  <div key={idx} className={`relative ${isDropdownOpen ? 'z-50' : 'z-10'}`}>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setAvatarModalIndex(idx)}
-                        className="w-12 h-12 rounded-2xl bg-[#1d140c] border-2 border-[#e8c84a] hover:border-[#ffd700] hover:scale-105 active:scale-95 transition-all relative flex-shrink-0 flex items-center justify-center shadow-md overflow-hidden group"
-                      >
-                        <AvatarDisplay avatarId={currentAvatarId} className="w-full h-full p-0.5" />
-                        <div className="absolute -bottom-1 -right-1 bg-[#ffd700] text-black w-5 h-5 rounded-full flex items-center justify-center text-xs font-black shadow border border-black/50 group-hover:scale-110 transition-transform">
-                          +
-                        </div>
-                      </button>
-
-                      <div className="relative flex-1 flex items-center">
-                        <input
-                          type="text"
-                          value={playerNames[idx] || ''}
-                          onChange={e => handleNameChange(idx, e.target.value)}
-                          placeholder={`${t('playerPlaceholder')} ${idx + 1}`}
-                          className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#e8c84a] rounded-xl pl-3.5 pr-24 py-2.5 text-sm text-[#f0ebe0] focus:outline-none transition-all font-barlow"
-                        />
-
-                        <button
-                          type="button"
-                          onClick={() => setOpenDropdownIndex(isDropdownOpen ? null : idx)}
-                          className={`absolute right-1.5 py-1 px-2.5 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1 transition-all ${
-                            isDropdownOpen
-                              ? 'bg-[#e8c84a] text-black shadow'
-                              : 'bg-[#221a10] border border-[#e8c84a]/40 text-[#ffd700] hover:bg-[#2e2316]'
-                          }`}
-                        >
-                          <span>{language === 'ro' ? '👤 Profil' : '👤 Profile'}</span>
-                          <span className="text-[10px]">{isDropdownOpen ? '▲' : '▼'}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {isDropdownOpen && (
-                      <div
-                        className={`absolute left-0 right-0 z-50 bg-gradient-to-b from-[#1c150e] to-[#120d09] border-2 border-[#e8c84a] rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] max-h-56 overflow-y-auto p-2 animate-fade-in ${
-                          openUpwards ? 'bottom-full mb-2' : 'top-14 mt-1'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between px-2 py-1 border-b border-[#2e2216] mb-1.5">
-                          <span className="text-[10px] text-[#ffd700] font-cinzel font-bold uppercase tracking-wider">
-                            📜 {language === 'ro' ? 'Profiluri Salvate' : 'Saved Profiles'} {openUpwards ? '↑' : '↓'}
-                          </span>
-                          <span className="text-[10px] text-gray-400 font-barlow">
-                            {profiles.length} {language === 'ro' ? 'înregistrate' : 'found'}
-                          </span>
-                        </div>
-
-                        {profiles.length === 0 ? (
-                          <div className="p-3 text-center text-xs text-gray-400 font-barlow">
-                            {language === 'ro'
-                              ? 'Nu ai profiluri salvate încă.'
-                              : 'No saved profiles yet.'}
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            {profiles.map(p => (
-                              <div
-                                key={p.id}
-                                onClick={() => selectProfileForPlayer(idx, p.name, p.avatarIcon)}
-                                className="p-2 rounded-xl hover:bg-[#2c2014] cursor-pointer text-sm font-barlow text-[#e8c84a] flex items-center justify-between border border-transparent hover:border-[#ffd700]/30 transition-colors"
-                              >
-                                <div className="flex items-center gap-2.5">
-                                  <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-[#0d0a07] border border-[#e8c84a]/30">
-                                    <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} className="w-full h-full" />
-                                  </div>
-                                  <div>
-                                    <div className="font-cinzel font-bold text-xs text-[#f0ebe0]">
-                                      {p.name}
-                                    </div>
-                                    <div className="text-[10px] text-gray-400">
-                                      {language === 'ro' ? 'Jocuri' : 'Games'}: {p.gamesPlayed} | 🍺 {p.totalSips} {t('sipsUnit')}
-                                    </div>
-                                  </div>
-                                </div>
-                                <span className="text-xs bg-[#e8c84a]/20 text-[#ffd700] px-2 py-0.5 rounded font-cinzel font-bold">
-                                  {language === 'ro' ? 'Alege ➔' : 'Select ➔'}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Start Game Action Button */}
-        <div className="space-y-2 pt-2">
+        {/* Top Switcher Icons/Buttons */}
+        <div className="flex items-center gap-1 bg-[#0f0a06] p-1 rounded-xl border border-[#2d1f14] flex-shrink-0">
           <button
-            onClick={handleStart}
-            disabled={mode === 'duel' && duelRole === 'join' && duelRoomCodeInput.trim().length !== 4}
-            className={`w-full py-4 rounded-xl font-cinzel font-black text-lg sm:text-xl transition-all active:scale-98 shadow-lg uppercase tracking-wide flex items-center justify-center gap-2 ${
-              mode === 'duel' && duelRole === 'join' && duelRoomCodeInput.trim().length !== 4
-                ? 'bg-[#22180f] text-gray-500 border border-gray-700 cursor-not-allowed'
-                : 'bg-gradient-to-r from-[#e8c84a] via-[#ffd700] to-[#e8c84a] text-black hover:brightness-110 gold-glow'
+            type="button"
+            onClick={() => setMainTab('play')}
+            className={`py-1 px-2 sm:px-2.5 rounded-lg text-xs font-cinzel font-bold transition-all flex items-center gap-1 ${
+              mainTab === 'play'
+                ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md'
+                : 'text-gray-400 hover:text-gray-200'
             }`}
+            title={language === 'ro' ? 'Panou de Joc' : 'Play Setup'}
           >
-            <span>{mode === 'duel' ? (duelRole === 'host' ? '👑' : '⚔️') : '🚀'}</span>
-            <span>
-              {mode === 'duel'
-                ? (duelRole === 'host' ? t('duelCreateRoom') : t('duelJoinBtn'))
-                : t('startGame')}
-            </span>
+            <span>🎮</span>
+            <span className="hidden xs:inline">{language === 'ro' ? 'Joacă' : 'Play'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMainTab('leaderboard')}
+            className={`py-1 px-2 sm:px-2.5 rounded-lg text-xs font-cinzel font-bold transition-all flex items-center gap-1 ${
+              mainTab === 'leaderboard'
+                ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+            title={language === 'ro' ? 'Clasament Mondial' : 'Global Leaderboard'}
+          >
+            <span>🏆</span>
+            <span className="hidden xs:inline">{language === 'ro' ? 'Top Mondial' : 'Top'}</span>
           </button>
         </div>
       </div>
 
-      {/* Navigation Buttons Row */}
-      <div className="flex items-center justify-center gap-3 w-full">
+      {/* VIEW 1: MAIN PAGE (GAME SETUP + PROFILES BUTTON UNDER START) */}
+      {mainTab === 'play' && (
+        <div className="w-full space-y-3">
+          {/* Main Game Setup Card */}
+          <div className="w-full bg-[#18130d]/95 backdrop-blur-md border border-[#e8c84a]/60 rounded-2xl p-3 sm:p-3.5 shadow-xl gold-glow space-y-3">
+            {/* Game Mode Selector - 4 Compact Grid Buttons */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
+                  {t('selectMode')}
+                </label>
+                <span className="text-[10px] text-gray-400 font-barlow">
+                  {mode === 'normal' ? '🍺 Clasic' : mode === 'boardgame' ? '🎲 Tablă' : mode === 'duel' ? '⚔️ WiFi 1v1' : '🎰 Craps Duel'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-4 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setMode('normal')}
+                  className={`p-1.5 rounded-xl border flex flex-col items-center gap-0.5 transition-all ${
+                    mode === 'normal'
+                      ? 'border-[#ffd700] bg-[#291e12] text-[#ffd700] gold-glow font-bold shadow-md ring-1 ring-[#ffd700]'
+                      : 'border-[#261d14] bg-[#110d09] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="text-lg">🍺</span>
+                  <span className="font-cinzel text-[10px] sm:text-[11px] leading-none">{t('normalMode')}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode('boardgame')}
+                  className={`p-1.5 rounded-xl border flex flex-col items-center gap-0.5 transition-all ${
+                    mode === 'boardgame'
+                      ? 'border-[#ffd700] bg-[#291e12] text-[#ffd700] gold-glow font-bold shadow-md ring-1 ring-[#ffd700]'
+                      : 'border-[#261d14] bg-[#110d09] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="text-lg">🎲</span>
+                  <span className="font-cinzel text-[10px] sm:text-[11px] leading-none">{t('boardgameMode')}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode('duel')}
+                  className={`p-1.5 rounded-xl border flex flex-col items-center gap-0.5 transition-all ${
+                    mode === 'duel'
+                      ? 'border-[#ff7a6b] bg-[#2d1410] text-[#ff9b8f] font-bold shadow-md ring-1 ring-[#ff7a6b]'
+                      : 'border-[#261d14] bg-[#110d09] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="text-lg">⚔️</span>
+                  <span className="font-cinzel text-[10px] sm:text-[11px] leading-none">Duel 1v1</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode('casino')}
+                  className={`p-1.5 rounded-xl border flex flex-col items-center gap-0.5 transition-all ${
+                    mode === 'casino'
+                      ? 'border-[#ffd700] bg-[#2b200e] text-[#ffd700] font-bold shadow-md ring-1 ring-[#ffd700]'
+                      : 'border-[#261d14] bg-[#110d09] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="text-lg">🎰</span>
+                  <span className="font-cinzel text-[10px] sm:text-[11px] leading-none">{t('casinoMode')}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* DUEL MODE COMPACT CONFIG */}
+            {mode === 'duel' && (
+              <div className="space-y-2 border-t border-[#2d2014] pt-2 animate-fade-in">
+                <div className="grid grid-cols-2 gap-1.5 bg-[#0f0a06] p-1 rounded-xl border border-[#2d1e12]">
+                  <button
+                    type="button"
+                    onClick={() => setDuelRole('host')}
+                    className={`py-1.5 px-2 rounded-lg font-cinzel text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                      duelRole === 'host'
+                        ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>👑</span>
+                    <span>{t('duelCreateRoom')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDuelRole('join')}
+                    className={`py-1.5 px-2 rounded-lg font-cinzel text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                      duelRole === 'join'
+                        ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>🚪</span>
+                    <span>{t('duelJoinRoom')}</span>
+                  </button>
+                </div>
+
+                {duelRole === 'host' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-cinzel font-bold text-gray-300 block">
+                        {t('duelSubmode')}
+                      </label>
+                      <div className="grid grid-cols-2 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setDuelSubmode('general')}
+                          className={`py-1.5 rounded-lg text-xs font-cinzel ${
+                            duelSubmode === 'general' ? 'bg-[#ffd700] text-black font-bold' : 'bg-[#120d09] text-gray-400'
+                          }`}
+                        >
+                          🌍 Gen
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDuelSubmode('football')}
+                          className={`py-1.5 rounded-lg text-xs font-cinzel ${
+                            duelSubmode === 'football' ? 'bg-[#ffd700] text-black font-bold' : 'bg-[#120d09] text-gray-400'
+                          }`}
+                        >
+                          ⚽ Fotbal
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-cinzel font-bold text-gray-300 block">
+                        {t('duelDifficulty')}
+                      </label>
+                      <div className="grid grid-cols-3 gap-1">
+                        {[
+                          { id: 'easy', label: '🟢' },
+                          { id: 'medium', label: '🟠' },
+                          { id: 'hard', label: '🔴' },
+                        ].map((d) => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => setDuelDifficulty(d.id as DuelDifficulty)}
+                            className={`py-1.5 rounded-lg text-xs font-cinzel ${
+                              duelDifficulty === d.id ? 'bg-[#ffd700] text-black font-bold' : 'bg-[#120d09] text-gray-400'
+                            }`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {duelRole === 'join' && (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={duelRoomCodeInput}
+                      onChange={(e) => setDuelRoomCodeInput(e.target.value.toUpperCase())}
+                      placeholder={language === 'ro' ? 'CODUL CAMEREI (EX: DU3L)' : 'ROOM CODE (EX: DU3L)'}
+                      className="w-full bg-[#100b07] border-2 border-[#ffd700] rounded-xl px-3 py-2 text-center text-lg font-cinzel font-black tracking-widest text-[#ffd700] placeholder-gray-600 focus:outline-none uppercase"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* CASINO MODE COMPACT CONFIG */}
+            {mode === 'casino' && (
+              <div className="space-y-2 border-t border-[#2d2014] pt-2 animate-fade-in">
+                <div className="grid grid-cols-2 gap-1.5 bg-[#0f0a06] p-1 rounded-xl border border-[#2d1e12]">
+                  <button
+                    type="button"
+                    onClick={() => setCasinoRole('host')}
+                    className={`py-1.5 px-2 rounded-lg font-cinzel text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                      casinoRole === 'host'
+                        ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>👑</span>
+                    <span>{t('casinoCreateRoom')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCasinoRole('join')}
+                    className={`py-1.5 px-2 rounded-lg font-cinzel text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                      casinoRole === 'join'
+                        ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>🚪</span>
+                    <span>{t('casinoJoinRoom')}</span>
+                  </button>
+                </div>
+
+                {casinoRole === 'host' && (
+                  <div className="flex items-center justify-between gap-2 bg-[#100c07] p-2 rounded-xl border border-[#2b2014]">
+                    <span className="text-xs font-cinzel text-[#ffd700]">🪙 {t('casinoStartingChips')}:</span>
+                    <div className="flex items-center gap-1">
+                      {[100, 250, 500, 1000].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setCasinoStartingChips(amt)}
+                          className={`px-2 py-1 rounded-lg text-xs font-mono font-bold ${
+                            casinoStartingChips === amt ? 'bg-[#ffd700] text-black' : 'bg-[#1c150e] text-gray-300'
+                          }`}
+                        >
+                          {amt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {casinoRole === 'join' && (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={casinoRoomCodeInput}
+                      onChange={(e) => setCasinoRoomCodeInput(e.target.value.toUpperCase())}
+                      placeholder={language === 'ro' ? 'COD CAZINO (EX: C4Z1)' : 'CASINO CODE (EX: C4Z1)'}
+                      className="w-full bg-[#100b07] border-2 border-[#ffd700] rounded-xl px-3 py-2 text-center text-lg font-cinzel font-black tracking-widest text-[#ffd700] placeholder-gray-600 focus:outline-none uppercase"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* NORMAL & BOARDGAME SETTINGS (PLAYER COUNT & DIFFICULTY/DICE) */}
+            {mode !== 'duel' && mode !== 'casino' && (
+              <div className="space-y-2 border-t border-[#2d2014] pt-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-cinzel font-bold text-[#e8c84a] uppercase">
+                    {t('playerCount')}:
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {[2, 3, 4, 5, 6].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setPlayerCount(num)}
+                        className={`w-8 h-8 rounded-lg font-bebas text-lg transition-all ${
+                          playerCount === num
+                            ? 'bg-[#ffd700] text-black font-bold shadow gold-glow scale-105'
+                            : 'bg-[#120d09] border border-[#2b1f13] text-gray-300 hover:border-gray-500'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {mode === 'normal' && (
+                  <div className="grid grid-cols-4 gap-1 pt-0.5">
+                    {[
+                      { id: 'weak', label: 'Weak' },
+                      { id: 'medium', label: 'Mediu' },
+                      { id: 'extreme', label: 'Extreme' },
+                      { id: 'nightmare', label: 'Coșmar' },
+                    ].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setDifficulty(item.id as Difficulty)}
+                        className={`py-1.5 rounded-lg font-cinzel text-xs transition-all ${
+                          difficulty === item.id
+                            ? 'bg-[#ffd700] text-black font-bold shadow'
+                            : 'bg-[#120d09] border border-[#2b1f13] text-gray-400 hover:border-gray-500'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {mode === 'boardgame' && (
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    <span className="text-[11px] font-cinzel font-bold text-[#e8c84a]">
+                      {t('diceOnBoard')}:
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setBoardDiceCount(1)}
+                        className={`py-1 px-3 rounded-lg font-cinzel text-xs ${
+                          boardDiceCount === 1 ? 'bg-[#ffd700] text-black font-bold' : 'bg-[#120d09] border border-[#2b1f13] text-gray-400'
+                        }`}
+                      >
+                        {t('oneDie')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBoardDiceCount(2)}
+                        className={`py-1 px-3 rounded-lg font-cinzel text-xs ${
+                          boardDiceCount === 2 ? 'bg-[#ffd700] text-black font-bold' : 'bg-[#120d09] border border-[#2b1f13] text-gray-400'
+                        }`}
+                      >
+                        {t('twoDice')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PLAYER ROSTER INPUTS (CLEAN ROWS WITH AVATAR PICKER & HIGH Z-INDEX MODAL SELECTOR) */}
+            <div className="space-y-2 border-t border-[#2d2014] pt-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
+                  {mode === 'duel' || mode === 'casino'
+                    ? language === 'ro'
+                      ? 'Nume & Avatar Jucător'
+                      : 'Player Name & Avatar'
+                    : `${t('playerNames')} (${playerCount})`}
+                </label>
+                <span className="text-[10px] text-gray-400 font-barlow">
+                  {language === 'ro' ? 'Apasă 👤 pt. profil' : 'Tap 👤 for profile'}
+                </span>
+              </div>
+
+              <div className="space-y-1.5">
+                {Array.from({ length: mode === 'duel' || mode === 'casino' ? 1 : playerCount }).map((_, idx) => {
+                  const currentAvatarId = playerAvatars[idx] || DEFAULT_AVATARS[idx % DEFAULT_AVATARS.length];
+
+                  return (
+                    <div key={idx} className="flex items-center gap-2">
+                      {/* Avatar Picker Button */}
+                      <button
+                        type="button"
+                        onClick={() => setAvatarModalIndex(idx)}
+                        className="w-10 h-10 rounded-xl bg-[#1d140c] border-2 border-[#e8c84a] hover:border-[#ffd700] hover:scale-105 active:scale-95 transition-all relative flex-shrink-0 flex items-center justify-center shadow overflow-hidden group"
+                        title={language === 'ro' ? 'Schimbă avatarul' : 'Change avatar'}
+                      >
+                        <AvatarDisplay avatarId={currentAvatarId} className="w-full h-full p-0.5" />
+                        <div className="absolute -bottom-1 -right-1 bg-[#ffd700] text-black w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-black shadow border border-black/50">
+                          +
+                        </div>
+                      </button>
+
+                      {/* Name Input & Profile Picker Modal Button */}
+                      <div className="relative flex-1 flex items-center">
+                        <input
+                          type="text"
+                          value={playerNames[idx] || ''}
+                          onChange={(e) => handleNameChange(idx, e.target.value)}
+                          placeholder={`${t('playerPlaceholder')} ${idx + 1}`}
+                          className="w-full bg-[#100b07] border border-[#2d1e12] focus:border-[#ffd700] rounded-xl pl-3 pr-14 py-2 text-xs sm:text-sm text-[#f0ebe0] focus:outline-none transition-all font-barlow"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => setPickerPlayerIndex(idx)}
+                          className="absolute right-1.5 py-1 px-2 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1 transition-all bg-[#22180e] border border-[#e8c84a]/50 text-[#ffd700] hover:bg-[#2d2013] active:scale-95 shadow"
+                          title={language === 'ro' ? 'Alege profil salvat' : 'Select saved profile'}
+                        >
+                          <span>👤</span>
+                          <span className="text-[10px]">▼</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ACTION BUTTONS DUO: 1. START GAME & 2. PROFILES BUTTON DIRECTLY UNDER IT */}
+            <div className="pt-1.5 space-y-2">
+              {/* PRIMARY ACTION: START GAME BUTTON */}
+              <button
+                type="button"
+                onClick={handleStart}
+                disabled={
+                  (mode === 'duel' && duelRole === 'join' && duelRoomCodeInput.trim().length !== 4) ||
+                  (mode === 'casino' && casinoRole === 'join' && casinoRoomCodeInput.trim().length !== 4)
+                }
+                className={`w-full py-3.5 rounded-xl font-cinzel font-black text-sm sm:text-base transition-all active:scale-98 shadow-lg uppercase tracking-wide flex items-center justify-center gap-2 ${
+                  (mode === 'duel' && duelRole === 'join' && duelRoomCodeInput.trim().length !== 4) ||
+                  (mode === 'casino' && casinoRole === 'join' && casinoRoomCodeInput.trim().length !== 4)
+                    ? 'bg-[#20170f] text-gray-500 border border-gray-700 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-[#ffd700] via-[#f7c844] to-[#ffd700] text-black hover:brightness-110 gold-glow'
+                }`}
+              >
+                <span>
+                  {mode === 'casino' ? '🎰' : mode === 'duel' ? (duelRole === 'host' ? '👑' : '⚔️') : '🚀'}
+                </span>
+                <span>
+                  {mode === 'casino'
+                    ? casinoRole === 'host'
+                      ? t('casinoCreateRoom')
+                      : t('casinoJoinBtn')
+                    : mode === 'duel'
+                    ? duelRole === 'host'
+                      ? t('duelCreateRoom')
+                      : t('duelJoinBtn')
+                    : t('startGame')}
+                </span>
+              </button>
+
+              {/* SECONDARY ACTION: PROFILURILE TALE BUTTON (NO EMOTICONS AS REQUESTED) */}
+              <button
+                type="button"
+                onClick={() => setShowProfilesModal(true)}
+                className="w-full py-3 sm:py-3.5 rounded-xl font-cinzel font-black text-sm sm:text-base transition-all active:scale-98 shadow-md uppercase tracking-wider flex items-center justify-center bg-gradient-to-r from-[#20150b] via-[#2c1d10] to-[#20150b] border-2 border-[#e8c84a]/80 text-[#ffd700] hover:border-[#ffd700] hover:bg-[#342314] hover:brightness-110"
+              >
+                {language === 'ro' ? 'Profilurile Tale' : 'Your Profiles'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW 2: DEDICATED GLOBAL LEADERBOARD VIEW (ONLY LEADERBOARD, NO PROFILES HERE) */}
+      {mainTab === 'leaderboard' && (
+        <div className="w-full space-y-3 animate-fade-in">
+          {/* Full Global Leaderboard with all 4 categories */}
+          <GlobalLeaderboardSection onOpenCloudModal={onOpenCloudModal} isFullView={true} />
+
+          {/* Return to Play Button */}
+          <button
+            type="button"
+            onClick={() => setMainTab('play')}
+            className="w-full py-2.5 rounded-xl bg-[#1c140d] border border-[#ffd700]/50 hover:border-[#ffd700] text-[#ffd700] font-cinzel font-bold text-xs uppercase shadow transition-all flex items-center justify-center gap-2"
+          >
+            <span>🎮</span>
+            <span>{language === 'ro' ? '← Înapoi la Panoul de Joc' : '← Back to Play Setup'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Quick Footer Links */}
+      <div className="flex items-center justify-center gap-2 w-full pt-1">
         <button
           onClick={onOpenRules}
-          className="flex-1 py-2.5 px-3 rounded-xl bg-[#161616] border border-[#2a2a2a] hover:border-[#e8c84a] text-sm font-cinzel text-[#f0ebe0] transition-all flex items-center justify-center gap-1.5"
+          className="flex-1 py-2 px-2 rounded-xl bg-[#140e08] border border-[#2b1f13] hover:border-[#ffd700] text-xs font-cinzel text-gray-300 hover:text-white transition-all flex items-center justify-center gap-1"
         >
-          {t('rulesBtn')}
+          <span>📜</span>
+          <span>{t('rulesBtn')}</span>
         </button>
+
         <button
-          onClick={onOpenProfiles}
-          className="flex-1 py-2.5 px-3 rounded-xl bg-[#161616] border border-[#2a2a2a] hover:border-[#e8c84a] text-sm font-cinzel text-[#f0ebe0] transition-all flex items-center justify-center gap-1.5"
+          onClick={onOpenAchievements}
+          className="flex-1 py-2 px-2 rounded-xl bg-[#140e08] border border-[#2b1f13] hover:border-[#ffd700] text-xs font-cinzel text-gray-300 hover:text-white transition-all flex items-center justify-center gap-1"
         >
-          📊 {t('tabProfiles')}
+          <span>🏅</span>
+          <span>{language === 'ro' ? 'Realizări' : 'Achievements'}</span>
         </button>
+
         <button
           onClick={onOpenCustomize}
-          className="flex-1 py-2.5 px-3 rounded-xl bg-[#161616] border border-[#2a2a2a] hover:border-[#e8c84a] text-sm font-cinzel text-[#f0ebe0] transition-all flex items-center justify-center gap-1.5"
+          className="flex-1 py-2 px-2 rounded-xl bg-[#140e08] border border-[#2b1f13] hover:border-[#ffd700] text-xs font-cinzel text-gray-300 hover:text-white transition-all flex items-center justify-center gap-1"
         >
-          🎨 {t('tabCustomize')}
+          <span>🎨</span>
+          <span>{t('tabCustomize')}</span>
         </button>
       </div>
 
-      {/* Custom Doubles Modal */}
-      {showCustomDoublesModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl p-6 max-w-md w-full space-y-4 gold-glow">
-            <h3 className="text-xl font-cinzel font-bold text-[#e8c84a] gold-text-glow">
-              {t('customDoublesTitle')}
-            </h3>
-            <p className="text-xs text-gray-300 font-barlow">
-              {t('customDoublesDesc')}
-            </p>
+      {/* Main Profiles Pop-up / Dropdown Modal */}
+      {showProfilesModal && (
+        <ProfilesManagementModal
+          isOpen={true}
+          onClose={() => setShowProfilesModal(false)}
+          onSelectProfileForPlayer={(p) => {
+            handleNameChange(0, p.name);
+            if (p.avatarIcon) handleAvatarChange(0, p.avatarIcon);
+          }}
+        />
+      )}
 
-            <div className="space-y-3">
-              {(['2-2', '3-3', '4-4', '5-5'] as const).map(pair => (
-                <div key={pair} className="space-y-1">
-                  <label className="text-xs font-cinzel font-bold text-[#e8c84a]">
-                    Dublu {pair}:
-                  </label>
-                  <input
-                    type="text"
-                    value={customDoubles[pair]}
-                    onChange={e =>
-                      setCustomDoubles(prev => ({ ...prev, [pair]: e.target.value }))
-                    }
-                    placeholder="Lasa liber pentru standard..."
-                    className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#e8c84a] rounded-xl px-3 py-2 text-sm text-[#f0ebe0] focus:outline-none"
-                  />
-                </div>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setShowCustomDoublesModal(false)}
-              className="w-full py-2.5 rounded-xl bg-[#e8c84a] text-black font-cinzel font-bold text-sm hover:bg-[#d4b038] transition-colors"
-            >
-              {t('save')}
-            </button>
-          </div>
-        </div>
+      {/* High Z-Index Profile Picker Modal for Specific Player Slot */}
+      {pickerPlayerIndex !== null && (
+        <ProfilePickerModal
+          isOpen={true}
+          onClose={() => setPickerPlayerIndex(null)}
+          onSelectProfile={(p) => selectProfileForPlayer(pickerPlayerIndex, p)}
+          playerIndex={pickerPlayerIndex}
+          playerName={playerNames[pickerPlayerIndex] || ''}
+        />
       )}
 
       {/* Avatar Modal */}
@@ -875,12 +791,46 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
         <AvatarModal
           isOpen={true}
           currentAvatarId={playerAvatars[avatarModalIndex] || DEFAULT_AVATARS[avatarModalIndex % DEFAULT_AVATARS.length]}
-          onSelectAvatar={newAvatarId => {
+          onSelectAvatar={(newAvatarId) => {
             handleAvatarChange(avatarModalIndex, newAvatarId);
             setAvatarModalIndex(null);
           }}
           onClose={() => setAvatarModalIndex(null)}
         />
+      )}
+
+      {/* Custom Doubles Modal */}
+      {showCustomDoublesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#18120c] border-2 border-[#ffd700] rounded-2xl p-5 max-w-md w-full space-y-3.5 gold-glow">
+            <h3 className="text-lg font-cinzel font-bold text-[#ffd700] gold-text-glow">
+              {t('customDoublesTitle')}
+            </h3>
+            <p className="text-xs text-gray-300 font-barlow">{t('customDoublesDesc')}</p>
+
+            <div className="space-y-2.5">
+              {(['2-2', '3-3', '4-4', '5-5'] as const).map((pair) => (
+                <div key={pair} className="space-y-1">
+                  <label className="text-xs font-cinzel font-bold text-[#ffd700]">Dublu {pair}:</label>
+                  <input
+                    type="text"
+                    value={customDoubles[pair]}
+                    onChange={(e) => setCustomDoubles((prev) => ({ ...prev, [pair]: e.target.value }))}
+                    placeholder="Lasa liber pentru standard..."
+                    className="w-full bg-[#100b07] border border-[#2d1e12] focus:border-[#ffd700] rounded-xl px-3 py-1.5 text-xs text-[#f0ebe0] focus:outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowCustomDoublesModal(false)}
+              className="w-full py-2.5 rounded-xl bg-[#ffd700] text-black font-cinzel font-bold text-xs hover:brightness-110 transition-all shadow"
+            >
+              {t('save')}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 {
   "name": "Barbutul lu' Călugăru",
-  "description": "Joc de băut cu temă medievală mănăstirească - Modurile Normal, Boardgame și Duel 1v1 Trivia",
+  "description": "Joc de băut cu temă medievală mănăstirească - Modurile Normal, Boardgame, Duel 1v1 Trivia și Casino Duel Craps (2-6 jucători)",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

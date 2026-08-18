@@ -244,3 +244,139 @@ textarea,
   animation: bulbBlink 1s infinite ease-in-out;
 }
 
+/* Realistic Top-Down 3D Dice Physics Drop & Bounce Animations */
+@keyframes diceDropPhysics1 {
+  0% {
+    transform: translateY(-80px) scale(1.4) rotate(-30deg);
+    opacity: 0.9;
+  }
+  35% {
+    transform: translateY(0px) scale(1.0) rotate(8deg);
+    opacity: 1;
+  }
+  52% {
+    transform: translateY(-28px) scale(1.16) rotate(-12deg);
+  }
+  70% {
+    transform: translateY(0px) scale(1.0) rotate(4deg);
+  }
+  84% {
+    transform: translateY(-10px) scale(1.05) rotate(-2deg);
+  }
+  94% {
+    transform: translateY(0px) scale(1.0) rotate(1deg);
+  }
+  100% {
+    transform: translateY(0px) scale(1.0) rotate(0deg);
+  }
+}
+
+@keyframes diceDropPhysics2 {
+  0% {
+    transform: translateY(-90px) scale(1.45) rotate(35deg);
+    opacity: 0.9;
+  }
+  38% {
+    transform: translateY(0px) scale(1.0) rotate(-10deg);
+    opacity: 1;
+  }
+  56% {
+    transform: translateY(-32px) scale(1.18) rotate(14deg);
+  }
+  74% {
+    transform: translateY(0px) scale(1.0) rotate(-4deg);
+  }
+  86% {
+    transform: translateY(-10px) scale(1.06) rotate(2deg);
+  }
+  95% {
+    transform: translateY(0px) scale(1.0) rotate(-1deg);
+  }
+  100% {
+    transform: translateY(0px) scale(1.0) rotate(0deg);
+  }
+}
+
+@keyframes diceShadowDrop1 {
+  0% {
+    transform: scale(1.8);
+    opacity: 0.2;
+    filter: blur(8px);
+  }
+  35% {
+    transform: scale(1.0);
+    opacity: 0.95;
+    filter: blur(2px);
+  }
+  52% {
+    transform: scale(1.4);
+    opacity: 0.4;
+    filter: blur(5px);
+  }
+  70% {
+    transform: scale(1.0);
+    opacity: 0.9;
+    filter: blur(2px);
+  }
+  84% {
+    transform: scale(1.15);
+    opacity: 0.65;
+    filter: blur(3px);
+  }
+  100% {
+    transform: scale(1.0);
+    opacity: 0.85;
+    filter: blur(2px);
+  }
+}
+
+@keyframes diceShadowDrop2 {
+  0% {
+    transform: scale(1.9);
+    opacity: 0.15;
+    filter: blur(9px);
+  }
+  38% {
+    transform: scale(1.0);
+    opacity: 0.95;
+    filter: blur(2px);
+  }
+  56% {
+    transform: scale(1.45);
+    opacity: 0.35;
+    filter: blur(5px);
+  }
+  74% {
+    transform: scale(1.0);
+    opacity: 0.9;
+    filter: blur(2px);
+  }
+  86% {
+    transform: scale(1.18);
+    opacity: 0.6;
+    filter: blur(3px);
+  }
+  100% {
+    transform: scale(1.0);
+    opacity: 0.85;
+    filter: blur(2px);
+  }
+}
+
+.animate-dice-drop-1 {
+  animation: diceDropPhysics1 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.animate-dice-drop-2 {
+  animation: diceDropPhysics2 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.animate-dice-shadow-1 {
+  animation: diceShadowDrop1 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.animate-dice-shadow-2 {
+  animation: diceShadowDrop2 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+

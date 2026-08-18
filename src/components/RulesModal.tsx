@@ -74,6 +74,24 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
               <li className="pl-4">{language === 'ro' ? '❌ GREȘIT: este blocat, iar oponentul are șansa să răspundă! Dacă și el greșește, beau amândoi!' : '❌ WRONG: gets locked out, opponent gets a rebound chance! If both fail, both drink!'}</li>
             </ul>
           </section>
+
+          {/* Casino Mode Section */}
+          <section className="bg-[#1e170c] border border-[#e8c84a]/70 rounded-xl p-4 space-y-2">
+            <h3 className="text-lg font-cinzel font-bold text-[#f8e178] flex items-center gap-2">
+              🎰 {language === 'ro' ? 'Modul Cazino (2-6 Jucători / Barbut Tavernă)' : 'Casino Mode (2-6 Players / Tavern Craps)'}
+            </h3>
+            <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm">
+              <li>{language === 'ro' ? '2-6 jucători la aceeași masă tavernă prin cod de cameră, toți începând cu același număr de fise de aur (ex: 500).' : '2-6 players at the same tavern table with room code, everyone starts with equal gold chips (e.g., 500).'}</li>
+              <li>{language === 'ro' ? 'Penalizare la fiecare rundă: 15% șansă CHUG IT ALL (groapă), altfel 1-10 guri de bere.' : 'Round penalty: 15% chance CHUG IT ALL, otherwise 1-10 sips of beer.'}</li>
+              <li>{language === 'ro' ? 'Timer de pariere (25s): plasezi fise pe zarurile virtuale stil Craps:' : 'Betting Timer (25s): place chips across virtual Craps dice bets:'}</li>
+              <li className="pl-4">{language === 'ro' ? '🎲 Numere individuale (1-6): Cotă 9:4 (+225% profit dacă apare numărul pe cel puțin un zar).' : '🎲 Individual Numbers (1-6): 9:4 Payout (+225% profit if number hits on at least one die).'}</li>
+              <li className="pl-4">{language === 'ro' ? '⚖️ Peste 7 / Sub 7: Cotă 7:5 (+140% profit). Atenție: suma 7 pierde pe ambele!' : '⚖️ Over 7 / Under 7: 7:5 Payout (+140% profit). Sum 7 loses on both!'}</li>
+              <li className="pl-4">{language === 'ro' ? '🎯 Par / Impar: Cotă 1:1 (+100% profit).' : '🎯 Even / Odd: 1:1 Payout (+100% profit).'}</li>
+              <li>{language === 'ro' ? '💀 ELIMINARE: dacă soldul tău ajunge la 0, bei CHUG IT ALL (groapă) și ești eliminat!' : '💀 ELIMINATION: if your balance reaches 0, drink CHUG IT ALL and get eliminated!'}</li>
+              <li>{language === 'ro' ? '🥴 BĂUTURĂ RUNDĂ: călugărul cu cel mai mic sold la finalul rundei bea penalizarea rundei!' : '🥴 ROUND DRINK: the active monk with the lowest balance drinks the round penalty!'}</li>
+              <li>{language === 'ro' ? '👑 CÂȘTIGĂTOR: ultimul călugăr rămas în viață cu fise de aur la masă!' : '👑 WINNER: the last monk standing with gold chips at the table!'}</li>
+            </ul>
+          </section>
         </div>
 
         <button

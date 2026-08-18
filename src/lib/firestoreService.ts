@@ -4,12 +4,12 @@ import {
   setDoc,
   collection,
   query,
-  orderBy,
   limit,
   getDocs,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth, handleFirestoreError, OperationType } from './firebase';
+import { Profile } from '../types';
 
 export interface CloudUserProfile {
   userId: string;
@@ -21,19 +21,31 @@ export interface CloudUserProfile {
   totalChugs: number;
   duelWins?: number;
   duelPlayed?: number;
+  winsBoardgame?: number;
+  winsDuel?: number;
+  winsCasino?: number;
+  profiles?: Profile[];
   unlockedAchievements?: string[];
   createdAt?: any;
   updatedAt?: any;
 }
 
 export interface CloudLeaderboardEntry {
+  id?: string;
   userId: string;
+  profileId?: string;
+  accountName?: string;
   displayName: string;
   avatarIcon?: string;
   totalSips: number;
   totalChugs: number;
-  duelWins: number;
-  duelPlayed: number;
+  totalScore: number;
+  winsBoardgame: number;
+  winsDuel: number;
+  winsCasino: number;
+  gamesPlayed: number;
+  duelWins?: number;
+  duelPlayed?: number;
   updatedAt?: any;
 }
 
@@ -67,6 +79,94 @@ export async function getUserProfile(userId: string): Promise<CloudUserProfile |
   }
 }
 
+const sanitizeId = (str: string): string => {
+  return str.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60);
+};
+
+export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<void> {
+  if (!auth.currentUser) return;
+  const userId = auth.currentUser.uid;
+  const accountName = auth.currentUser.displayName || auth.currentUser.email || 'Călugăr Google';
+  const path = `users/${userId}`;
+
+  try {
+    const existing = await getDoc(doc(db, 'users', userId));
+    const now = serverTimestamp();
+
+    const sanitizedProfiles: Profile[] = profiles.map(p => ({
+      id: p.id,
+      name: (p.name || 'Călugăr').substring(0, 50),
+      avatarIcon: (p.avatarIcon || 'monk_drunk').substring(0, 64),
+      gamesPlayed: Math.max(0, p.gamesPlayed || 0),
+      totalSips: Math.max(0, p.totalSips || 0),
+      totalChugs: Math.max(0, p.totalChugs || 0),
+      winsBoardgame: Math.max(0, p.winsBoardgame || 0),
+      winsDuel: Math.max(0, p.winsDuel || 0),
+      winsCasino: Math.max(0, p.winsCasino || 0),
+      unlockedAchievements: (p.unlockedAchievements || []).slice(0, 50),
+      createdAt: p.createdAt || Date.now(),
+    }));
+
+    const totalLocalSips = sanitizedProfiles.reduce((s, p) => s + p.totalSips, 0);
+    const totalLocalChugs = sanitizedProfiles.reduce((s, p) => s + p.totalChugs, 0);
+    const totalLocalGames = sanitizedProfiles.reduce((s, p) => s + p.gamesPlayed, 0);
+    const totalBoardWins = sanitizedProfiles.reduce((s, p) => s + (p.winsBoardgame || 0), 0);
+    const totalDuelWins = sanitizedProfiles.reduce((s, p) => s + (p.winsDuel || 0), 0);
+    const totalCasinoWins = sanitizedProfiles.reduce((s, p) => s + (p.winsCasino || 0), 0);
+
+    const mergedAchievements = Array.from(
+      new Set(sanitizedProfiles.flatMap(p => p.unlockedAchievements || []))
+    ).slice(0, 50);
+
+    const userDocData = {
+      userId,
+      displayName: accountName.substring(0, 100),
+      avatarIcon: (sanitizedProfiles[0]?.avatarIcon || 'monk_drunk').substring(0, 64),
+      email: auth.currentUser.email ? auth.currentUser.email.substring(0, 256) : '',
+      profiles: sanitizedProfiles,
+      gamesPlayed: totalLocalGames,
+      totalSips: totalLocalSips,
+      totalChugs: totalLocalChugs,
+      duelWins: totalDuelWins,
+      duelPlayed: totalDuelWins,
+      winsBoardgame: totalBoardWins,
+      winsDuel: totalDuelWins,
+      winsCasino: totalCasinoWins,
+      unlockedAchievements: mergedAchievements,
+      createdAt: existing.exists() ? existing.data()?.createdAt || now : now,
+      updatedAt: now,
+    };
+
+    await setDoc(doc(db, 'users', userId), userDocData, { merge: true });
+
+    // Sync each individual profile as its own entry in the global leaderboard!
+    for (const p of sanitizedProfiles) {
+      const entryId = `${userId}_${sanitizeId(p.id)}`;
+      const totalScore = p.totalSips + 25 * p.totalChugs;
+
+      const leaderboardData = {
+        userId,
+        profileId: p.id,
+        accountName: accountName.substring(0, 100),
+        displayName: p.name.substring(0, 100),
+        avatarIcon: p.avatarIcon || 'monk_drunk',
+        totalSips: p.totalSips,
+        totalChugs: p.totalChugs,
+        totalScore,
+        winsBoardgame: p.winsBoardgame || 0,
+        winsDuel: p.winsDuel || 0,
+        winsCasino: p.winsCasino || 0,
+        gamesPlayed: p.gamesPlayed || 0,
+        updatedAt: now,
+      };
+
+      await setDoc(doc(db, 'leaderboards', entryId), leaderboardData, { merge: true });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
 export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promise<void> {
   if (!auth.currentUser) return;
   const userId = auth.currentUser.uid;
@@ -78,33 +178,24 @@ export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promi
 
     const dataToSave = {
       userId,
-      displayName: (profile.displayName || auth.currentUser.displayName || 'Călugăr Anonim').substring(0, 50),
+      displayName: (profile.displayName || auth.currentUser.displayName || 'Călugăr Google').substring(0, 100),
       avatarIcon: (profile.avatarIcon || 'monk_drunk').substring(0, 64),
       email: auth.currentUser.email ? auth.currentUser.email.substring(0, 256) : '',
+      profiles: profile.profiles || existing.data()?.profiles || [],
       gamesPlayed: Math.max(0, profile.gamesPlayed || 0),
       totalSips: Math.max(0, profile.totalSips || 0),
       totalChugs: Math.max(0, profile.totalChugs || 0),
       duelWins: Math.max(0, profile.duelWins || 0),
       duelPlayed: Math.max(0, profile.duelPlayed || 0),
+      winsBoardgame: Math.max(0, profile.winsBoardgame || 0),
+      winsDuel: Math.max(0, profile.winsDuel || 0),
+      winsCasino: Math.max(0, profile.winsCasino || 0),
       unlockedAchievements: (profile.unlockedAchievements || []).slice(0, 50),
       createdAt: existing.exists() ? existing.data()?.createdAt || now : now,
       updatedAt: now,
     };
 
     await setDoc(doc(db, 'users', userId), dataToSave, { merge: true });
-
-    // Also update public leaderboard
-    await setDoc(doc(db, 'leaderboards', userId), {
-      userId,
-      displayName: dataToSave.displayName,
-      avatarIcon: dataToSave.avatarIcon,
-      totalSips: dataToSave.totalSips,
-      totalChugs: dataToSave.totalChugs,
-      duelWins: dataToSave.duelWins,
-      duelPlayed: dataToSave.duelPlayed,
-      updatedAt: now,
-    }, { merge: true });
-
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -113,11 +204,29 @@ export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promi
 export async function fetchGlobalLeaderboard(): Promise<CloudLeaderboardEntry[]> {
   const path = 'leaderboards';
   try {
-    const q = query(collection(db, 'leaderboards'), orderBy('totalSips', 'desc'), limit(25));
+    const q = query(collection(db, 'leaderboards'), limit(100));
     const querySnapshot = await getDocs(q);
     const results: CloudLeaderboardEntry[] = [];
     querySnapshot.forEach((d) => {
-      results.push(d.data() as CloudLeaderboardEntry);
+      const data = d.data();
+      const sips = data.totalSips || 0;
+      const chugs = data.totalChugs || 0;
+      results.push({
+        id: d.id,
+        userId: data.userId || '',
+        profileId: data.profileId || d.id,
+        accountName: data.accountName || '',
+        displayName: data.displayName || 'Călugăr Anonim',
+        avatarIcon: data.avatarIcon || 'monk_drunk',
+        totalSips: sips,
+        totalChugs: chugs,
+        totalScore: typeof data.totalScore === 'number' ? data.totalScore : sips + 25 * chugs,
+        winsBoardgame: data.winsBoardgame || 0,
+        winsDuel: data.winsDuel || data.duelWins || 0,
+        winsCasino: data.winsCasino || 0,
+        gamesPlayed: data.gamesPlayed || data.duelPlayed || 0,
+        updatedAt: data.updatedAt,
+      });
     });
     return results;
   } catch (error) {
@@ -143,7 +252,7 @@ export async function recordDuelMatchHistory(match: Omit<CloudDuelHistory, 'crea
 export async function fetchRecentDuelHistories(): Promise<CloudDuelHistory[]> {
   const path = 'duel_histories';
   try {
-    const q = query(collection(db, 'duel_histories'), orderBy('createdAt', 'desc'), limit(15));
+    const q = query(collection(db, 'duel_histories'), limit(20));
     const querySnapshot = await getDocs(q);
     const results: CloudDuelHistory[] = [];
     querySnapshot.forEach((d) => {

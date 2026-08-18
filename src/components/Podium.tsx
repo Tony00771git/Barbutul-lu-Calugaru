@@ -13,21 +13,6 @@ interface PodiumProps {
 export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHome }) => {
   const { t, language, batchUpdateProfiles } = useApp();
 
-  // Save profile stats once on render
-  useEffect(() => {
-    const stats = players
-      .filter(p => !!p.name)
-      .map(p => ({
-        name: p.name,
-        sips: p.sipsTotal,
-        chugs: p.chugsTotal,
-      }));
-
-    if (stats.length > 0) {
-      batchUpdateProfiles(stats);
-    }
-  }, []);
-
   // Sort players depending on mode
   const sortedPlayers = [...players].sort((a, b) => {
     if (mode === 'normal') {
@@ -46,6 +31,25 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
       return b.properties.length - a.properties.length;
     }
   });
+
+  // Save profile stats once on render
+  useEffect(() => {
+    const boardWinnerName = (mode === 'boardgame' && sortedPlayers[0] && !sortedPlayers[0].hasGivenUp) ? sortedPlayers[0].name : null;
+
+    const stats = players
+      .filter(p => !!p.name)
+      .map(p => ({
+        name: p.name,
+        sips: p.sipsTotal,
+        chugs: p.chugsTotal,
+        avatarIcon: p.avatarIcon,
+        winMode: (boardWinnerName && p.name === boardWinnerName ? 'boardgame' : undefined) as 'boardgame' | undefined,
+      }));
+
+    if (stats.length > 0) {
+      batchUpdateProfiles(stats);
+    }
+  }, []);
 
   // Calculate Kings & Awards for Normal Mode
   const maxSips = Math.max(...players.map(p => p.sipsTotal));

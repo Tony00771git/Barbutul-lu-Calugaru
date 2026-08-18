@@ -1,10 +1,74 @@
-export type GameMode = 'normal' | 'boardgame' | 'duel';
+export type GameMode = 'normal' | 'boardgame' | 'duel' | 'casino';
 export type Language = 'ro' | 'en';
-export type ThemeId = 'tavern' | 'spring' | 'winter' | 'sky' | 'battlefield';
+export type ThemeId = 'tavern' | 'cellar' | 'great_hall' | 'dungeon';
 export type DiceSkin = 'gold' | 'bone' | 'wood';
 export type Difficulty = 'weak' | 'medium' | 'extreme' | 'nightmare';
 export type DuelSubmode = 'general' | 'football';
 export type DuelDifficulty = 'easy' | 'medium' | 'hard';
+
+// Casino Mode Types
+export type CasinoBetType = 'over7' | 'under7' | 'even' | 'odd' | 'number';
+
+export interface CasinoPlayer {
+  id: string;
+  name: string;
+  avatarIcon: string;
+  color: string;
+  isHost: boolean;
+  isBot?: boolean;
+  connected: boolean;
+  balance: number;        // sold curent, niciodată negativ
+  eliminated: boolean;
+  eliminatedAtRound?: number;
+  guriTotal: number;
+  groapaTotal: number;
+}
+
+export interface CasinoBet {
+  playerId: string;
+  type: CasinoBetType;
+  numberValue?: number;    // 1-6, doar pentru type: 'number'
+  amount: number;
+}
+
+export interface CasinoPenalty {
+  type: 'sips' | 'groapa';
+  amount?: number; // 1-10 dacă sips
+}
+
+export type CasinoRoundPhase = 'betting' | 'rolling' | 'resolved';
+
+export interface CasinoRound {
+  roundNumber: number;
+  penalty: CasinoPenalty;
+  bets: CasinoBet[];
+  diceResult?: [number, number];
+  phase: CasinoRoundPhase;
+  bettingEndsAt?: number;
+  lockedPlayerIds: string[];
+  payouts?: Record<string, {
+    totalWon: number;
+    totalLost: number;
+    netProfit: number;
+    winningBetsCount: number;
+    details: string[];
+  }>;
+  eliminatedThisRound?: string[];
+  lowestBalanceDrinkers?: string[];
+}
+
+export interface CasinoRoomState {
+  code: string;
+  startingChips: number;
+  hostPlayerId: string;
+  players: CasinoPlayer[];
+  status: 'lobby' | 'in_game' | 'finished';
+  currentRound: number;
+  round: CasinoRound;
+  winnerId?: string | null;
+  eliminationOrder?: string[]; // Player IDs in order of elimination (first eliminated -> last eliminated)
+  updatedAt?: any;
+}
 
 export interface DuelQuestion {
   id: number;
@@ -78,6 +142,9 @@ export interface Profile {
   gamesPlayed: number;
   totalSips: number;
   totalChugs: number;
+  winsBoardgame?: number;
+  winsDuel?: number;
+  winsCasino?: number;
   unlockedAchievements?: string[];
   createdAt: number;
 }

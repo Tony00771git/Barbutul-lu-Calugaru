@@ -5,6 +5,7 @@ import { AvatarDisplay } from './AvatarDisplay';
 import {
   fetchGlobalLeaderboard,
   fetchRecentDuelHistories,
+  syncAccountProfilesToCloud,
   CloudLeaderboardEntry,
   CloudDuelHistory,
 } from '../lib/firestoreService';
@@ -14,13 +15,14 @@ interface CloudAccountModalProps {
   onClose: () => void;
 }
 
+type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'totalScore';
+
 export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, onClose }) => {
   const {
     user,
     cloudProfile,
     signInWithGoogle,
     signOut,
-    updateCloudProfile,
     loading: authLoading,
     isSigningIn,
     authError,
@@ -29,10 +31,12 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
   const { profiles, t, language } = useApp();
 
   const [activeSubtab, setActiveSubtab] = useState<'profile' | 'leaderboard' | 'history'>('profile');
+  const [leaderboardCategory, setLeaderboardCategory] = useState<LeaderboardCategory>('totalScore');
   const [leaderboard, setLeaderboard] = useState<CloudLeaderboardEntry[]>([]);
   const [history, setHistory] = useState<CloudDuelHistory[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -70,35 +74,48 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
 
   const handleSyncLocalStatsToCloud = async () => {
     if (!user) return;
-
-    // Aggregate stats from local profiles
-    const primaryLocal = profiles[0];
-    const totalLocalSips = profiles.reduce((sum, p) => sum + (p.totalSips || 0), 0);
-    const totalLocalChugs = profiles.reduce((sum, p) => sum + (p.totalChugs || 0), 0);
-    const totalLocalGames = profiles.reduce((sum, p) => sum + (p.gamesPlayed || 0), 0);
-
-    const mergedAchievements = Array.from(
-      new Set(profiles.flatMap(p => p.unlockedAchievements || []))
-    );
+    setIsSyncing(true);
 
     try {
-      await updateCloudProfile({
-        displayName: user.displayName || primaryLocal?.name || 'Călugăr Pelerin',
-        avatarIcon: primaryLocal?.avatarIcon || cloudProfile?.avatarIcon || 'monk_drunk',
-        totalSips: Math.max(cloudProfile?.totalSips || 0, totalLocalSips),
-        totalChugs: Math.max(cloudProfile?.totalChugs || 0, totalLocalChugs),
-        gamesPlayed: Math.max(cloudProfile?.gamesPlayed || 0, totalLocalGames),
-        unlockedAchievements: mergedAchievements.slice(0, 50),
-      });
-
+      await syncAccountProfilesToCloud(profiles);
       setSyncSuccessMessage(
-        language === 'ro' ? '✅ Profilul local a fost sincronizat cu succes în Cloud Firebase!' : '✅ Local stats synchronized with Firebase Cloud!'
+        language === 'ro'
+          ? `✅ S-au sincronizat cu succes ${profiles.length} profiluri în Firebase!`
+          : `✅ Successfully synchronized ${profiles.length} profiles to Firebase!`
       );
       setTimeout(() => setSyncSuccessMessage(null), 3500);
     } catch (err) {
       console.error('Failed to sync to cloud', err);
+    } finally {
+      setIsSyncing(false);
     }
   };
+
+  // Sort and filter leaderboard based on active category
+  const sortedLeaderboard = [...leaderboard].sort((a, b) => {
+    if (leaderboardCategory === 'monopoly') {
+      const winsA = a.winsBoardgame || 0;
+      const winsB = b.winsBoardgame || 0;
+      if (winsB !== winsA) return winsB - winsA;
+      return (b.totalScore || 0) - (a.totalScore || 0);
+    }
+    if (leaderboardCategory === 'duel') {
+      const winsA = a.winsDuel || (a.duelWins || 0);
+      const winsB = b.winsDuel || (b.duelWins || 0);
+      if (winsB !== winsA) return winsB - winsA;
+      return (b.totalScore || 0) - (a.totalScore || 0);
+    }
+    if (leaderboardCategory === 'casino') {
+      const winsA = a.winsCasino || 0;
+      const winsB = b.winsCasino || 0;
+      if (winsB !== winsA) return winsB - winsA;
+      return (b.totalScore || 0) - (a.totalScore || 0);
+    }
+    // 'totalScore' (sips + chugs * 25)
+    const scoreA = a.totalScore ?? (a.totalSips + 25 * a.totalChugs);
+    const scoreB = b.totalScore ?? (b.totalSips + 25 * b.totalChugs);
+    return scoreB - scoreA;
+  });
 
   if (!isOpen) return null;
 
@@ -132,7 +149,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
           </button>
         </div>
 
-        {/* Subtab Navigation */}
+        {/* Main Subtab Navigation */}
         <div className="grid grid-cols-3 gap-1.5 bg-[#0e0a06] p-1.5 rounded-2xl border border-[#2a2219]">
           <button
             onClick={() => setActiveSubtab('profile')}
@@ -143,7 +160,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
             }`}
           >
             <span>👤</span>
-            <span>Cont Cloud</span>
+            <span>Cont & Profiluri</span>
           </button>
 
           <button
@@ -155,7 +172,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
             }`}
           >
             <span>🏆</span>
-            <span>Top Global</span>
+            <span>Top Mondial</span>
           </button>
 
           <button
@@ -173,7 +190,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
 
         {/* Subtab Content */}
         <div className="flex-1 overflow-y-auto pr-1 space-y-3 min-h-[220px]">
-          {/* TAB 1: PROFILE & AUTH */}
+          {/* TAB 1: PROFILE & AUTH & PROFILES SYNC */}
           {activeSubtab === 'profile' && (
             <div className="space-y-4 animate-fade-in">
               {!user ? (
@@ -184,7 +201,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                       Conectare cu Google
                     </h3>
                     <p className="text-xs text-gray-300 font-barlow">
-                      Salvează-ți gurile de băutură, gropile, victoriile la Duel și trofeele în baza de date securizată Firebase Firestore!
+                      Fiecare cont Google are asociate toate profilurile tale! Când te loghezi pe un telefon nou, toate profilurile, gurile de băutură, gropile și victoriile sunt descărcate automat.
                     </p>
                   </div>
 
@@ -261,7 +278,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {/* User Profile Card */}
+                  {/* Google Account Summary Card */}
                   <div className="bg-gradient-to-r from-[#20140a] via-[#160f08] to-[#20140a] border border-[#e8c84a]/60 rounded-2xl p-4 space-y-3 shadow-lg">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -274,16 +291,16 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                               referrerPolicy="no-referrer"
                             />
                           ) : (
-                            <AvatarDisplay avatarId={cloudProfile?.avatarIcon || 'monk_drunk'} className="w-full h-full" />
+                            <AvatarDisplay avatarId="monk_drunk" className="w-full h-full" />
                           )}
                         </div>
                         <div>
                           <h3 className="font-cinzel font-bold text-sm text-[#ffd700] gold-text-glow">
-                            {cloudProfile?.displayName || user.displayName || 'Călugăr Pelerin'}
+                            {user.displayName || 'Cont Google'}
                           </h3>
                           <p className="text-xs text-gray-400 font-barlow">{user.email}</p>
                           <div className="inline-flex items-center gap-1 mt-0.5 text-[10px] text-emerald-400 font-cinzel">
-                            <span>●</span> Sincronizat Firebase
+                            <span>●</span> Sincronizat Firebase Cloud
                           </div>
                         </div>
                       </div>
@@ -296,37 +313,59 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                       </button>
                     </div>
 
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-4 gap-2 pt-2 border-t border-[#2e2216] text-center">
-                      <div className="bg-[#120c06] p-2 rounded-xl border border-white/5">
-                        <div className="text-[10px] text-gray-400 font-cinzel">🍺 Guri</div>
-                        <div className="font-bebas text-lg text-yellow-400 font-bold">{cloudProfile?.totalSips || 0}</div>
+                    {/* Associated Local Profiles List */}
+                    <div className="space-y-2 pt-2 border-t border-[#2e2216]">
+                      <div className="flex items-center justify-between text-xs font-cinzel font-bold text-[#ffd700]">
+                        <span>Profiluri Asociate Acestui Cont ({profiles.length})</span>
+                        <span className="text-[10px] text-gray-400">Fiecare are loc în clasament</span>
                       </div>
-                      <div className="bg-[#120c06] p-2 rounded-xl border border-white/5">
-                        <div className="text-[10px] text-gray-400 font-cinzel">🕳️ Gropi</div>
-                        <div className="font-bebas text-lg text-orange-400 font-bold">{cloudProfile?.totalChugs || 0}</div>
-                      </div>
-                      <div className="bg-[#120c06] p-2 rounded-xl border border-white/5">
-                        <div className="text-[10px] text-gray-400 font-cinzel">⚔️ Dueluri</div>
-                        <div className="font-bebas text-lg text-blue-400 font-bold">{cloudProfile?.duelWins || 0}</div>
-                      </div>
-                      <div className="bg-[#120c06] p-2 rounded-xl border border-white/5">
-                        <div className="text-[10px] text-gray-400 font-cinzel">🏅 Trofee</div>
-                        <div className="font-bebas text-lg text-emerald-400 font-bold">{cloudProfile?.unlockedAchievements?.length || 0}</div>
+
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {profiles.map((p) => {
+                          const score = (p.totalSips || 0) + 25 * (p.totalChugs || 0);
+                          return (
+                            <div
+                              key={p.id}
+                              className="bg-[#120c06] border border-[#2a2219] rounded-xl p-2.5 flex items-center justify-between text-xs"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-lg overflow-hidden border border-[#e8c84a]/40 bg-[#1c140d] flex-shrink-0">
+                                  <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} className="w-full h-full" />
+                                </div>
+                                <div>
+                                  <div className="font-cinzel font-bold text-gray-200">{p.name}</div>
+                                  <div className="text-[10px] text-gray-400 font-barlow flex gap-2">
+                                    <span>🏰 Monopoly: <strong>{p.winsBoardgame || 0}</strong></span>
+                                    <span>⚔️ Duel: <strong>{p.winsDuel || 0}</strong></span>
+                                    <span>🎲 Casino: <strong>{p.winsCasino || 0}</strong></span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="text-right">
+                                <div className="font-bebas text-sm text-[#ffd700] leading-none">
+                                  {score} <span className="text-[9px] text-gray-400 font-cinzel">Scor</span>
+                                </div>
+                                <div className="text-[10px] text-gray-400">
+                                  {p.totalSips} guri • {p.totalChugs} gropi
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
 
-                  {/* Sync Action */}
+                  {/* Manual Cloud Sync Action */}
                   <div className="bg-[#140e08] border border-[#2e2216] rounded-2xl p-3.5 space-y-2">
                     <div className="flex items-center justify-between">
                       <div className="text-xs font-cinzel font-bold text-gray-200">
-                        🔄 Sincronizează Datele Locale în Cloud
+                        🔄 Salvare și Sincronizare pe Nou Dispozitiv
                       </div>
-                      <span className="text-[10px] text-gray-400">({profiles.length} profiluri locale)</span>
                     </div>
                     <p className="text-[11px] text-gray-400 font-barlow">
-                      Dacă ai jucat local sau ai acumulat trofee noi pe acest dispozitiv, apasă mai jos pentru a le urca pe serverul Firebase.
+                      Toate cele {profiles.length} profiluri sunt salvate în contul tău Google. Dacă te conectezi pe alt telefon sau tabletă, se vor încărca automat din Cloud!
                     </p>
 
                     {syncSuccessMessage && (
@@ -337,9 +376,10 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
 
                     <button
                       onClick={handleSyncLocalStatsToCloud}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black font-cinzel font-bold text-xs hover:brightness-110 active:scale-95 transition-all shadow"
+                      disabled={isSyncing}
+                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black font-cinzel font-bold text-xs hover:brightness-110 active:scale-95 transition-all shadow disabled:opacity-60 flex items-center justify-center gap-2"
                     >
-                      ☁️ Sincronizează Acum în Firebase
+                      {isSyncing ? '⏳ Se sincronizează...' : '☁️ Sincronizează Profilurile Acum'}
                     </button>
                   </div>
                 </div>
@@ -347,11 +387,68 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
             </div>
           )}
 
-          {/* TAB 2: GLOBAL LEADERBOARD */}
+          {/* TAB 2: GLOBAL LEADERBOARD (4 TABS) */}
           {activeSubtab === 'leaderboard' && (
-            <div className="space-y-2 animate-fade-in">
-              <div className="flex items-center justify-between pb-1 text-xs text-gray-400 font-cinzel">
-                <span>Top 25 Călugări ai Tavernei (Global)</span>
+            <div className="space-y-3 animate-fade-in">
+              {/* 4 Tabs Selector for Leaderboard */}
+              <div className="grid grid-cols-4 gap-1 bg-[#0b0805] p-1 rounded-xl border border-[#251d14]">
+                <button
+                  onClick={() => setLeaderboardCategory('monopoly')}
+                  className={`py-1.5 px-1 rounded-lg text-center font-cinzel font-bold text-[10px] sm:text-[11px] transition-all flex flex-col items-center justify-center leading-tight ${
+                    leaderboardCategory === 'monopoly'
+                      ? 'bg-[#e8c84a] text-black shadow font-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span>🏰 Monopoly</span>
+                  <span className="text-[9px] opacity-80 font-barlow">Victorii</span>
+                </button>
+
+                <button
+                  onClick={() => setLeaderboardCategory('duel')}
+                  className={`py-1.5 px-1 rounded-lg text-center font-cinzel font-bold text-[10px] sm:text-[11px] transition-all flex flex-col items-center justify-center leading-tight ${
+                    leaderboardCategory === 'duel'
+                      ? 'bg-[#e8c84a] text-black shadow font-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span>⚔️ Duel</span>
+                  <span className="text-[9px] opacity-80 font-barlow">Victorii</span>
+                </button>
+
+                <button
+                  onClick={() => setLeaderboardCategory('casino')}
+                  className={`py-1.5 px-1 rounded-lg text-center font-cinzel font-bold text-[10px] sm:text-[11px] transition-all flex flex-col items-center justify-center leading-tight ${
+                    leaderboardCategory === 'casino'
+                      ? 'bg-[#e8c84a] text-black shadow font-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span>🎲 Casino</span>
+                  <span className="text-[9px] opacity-80 font-barlow">Victorii</span>
+                </button>
+
+                <button
+                  onClick={() => setLeaderboardCategory('totalScore')}
+                  className={`py-1.5 px-1 rounded-lg text-center font-cinzel font-bold text-[10px] sm:text-[11px] transition-all flex flex-col items-center justify-center leading-tight ${
+                    leaderboardCategory === 'totalScore'
+                      ? 'bg-[#e8c84a] text-black shadow font-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span>🔥 Scor Total</span>
+                  <span className="text-[9px] opacity-80 font-barlow">Guri+Gropi×25</span>
+                </button>
+              </div>
+
+              {/* Sub-header info */}
+              <div className="flex items-center justify-between px-1 text-xs text-gray-400 font-cinzel">
+                <span className="text-[11px]">
+                  {leaderboardCategory === 'monopoly' && '🏰 Top Victorii Monopoly / Joc de Tablă'}
+                  {leaderboardCategory === 'duel' && '⚔️ Top Victorii Duel 1v1 Trivia'}
+                  {leaderboardCategory === 'casino' && '🎲 Top Victorii Barbut Duel Casino'}
+                  {leaderboardCategory === 'totalScore' && '🔥 Top Scor Global (Guri + Gropi × 25)'}
+                </span>
                 <button
                   onClick={loadLeaderboard}
                   disabled={loadingData}
@@ -364,77 +461,118 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
               {loadingData ? (
                 <div className="text-center py-8 space-y-2">
                   <div className="text-3xl animate-spin">⏳</div>
-                  <div className="text-xs font-cinzel text-gray-400">Se descarcă clasamentul din Firestore...</div>
+                  <div className="text-xs font-cinzel text-gray-400">Se descarcă clasamentul mondial...</div>
                 </div>
-              ) : leaderboard.length === 0 ? (
+              ) : sortedLeaderboard.length === 0 ? (
                 <div className="text-center py-8 space-y-2 bg-[#140e08] rounded-2xl border border-[#2e2216] p-4">
                   <div className="text-3xl">🍺</div>
                   <p className="text-xs font-cinzel text-gray-400">
                     Fii primul călugăr din clasamentul global!
                   </p>
                   <p className="text-[11px] text-gray-500">
-                    Autentifică-te cu Google și sincronizează scorul pentru a apărea în top.
+                    Autentifică-te cu Google și fiecare profil asociat va apărea în top.
                   </p>
                 </div>
               ) : (
-                leaderboard.map((item, idx) => {
-                  const isMe = user?.uid === item.userId;
-                  const rankBadge = idx === 0 ? '👑 1' : idx === 1 ? '🥈 2' : idx === 2 ? '🥉 3' : `#${idx + 1}`;
+                <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+                  {sortedLeaderboard.map((item, idx) => {
+                    const isMe = user?.uid === item.userId;
+                    const rankBadge = idx === 0 ? '👑 1' : idx === 1 ? '🥈 2' : idx === 2 ? '🥉 3' : `#${idx + 1}`;
+                    const calculatedScore = item.totalScore ?? (item.totalSips + 25 * item.totalChugs);
 
-                  return (
-                    <div
-                      key={item.userId || idx}
-                      className={`p-2.5 rounded-2xl border flex items-center justify-between gap-2 transition-all ${
-                        isMe
-                          ? 'bg-gradient-to-r from-[#2e1f13] via-[#22170e] to-[#2e1f13] border-[#ffd700] shadow-md'
-                          : 'bg-[#140e08] border-[#2c2218]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-7 h-7 rounded-xl font-cinzel font-black text-xs flex items-center justify-center flex-shrink-0 ${
-                            idx === 0
-                              ? 'bg-gradient-to-br from-amber-400 to-yellow-600 text-black shadow'
-                              : idx === 1
-                              ? 'bg-slate-300 text-black'
-                              : idx === 2
-                              ? 'bg-amber-700 text-white'
-                              : 'bg-black/60 text-gray-400 border border-white/10'
-                          }`}
-                        >
-                          {rankBadge}
+                    return (
+                      <div
+                        key={item.entryId || `${item.userId}_${item.profileId || idx}`}
+                        className={`p-2.5 rounded-2xl border flex items-center justify-between gap-2 transition-all ${
+                          isMe
+                            ? 'bg-gradient-to-r from-[#2e1f13] via-[#22170e] to-[#2e1f13] border-[#ffd700] shadow-md'
+                            : 'bg-[#140e08] border-[#2c2218]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={`w-7 h-7 rounded-xl font-cinzel font-black text-xs flex items-center justify-center flex-shrink-0 ${
+                              idx === 0
+                                ? 'bg-gradient-to-br from-amber-400 to-yellow-600 text-black shadow'
+                                : idx === 1
+                                ? 'bg-slate-300 text-black'
+                                : idx === 2
+                                ? 'bg-amber-700 text-white'
+                                : 'bg-black/60 text-gray-400 border border-white/10'
+                            }`}
+                          >
+                            {rankBadge}
+                          </div>
+
+                          <div className="w-8 h-8 rounded-xl bg-[#22180f] border border-[#e8c84a]/50 flex-shrink-0 overflow-hidden">
+                            <AvatarDisplay avatarId={item.avatarIcon || 'monk_drunk'} className="w-full h-full" />
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="font-cinzel font-bold text-xs text-gray-200 flex items-center gap-1.5 truncate">
+                              <span className="truncate">{item.profileName || item.displayName}</span>
+                              {isMe && (
+                                <span className="text-[9px] bg-[#ffd700] text-black font-black px-1.5 py-0.2 rounded-full flex-shrink-0">
+                                  TU
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-gray-400 font-barlow truncate">
+                              {item.accountDisplayName ? `${item.accountDisplayName}` : ''}
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="w-8 h-8 rounded-xl bg-[#22180f] border border-[#e8c84a]/50 flex-shrink-0 overflow-hidden">
-                          <AvatarDisplay avatarId={item.avatarIcon || 'monk_drunk'} className="w-full h-full" />
-                        </div>
+                        {/* Stats Value Depending on Active Category */}
+                        <div className="text-right flex-shrink-0 pl-2">
+                          {leaderboardCategory === 'monopoly' && (
+                            <>
+                              <div className="font-bebas text-base text-[#ffd700] leading-none">
+                                {item.winsBoardgame || 0} <span className="text-[10px] text-gray-400 font-cinzel">Victorii</span>
+                              </div>
+                              <div className="text-[10px] text-gray-400">
+                                {calculatedScore} scor total
+                              </div>
+                            </>
+                          )}
 
-                        <div>
-                          <div className="font-cinzel font-bold text-xs text-gray-200 flex items-center gap-1.5">
-                            <span>{item.displayName}</span>
-                            {isMe && (
-                              <span className="text-[9px] bg-[#ffd700] text-black font-black px-1.5 py-0.2 rounded-full">
-                                TU
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-gray-400 font-barlow">
-                            {item.duelWins || 0} victorii duel
-                          </div>
+                          {leaderboardCategory === 'duel' && (
+                            <>
+                              <div className="font-bebas text-base text-[#ffd700] leading-none">
+                                {item.winsDuel || (item.duelWins || 0)} <span className="text-[10px] text-gray-400 font-cinzel">Victorii</span>
+                              </div>
+                              <div className="text-[10px] text-gray-400">
+                                {calculatedScore} scor total
+                              </div>
+                            </>
+                          )}
+
+                          {leaderboardCategory === 'casino' && (
+                            <>
+                              <div className="font-bebas text-base text-[#ffd700] leading-none">
+                                {item.winsCasino || 0} <span className="text-[10px] text-gray-400 font-cinzel">Victorii</span>
+                              </div>
+                              <div className="text-[10px] text-gray-400">
+                                {calculatedScore} scor total
+                              </div>
+                            </>
+                          )}
+
+                          {leaderboardCategory === 'totalScore' && (
+                            <>
+                              <div className="font-bebas text-base text-[#ffd700] leading-none">
+                                {calculatedScore} <span className="text-[10px] text-gray-400 font-cinzel">Pct</span>
+                              </div>
+                              <div className="text-[10px] text-gray-400">
+                                {item.totalSips} guri • {item.totalChugs} gropi
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
-
-                      <div className="text-right">
-                        <div className="font-bebas text-base text-[#ffd700] leading-none">
-                          {item.totalSips} <span className="text-[10px] text-gray-400 font-cinzel">Guri</span>
-                        </div>
-                        <div className="text-[10px] text-orange-400 font-bebas">
-                          {item.totalChugs} <span className="text-[9px] text-gray-400 font-cinzel">Gropi</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
               )}
             </div>
           )}

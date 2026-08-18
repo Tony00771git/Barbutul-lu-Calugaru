@@ -185,6 +185,8 @@ export const NormalGame: React.FC<NormalGameProps> = ({
           setParticleType('heaven');
           setMonkOverride('resurrected');
           
+          checkAchievement(activePlayer.name, { isHeaven: true, isDoubles: true });
+
           // Other players drink 1 sip
           setPlayers(prev => prev.map((p, idx) => {
             if (idx !== activePlayerIndex) {
@@ -207,6 +209,7 @@ export const NormalGame: React.FC<NormalGameProps> = ({
         if (d1 === 6) {
           setParticleType('chug');
           setMonkOverride('dead');
+          checkAchievement(activePlayer.name, { isDoubles: true });
           setTurnResult({
             reason: `Ai dat Dublă de 6 - 6 (GROAPĂ TOTALĂ)! 🎲🔥`,
             sipsToDrink: 0,
@@ -221,6 +224,7 @@ export const NormalGame: React.FC<NormalGameProps> = ({
         if (difficulty === 'weak') {
           const sipsToTake = normalCount + 1;
           setMonkOverride('tipsy');
+          checkAchievement(activePlayer.name, { isDoubles: true });
           setTurnResult({
             reason: `Ai dat Dublă 🎲 ${d1} - ${d2}! La nivel Ușor, dubla încheie tura.`,
             sipsToDrink: sipsToTake,
@@ -234,6 +238,7 @@ export const NormalGame: React.FC<NormalGameProps> = ({
         // Normal doubles (2-2 to 5-5)
         const newDoubleCount = doubleCount + 1;
         setDoubleCount(newDoubleCount);
+        checkAchievement(activePlayer.name, { isDoubles: true });
 
         const threshold = getDoubleThreshold();
 
@@ -274,6 +279,8 @@ export const NormalGame: React.FC<NormalGameProps> = ({
     }));
 
     const sipsToDrink = normalCount > 0 ? normalCount : 1;
+
+    checkAchievement(activePlayer.name, { isPassDice: true });
 
     setTurnResult({
       reason: `Ai ales să pasezi tura după ${normalCount} aruncări acumulate.`,
