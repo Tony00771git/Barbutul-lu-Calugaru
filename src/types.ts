@@ -52,9 +52,16 @@ export interface CasinoRound {
     netProfit: number;
     winningBetsCount: number;
     details: string[];
+    isFraudulent?: boolean;
+    fraudReason?: string;
+    fraudFine?: number;
+    fraudSips?: number;
+    isNonBettor?: boolean;
   }>;
   eliminatedThisRound?: string[];
   lowestBalanceDrinkers?: string[];
+  fraudulentDrinkers?: string[];
+  nonBettorDrinkers?: string[];
 }
 
 export interface CasinoRoomState {

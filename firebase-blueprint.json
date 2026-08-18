@@ -18,8 +18,8 @@
         },
         "avatarIcon": {
           "type": "string",
-          "description": "Selected avatar identifier",
-          "maxLength": 64
+          "description": "Selected avatar identifier or custom photo base64",
+          "maxLength": 50000
         },
         "email": {
           "type": "string",
@@ -107,8 +107,8 @@
         },
         "avatarIcon": {
           "type": "string",
-          "description": "Avatar key",
-          "maxLength": 64
+          "description": "Avatar key or custom photo base64",
+          "maxLength": 50000
         },
         "totalSips": {
           "type": "number",

@@ -6,6 +6,7 @@ import {
   fetchGlobalLeaderboard,
   CloudLeaderboardEntry,
   syncAccountProfilesToCloud,
+  resetGlobalLeaderboard,
 } from '../lib/firestoreService';
 
 type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'totalScore';
@@ -29,13 +30,15 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [isResetting, setIsResetting] = useState<boolean>(false);
+  const [showResetConfirm, setShowResetConfirm] = useState<boolean>(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
 
   const loadLeaderboardData = async () => {
     setLoading(true);
     try {
       const data = await fetchGlobalLeaderboard();
-      setLeaderboard(data);
+      setLeaderboard(data || []);
     } catch (err) {
       console.error('Error fetching global leaderboard:', err);
     } finally {
@@ -55,7 +58,7 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
     setIsSyncing(true);
     try {
       await syncAccountProfilesToCloud(profiles);
-      setSyncNotice(language === 'ro' ? '✅ Sincronizat!' : '✅ Synced!');
+      setSyncNotice(language === 'ro' ? '✅ Subprofiluri sincronizate!' : '✅ Sub-profiles synced!');
       await loadLeaderboardData();
       setTimeout(() => setSyncNotice(null), 3000);
     } catch (e) {
@@ -67,31 +70,50 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
     }
   };
 
-  // Sort entries based on category
-  const sortedEntries = [...leaderboard].sort((a, b) => {
-    if (activeCategory === 'monopoly') {
-      const winsA = a.winsBoardgame || 0;
-      const winsB = b.winsBoardgame || 0;
-      if (winsB !== winsA) return winsB - winsA;
-      return (b.totalScore || 0) - (a.totalScore || 0);
+  const handleReset = async () => {
+    setShowResetConfirm(false);
+    setIsResetting(true);
+    try {
+      await resetGlobalLeaderboard(user ? profiles : undefined);
+      setSyncNotice(language === 'ro' ? '🧹 Clasament resetat & curățat!' : '🧹 Leaderboard reset!');
+      await loadLeaderboardData();
+      setTimeout(() => setSyncNotice(null), 3500);
+    } catch (e) {
+      console.error(e);
+      setSyncNotice(language === 'ro' ? '❌ Eroare resetare' : '❌ Reset error');
+      setTimeout(() => setSyncNotice(null), 3500);
+    } finally {
+      setIsResetting(false);
     }
-    if (activeCategory === 'duel') {
-      const winsA = a.winsDuel || (a.duelWins || 0);
-      const winsB = b.winsDuel || (b.duelWins || 0);
-      if (winsB !== winsA) return winsB - winsA;
-      return (b.totalScore || 0) - (a.totalScore || 0);
-    }
-    if (activeCategory === 'casino') {
-      const winsA = a.winsCasino || 0;
-      const winsB = b.winsCasino || 0;
-      if (winsB !== winsA) return winsB - winsA;
-      return (b.totalScore || 0) - (a.totalScore || 0);
-    }
-    // 'totalScore' (sips + chugs * 25)
-    const scoreA = a.totalScore ?? (a.totalSips + 25 * a.totalChugs);
-    const scoreB = b.totalScore ?? (b.totalSips + 25 * b.totalChugs);
-    return scoreB - scoreA;
-  });
+  };
+
+  // Sort entries based on category and ensure strictly subprofiles
+  const sortedEntries = [...leaderboard]
+    .filter(entry => entry.profileId && entry.profileId !== entry.userId)
+    .sort((a, b) => {
+      if (activeCategory === 'monopoly') {
+        const winsA = a.winsBoardgame || 0;
+        const winsB = b.winsBoardgame || 0;
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
+      if (activeCategory === 'duel') {
+        const winsA = a.winsDuel || (a.duelWins || 0);
+        const winsB = b.winsDuel || (b.duelWins || 0);
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
+      if (activeCategory === 'casino') {
+        const winsA = a.winsCasino || 0;
+        const winsB = b.winsCasino || 0;
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
+      // 'totalScore' (sips + chugs * 25)
+      const scoreA = a.totalScore ?? (a.totalSips + 25 * a.totalChugs);
+      const scoreB = b.totalScore ?? (b.totalSips + 25 * b.totalChugs);
+      return scoreB - scoreA;
+    });
 
   // Filter with search term
   const filteredEntries = sortedEntries.filter((entry) => {
@@ -164,15 +186,27 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
           )}
 
           {user ? (
-            <button
-              onClick={handleSync}
-              disabled={isSyncing}
-              className="py-1 px-2 rounded-lg bg-[#1e2e1c] border border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/50 text-[11px] font-cinzel font-bold flex items-center gap-1 transition-all active:scale-95 shadow"
-              title={language === 'ro' ? 'Sincronizează profilurile mele' : 'Sync my profiles'}
-            >
-              <span>{isSyncing ? '⏳' : '⚡'}</span>
-              <span>Sync</span>
-            </button>
+            <>
+              <button
+                onClick={handleSync}
+                disabled={isSyncing || isResetting}
+                className="py-1 px-2 rounded-lg bg-[#1e2e1c] border border-emerald-500/40 text-emerald-300 hover:bg-emerald-900/50 text-[11px] font-cinzel font-bold flex items-center gap-1 transition-all active:scale-95 shadow"
+                title={language === 'ro' ? 'Sincronizează doar subprofilurile mele' : 'Sync my sub-profiles'}
+              >
+                <span>{isSyncing ? '⏳' : '⚡'}</span>
+                <span>Sync</span>
+              </button>
+
+              <button
+                onClick={() => setShowResetConfirm(true)}
+                disabled={isSyncing || isResetting}
+                className="py-1 px-2 rounded-lg bg-[#2a1010] border border-red-500/40 text-red-300 hover:bg-red-900/50 text-[11px] font-cinzel font-bold flex items-center gap-1 transition-all active:scale-95 shadow"
+                title={language === 'ro' ? 'Resetează și curăță clasamentul mondial' : 'Reset global leaderboard'}
+              >
+                <span>{isResetting ? '⏳' : '🧹'}</span>
+                <span>{language === 'ro' ? 'Reset' : 'Reset'}</span>
+              </button>
+            </>
           ) : (
             <button
               onClick={onOpenCloudModal}
@@ -185,14 +219,44 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
 
           <button
             onClick={loadLeaderboardData}
-            disabled={loading}
+            disabled={loading || isResetting}
             className="p-1.5 rounded-lg bg-[#1c140c] border border-[#3d2d1c] hover:border-[#e8c84a] text-gray-300 hover:text-[#ffd700] text-xs transition-all active:scale-95"
             title={language === 'ro' ? 'Reîmprospătează clasamentul' : 'Refresh leaderboard'}
           >
-            <span className={loading ? 'inline-block animate-spin' : ''}>🔄</span>
+            <span className={loading || isResetting ? 'inline-block animate-spin' : ''}>🔄</span>
           </button>
         </div>
       </div>
+
+      {/* Reset Confirmation Dialog */}
+      {showResetConfirm && (
+        <div className="bg-[#1e0a0a] border border-red-500/60 rounded-xl p-3 text-center space-y-2 animate-fade-in shadow-2xl">
+          <p className="text-xs font-cinzel font-bold text-red-200">
+            {language === 'ro'
+              ? '🧹 Sigur vrei să resetezi clasamentul global?'
+              : '🧹 Are you sure you want to reset the global leaderboard?'}
+          </p>
+          <p className="text-[10px] text-gray-300 font-barlow">
+            {language === 'ro'
+              ? 'Se vor șterge intrările agregate vechi și se vor re-înscrie doar subprofilurile tale individuale!'
+              : 'Legacy master entries will be wiped, leaving only distinct individual sub-profiles!'}
+          </p>
+          <div className="flex justify-center gap-2 pt-1">
+            <button
+              onClick={handleReset}
+              className="px-3 py-1 bg-red-700 hover:bg-red-600 text-white font-cinzel font-bold text-xs rounded-lg shadow active:scale-95"
+            >
+              {language === 'ro' ? 'Da, Resetează' : 'Yes, Reset'}
+            </button>
+            <button
+              onClick={() => setShowResetConfirm(false)}
+              className="px-3 py-1 bg-[#2b241c] hover:bg-[#3d3328] text-gray-300 font-cinzel font-bold text-xs rounded-lg active:scale-95"
+            >
+              {language === 'ro' ? 'Anulează' : 'Cancel'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 4 Category Tabs Switcher */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-[#0b0805] p-1 rounded-xl border border-[#261c11]">

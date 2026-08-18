@@ -547,6 +547,61 @@ export async function triggerBettingTimeout(roomCode: string): Promise<void> {
 }
 
 /**
+ * Analyzes a player's bets for contradictory or excessive hedging (Fraudulent Bets).
+ */
+export interface FraudCheckResult {
+  isFraudulent: boolean;
+  reason?: string;
+  coveredNumbersCount?: number;
+}
+
+export function analyzePlayerCasinoBets(bets: CasinoBet[]): FraudCheckResult {
+  if (!bets || bets.length === 0) {
+    return { isFraudulent: false };
+  }
+
+  const hasEven = bets.some((b) => b.type === 'even');
+  const hasOdd = bets.some((b) => b.type === 'odd');
+  const hasOver7 = bets.some((b) => b.type === 'over7');
+  const hasUnder7 = bets.some((b) => b.type === 'under7');
+
+  const numberBets = bets.filter((b) => b.type === 'number' && b.numberValue !== undefined);
+  const uniqueNumbers = Array.from(new Set(numberBets.map((b) => b.numberValue)));
+
+  const reasons: string[] = [];
+
+  // Check 1: Even + Odd contradictory arbitrage
+  if (hasEven && hasOdd) {
+    reasons.push('Pariu contradictoriu Par + Impar');
+  }
+
+  // Check 2: Over 7 + Under 7 contradictory arbitrage
+  if (hasOver7 && hasUnder7) {
+    reasons.push('Pariu contradictoriu Peste 7 + Sub 7');
+  }
+
+  // Check 3: Too many numbers covered (4, 5, or all 6 numbers)
+  if (uniqueNumbers.length >= 4) {
+    reasons.push(`Acoperire excesivă de numere (${uniqueNumbers.length}/6 numere pariate)`);
+  }
+
+  // Check 4: Combined multi-hedge (Par/Impar + 3 or more numbers)
+  if ((hasEven || hasOdd) && uniqueNumbers.length >= 3) {
+    reasons.push('Arbitraj compus (Paritate + 3+ numere)');
+  }
+
+  if (reasons.length > 0) {
+    return {
+      isFraudulent: true,
+      reason: reasons.join('; '),
+      coveredNumbersCount: uniqueNumbers.length,
+    };
+  }
+
+  return { isFraudulent: false };
+}
+
+/**
  * Resolves the round: calculates craps payouts, updates balances, checks eliminations & penalties.
  */
 export async function resolveCasinoRound(roomCode: string): Promise<void> {
@@ -574,12 +629,20 @@ export async function resolveCasinoRound(roomCode: string): Promise<void> {
           netProfit: number;
           winningBetsCount: number;
           details: string[];
+          isFraudulent?: boolean;
+          fraudReason?: string;
+          fraudFine?: number;
+          fraudSips?: number;
+          isNonBettor?: boolean;
         }
       > = {};
 
       const playerBalances: Record<string, number> = {};
+      const playerBetsByPlayer: Record<string, CasinoBet[]> = {};
+
       room.players.forEach((p) => {
         playerBalances[p.id] = p.balance;
+        playerBetsByPlayer[p.id] = [];
         payoutsByPlayer[p.id] = {
           totalWon: 0,
           totalLost: 0,
@@ -589,69 +652,152 @@ export async function resolveCasinoRound(roomCode: string): Promise<void> {
         };
       });
 
-      for (const bet of room.round.bets) {
-        const pId = bet.playerId;
+      room.round.bets.forEach((bet) => {
+        if (playerBetsByPlayer[bet.playerId]) {
+          playerBetsByPlayer[bet.playerId].push(bet);
+        }
+      });
+
+      const fraudulentDrinkers: string[] = [];
+      const nonBettorDrinkers: string[] = [];
+
+      // Process each player's bets
+      for (const player of room.players) {
+        const pId = player.id;
         const playerStats = payoutsByPlayer[pId];
         if (!playerStats) continue;
 
-        let won = false;
-        let profit = 0;
-        let betLabel = '';
+        if (player.eliminated) continue;
 
-        switch (bet.type) {
-          case 'over7':
-            betLabel = 'Peste 7';
-            if (sum > 7) {
-              won = true;
-              profit = Math.floor((bet.amount * 7) / 5); // 7:5 payout
-            }
-            break;
+        const pBets = playerBetsByPlayer[pId] || [];
 
-          case 'under7':
-            betLabel = 'Sub 7';
-            if (sum < 7) {
-              won = true;
-              profit = Math.floor((bet.amount * 7) / 5); // 7:5 payout
-            }
-            break;
-
-          case 'even':
-            betLabel = 'Par';
-            if (sum % 2 === 0) {
-              won = true;
-              profit = bet.amount; // 1:1 payout
-            }
-            break;
-
-          case 'odd':
-            betLabel = 'Impar';
-            if (sum % 2 !== 0) {
-              won = true;
-              profit = bet.amount; // 1:1 payout
-            }
-            break;
-
-          case 'number':
-            const num = bet.numberValue || 1;
-            betLabel = `Numărul ${num}`;
-            if (d1 === num || d2 === num) {
-              won = true;
-              profit = Math.floor((bet.amount * 9) / 4); // 9:4 payout
-            }
-            break;
+        // Check if active player skipped betting entirely
+        if (pBets.length === 0) {
+          nonBettorDrinkers.push(pId);
+          playerStats.isNonBettor = true;
+          playerStats.totalWon = 0;
+          playerStats.totalLost = 0;
+          playerStats.netProfit = 0;
+          playerStats.winningBetsCount = 0;
+          playerStats.details.push(
+            `⚠️ Eschivă de la pariere: Nu ai plasat niciun pariu în această rundă! Ai primit canonul de băutură stabilit de stareț (${
+              room.round.penalty.type === 'groapa'
+                ? 'CHUG / GROAPĂ'
+                : `${room.round.penalty.amount || 1} guri`
+            }).`
+          );
+          continue;
         }
 
-        if (won) {
-          const returnTotal = bet.amount + profit;
-          playerBalances[pId] += returnTotal;
-          playerStats.totalWon += returnTotal;
-          playerStats.netProfit += profit;
-          playerStats.winningBetsCount += 1;
-          playerStats.details.push(`✅ ${betLabel} (${bet.amount} fise): +${profit} profit (+${returnTotal} returnat)`);
+        // Check if player's bets are fraudulent / arbitrage
+        const fraudCheck = analyzePlayerCasinoBets(pBets);
+        const isPlayerFraud = fraudCheck.isFraudulent;
+
+        let playerRawWon = 0;
+        let playerRawLost = 0;
+        let playerRawProfit = 0;
+        let winningCount = 0;
+
+        for (const bet of pBets) {
+          let won = false;
+          let profit = 0;
+          let betLabel = '';
+
+          switch (bet.type) {
+            case 'over7':
+              betLabel = 'Peste 7';
+              if (sum > 7) {
+                won = true;
+                profit = bet.amount; // 1:1 payout (+100% profit; sum=7 loses)
+              }
+              break;
+
+            case 'under7':
+              betLabel = 'Sub 7';
+              if (sum < 7) {
+                won = true;
+                profit = bet.amount; // 1:1 payout (+100% profit; sum=7 loses)
+              }
+              break;
+
+            case 'even':
+              betLabel = 'Par';
+              if (sum % 2 === 0) {
+                won = true;
+                profit = bet.amount; // 1:1 payout
+              }
+              break;
+
+            case 'odd':
+              betLabel = 'Impar';
+              if (sum % 2 !== 0) {
+                won = true;
+                profit = bet.amount; // 1:1 payout
+              }
+              break;
+
+            case 'number':
+              const num = bet.numberValue || 1;
+              const matches = (d1 === num ? 1 : 0) + (d2 === num ? 1 : 0);
+              if (matches === 1) {
+                won = true;
+                profit = bet.amount; // 1:1 payout for 1 die (+100% profit)
+                betLabel = `Numărul ${num} (1 zar)`;
+              } else if (matches === 2) {
+                won = true;
+                profit = bet.amount * 3; // 3:1 payout for double dice (+300% profit)
+                betLabel = `Numărul ${num} (DUBLĂ DE AUR! ✨)`;
+              } else {
+                won = false;
+                betLabel = `Numărul ${num}`;
+              }
+              break;
+          }
+
+          if (won) {
+            const returnTotal = bet.amount + profit;
+            playerRawWon += returnTotal;
+            playerRawProfit += profit;
+            winningCount += 1;
+            playerStats.details.push(
+              `✅ ${betLabel} (${bet.amount} fise): +${profit} profit (+${returnTotal} returnat)`
+            );
+          } else {
+            playerRawLost += bet.amount;
+            playerRawProfit -= bet.amount;
+            playerStats.details.push(`❌ ${betLabel} (${bet.amount} fise): pierdut`);
+          }
+        }
+
+        playerStats.winningBetsCount = winningCount;
+        playerStats.totalLost = playerRawLost;
+
+        if (isPlayerFraud) {
+          // FRAUD PENALTY: Confiscate all profit, apply fine & drinking canon
+          const totalBetsAmount = pBets.reduce((acc, b) => acc + b.amount, 0);
+          const fraudFine = Math.min(
+            playerBalances[pId],
+            Math.max(25, Math.floor(totalBetsAmount * 0.25))
+          );
+          const fraudSips = 3;
+
+          playerBalances[pId] = Math.max(0, playerBalances[pId] - fraudFine);
+          playerStats.isFraudulent = true;
+          playerStats.fraudReason = fraudCheck.reason;
+          playerStats.fraudFine = fraudFine;
+          playerStats.fraudSips = fraudSips;
+          playerStats.totalWon = 0;
+          playerStats.netProfit = -playerRawLost - fraudFine;
+
+          playerStats.details.unshift(
+            `🚨 FRAUDĂ DETECTATĂ: ${fraudCheck.reason}. Profiturile au fost confiscate! Amendă: -${fraudFine} fise + 3 Guri de Canon.`
+          );
+
+          fraudulentDrinkers.push(pId);
         } else {
-          playerStats.totalLost += bet.amount;
-          playerStats.netProfit -= bet.amount;
-          playerStats.details.push(`❌ ${betLabel} (${bet.amount} fise): pierdut`);
+          playerBalances[pId] += playerRawWon;
+          playerStats.totalWon = playerRawWon;
+          playerStats.netProfit = playerRawProfit;
         }
       }
 
@@ -666,6 +812,20 @@ export async function resolveCasinoRound(roomCode: string): Promise<void> {
         let isEliminated = player.eliminated;
         let groapaTotal = player.groapaTotal;
         let guriTotal = player.guriTotal;
+
+        // Apply fraud drinking penalty if caught
+        if (fraudulentDrinkers.includes(player.id)) {
+          guriTotal += 3;
+        }
+
+        // Apply penalty for skipping betting (non-bettors drink the round penalty generated by the game)
+        if (nonBettorDrinkers.includes(player.id)) {
+          if (room.round.penalty.type === 'groapa') {
+            groapaTotal += 1;
+          } else {
+            guriTotal += room.round.penalty.amount || 1;
+          }
+        }
 
         if (newBal === 0) {
           isEliminated = true;
@@ -704,10 +864,10 @@ export async function resolveCasinoRound(roomCode: string): Promise<void> {
           }
         });
 
-        // Apply penalty stats to lowest balance drinkers
+        // Apply penalty stats to lowest balance drinkers (if not already penalized as non-bettor)
         const penalty = room.round.penalty;
         updatedPlayers.forEach((p) => {
-          if (lowestBalanceDrinkers.includes(p.id)) {
+          if (lowestBalanceDrinkers.includes(p.id) && !nonBettorDrinkers.includes(p.id)) {
             if (penalty.type === 'groapa') {
               p.groapaTotal += 1;
             } else {
@@ -739,6 +899,8 @@ export async function resolveCasinoRound(roomCode: string): Promise<void> {
         'round.payouts': payoutsByPlayer,
         'round.eliminatedThisRound': newlyEliminatedIds,
         'round.lowestBalanceDrinkers': lowestBalanceDrinkers,
+        'round.fraudulentDrinkers': fraudulentDrinkers,
+        'round.nonBettorDrinkers': nonBettorDrinkers,
         updatedAt: serverTimestamp(),
       }));
     });

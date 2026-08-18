@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { getAvatarById } from '../data/avatars';
 import { getSyncedServerNow } from '../lib/duelFirestoreService';
-import { triggerBettingTimeout } from '../lib/casinoFirestoreService';
+import { triggerBettingTimeout, analyzePlayerCasinoBets } from '../lib/casinoFirestoreService';
 import { CasinoDiceArena } from './CasinoDiceArena';
 
 interface CasinoGameProps {
@@ -69,6 +69,11 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
   // Total draft bets placed by local player
   const totalDraftBetAmount = useMemo(() => {
     return draftBets.reduce((acc, b) => acc + b.amount, 0);
+  }, [draftBets]);
+
+  // Real-time analysis of current draft bets for fraud / arbitrage
+  const draftFraud = useMemo(() => {
+    return analyzePlayerCasinoBets(draftBets);
   }, [draftBets]);
 
   // Current balance plus any already committed round bets
@@ -588,7 +593,11 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
   // Determine if this client is the victim who must drink this round
   const isVictimLowest = round.lowestBalanceDrinkers?.includes(localPlayer.id) && !isEliminated;
   const isVictimEliminated = round.eliminatedThisRound?.includes(localPlayer.id);
-  const isVictim = (isVictimLowest || isVictimEliminated) && isResolved;
+  const isVictimFraud = round.fraudulentDrinkers?.includes(localPlayer.id);
+  const isVictimNonBettor = round.nonBettorDrinkers?.includes(localPlayer.id) && !isEliminated;
+  const isVictim = (isVictimLowest || isVictimEliminated || isVictimFraud || isVictimNonBettor) && isResolved;
+
+  const myPayout = round.payouts?.[localPlayer.id];
 
   const penaltyText =
     round.penalty.type === 'groapa'
@@ -614,16 +623,26 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
 
             {/* Icon Banner */}
             <div className="text-5xl sm:text-6xl animate-bounce">
-              {round.penalty.type === 'groapa' || isVictimEliminated ? '🔥' : '🍺'}
+              {isVictimFraud ? '🚨' : isVictimNonBettor ? '⚠️' : round.penalty.type === 'groapa' || isVictimEliminated ? '🔥' : '🍺'}
             </div>
 
             {/* Victim Header */}
             <div>
               <span className="text-[11px] font-cinzel font-black uppercase tracking-widest text-red-400 bg-red-950/80 border border-red-700/60 px-3 py-1 rounded-full">
-                {isVictimEliminated ? '💀 AI FOST ELIMINAT!' : '🥴 AI CEL MAI MIC SOLD DIN TAVERNĂ!'}
+                {isVictimFraud
+                  ? '🚨 TRIȘOR PRINS ÎN TAVERNĂ!'
+                  : isVictimNonBettor
+                  ? '⚠️ N-AI PARIAT ÎN ACEASTĂ RUNDĂ!'
+                  : isVictimEliminated
+                  ? '💀 AI FOST ELIMINAT!'
+                  : '🥴 AI CEL MAI MIC SOLD DIN TAVERNĂ!'}
               </span>
               <h2 className="text-xl sm:text-2xl font-cinzel font-black text-[#ffd700] gold-text-glow mt-2">
-                {isVictimEliminated
+                {isVictimFraud
+                  ? 'PARIURILE TALE AU FOST ANULATE!'
+                  : isVictimNonBettor
+                  ? 'CINE NU PARIAZĂ, BEA CANONUL!'
+                  : isVictimEliminated
                   ? 'FĂRĂ GALBENI RĂMAȘI!'
                   : 'TREBUIE SĂ BEI PEDEAPSA RUNDEI!'}
               </h2>
@@ -632,15 +651,33 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
             {/* Big Penalty Announcement Card */}
             <div className="w-full bg-[#120805] border-2 border-red-500/80 rounded-2xl p-4 shadow-inner flex flex-col items-center gap-1">
               <span className="text-xs text-gray-400 font-cinzel font-bold">
-                {round.penalty.type === 'groapa' || isVictimEliminated
+                {isVictimFraud
+                  ? 'CANON DE BĂUTURĂ PENTRU FRAUDĂ'
+                  : isVictimNonBettor
+                  ? 'PEDEAPSĂ PENTRU NEPARIERE'
+                  : round.penalty.type === 'groapa' || isVictimEliminated
                   ? 'PEDEAPSĂ SUPREMĂ'
                   : 'CANTITATE DE BĂUT'}
               </span>
               <span className="text-2xl sm:text-3xl font-cinzel font-black text-red-400 animate-pulse tracking-wide">
-                {isVictimEliminated ? '🔥 CHUG IT ALL (GROAPĂ)!' : penaltyText}
+                {isVictimFraud
+                  ? '🍺 +3 GURI DE CANON!'
+                  : isVictimEliminated
+                  ? '🔥 CHUG IT ALL (GROAPĂ)!'
+                  : penaltyText}
               </span>
               <span className="text-[11px] text-gray-400 mt-1">
-                Soldul tău este {currentPlayer?.balance} 🪙. Bea înainte de tura următoare!
+                {isVictimFraud && myPayout?.fraudReason ? (
+                  <span className="text-amber-300">
+                    Motiv: {myPayout.fraudReason}. Amendă: -{myPayout.fraudFine || 0}🪙
+                  </span>
+                ) : isVictimNonBettor ? (
+                  <span className="text-amber-300">
+                    Ai stat pe bară fără să pariezi fise. Starețul te pedepsește cu băutură!
+                  </span>
+                ) : (
+                  `Soldul tău este ${currentPlayer?.balance} 🪙. Bea înainte de tura următoare!`
+                )}
               </span>
             </div>
 
@@ -764,6 +801,21 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
             </div>
           </div>
 
+          {/* Real-time Fraudulent Bet Warning Alert */}
+          {draftFraud.isFraudulent && (
+            <div className="relative z-10 bg-gradient-to-r from-red-950/95 via-[#2b1008]/95 to-red-950/95 border-2 border-red-500 rounded-xl p-2 sm:p-2.5 shadow-lg flex items-start sm:items-center gap-2 text-xs text-red-200 animate-pulse">
+              <span className="text-xl flex-shrink-0">🚨</span>
+              <div className="flex-1 leading-snug">
+                <div className="font-cinzel font-black text-red-300 text-xs sm:text-sm">
+                  {t('casinoFraudDetectedTitle')}
+                </div>
+                <div className="text-[11px] text-amber-200 mt-0.5">
+                  <strong>Motiv:</strong> {draftFraud.reason}. {t('casinoFraudAbbotWarning')}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Section 1: Number Bets (1 to 6) in a clean single 6-column horizontal grid */}
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-1">
@@ -771,7 +823,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                 <span>🎲</span> Pariuri Număr (1 - 6)
               </span>
               <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
-                Cotă 9:4 (+225%)
+                1:1 (+100% la 1 zar) | 3:1 (+300% la Dublă)
               </span>
             </div>
 
@@ -804,7 +856,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                         {currentDraft}🪙
                       </span>
                     ) : (
-                      <span className="text-[9px] text-[#557355] font-semibold leading-none">9:4</span>
+                      <span className="text-[9px] text-[#557355] font-semibold leading-none">1:1 / 3:1</span>
                     )}
                   </button>
                 );
@@ -841,13 +893,13 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                     <span className="text-[10px] sm:text-xs font-cinzel font-bold text-[#f8e178] leading-none">
                       Peste 7 (&gt;7)
                     </span>
-                    <span className="text-[9px] text-emerald-400 font-semibold leading-none">7:5</span>
+                    <span className="text-[9px] text-emerald-400 font-semibold leading-none">1:1</span>
                     {draft > 0 ? (
                       <span className="text-[9px] sm:text-[10px] font-black text-black bg-[#e8c84a] px-1.5 py-0.2 rounded-full shadow">
                         {draft}🪙
                       </span>
                     ) : (
-                      <span className="text-[9px] text-[#8ca38c] leading-none">+140%</span>
+                      <span className="text-[9px] text-[#8ca38c] leading-none">+100%</span>
                     )}
                   </button>
                 );
@@ -870,13 +922,13 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                     <span className="text-[10px] sm:text-xs font-cinzel font-bold text-[#f8e178] leading-none">
                       Sub 7 (&lt;7)
                     </span>
-                    <span className="text-[9px] text-emerald-400 font-semibold leading-none">7:5</span>
+                    <span className="text-[9px] text-emerald-400 font-semibold leading-none">1:1</span>
                     {draft > 0 ? (
                       <span className="text-[9px] sm:text-[10px] font-black text-black bg-[#e8c84a] px-1.5 py-0.2 rounded-full shadow">
                         {draft}🪙
                       </span>
                     ) : (
-                      <span className="text-[9px] text-[#8ca38c] leading-none">+140%</span>
+                      <span className="text-[9px] text-[#8ca38c] leading-none">+100%</span>
                     )}
                   </button>
                 );
@@ -997,7 +1049,11 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                   <button
                     type="button"
                     onClick={handleLockBets}
-                    className="px-4 py-1.5 bg-gradient-to-r from-[#b38f20] via-[#e8c84a] to-[#f8e178] text-[#1c1208] font-cinzel font-black text-xs sm:text-sm rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 gold-glow"
+                    className={`px-4 py-1.5 text-xs sm:text-sm font-cinzel font-black rounded-xl shadow-lg active:scale-95 transition-all flex items-center gap-1.5 ${
+                      draftFraud.isFraudulent
+                        ? 'bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-black border border-amber-300 animate-pulse'
+                        : 'bg-gradient-to-r from-[#b38f20] via-[#e8c84a] to-[#f8e178] text-[#1c1208] gold-glow'
+                    }`}
                   >
                     <span>🔒</span> {t('casinoLockBetsBtn')} ({totalDraftBetAmount}🪙)
                   </button>
@@ -1055,17 +1111,72 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                 </div>
               )}
 
+              {/* Fraudulent Bet tavern announcement */}
+              {round.fraudulentDrinkers && round.fraudulentDrinkers.length > 0 && (
+                <div className="text-xs bg-red-950/80 border border-red-500/80 p-2.5 rounded-xl flex flex-col gap-1 text-red-200 shadow-md animate-pulse">
+                  <div className="font-cinzel font-black text-red-300 flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>🚨</span> {t('casinoFraudCaughtTitle')}
+                  </div>
+                  <div className="text-[11px] text-amber-200 space-y-1">
+                    {round.fraudulentDrinkers.map((id) => {
+                      const p = room.players.find((pl) => pl.id === id);
+                      const pInfo = round.payouts?.[id];
+                      return (
+                        <div key={id} className="flex items-center justify-between bg-black/40 px-2 py-1 rounded border border-red-900/50">
+                          <span>
+                            <strong className="text-[#ffd700]">{p?.name || id}</strong>: {pInfo?.fraudReason || 'Pariuri contradictorii / acoperire'}
+                          </span>
+                          <span className="text-red-400 font-mono font-bold text-right ml-2 flex-shrink-0">
+                            -{pInfo?.fraudFine || 0}🪙 &amp; 🍺 +3 guri canon
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Non-Bettor tavern announcement */}
+              {round.nonBettorDrinkers && round.nonBettorDrinkers.length > 0 && (
+                <div className="text-xs bg-orange-950/70 border border-orange-500/70 p-2.5 rounded-xl flex flex-col gap-1 text-orange-200 shadow-md">
+                  <div className="font-cinzel font-black text-orange-300 flex items-center gap-1.5 text-xs sm:text-sm">
+                    <span>⚠️</span> {t('casinoNonBettorCaughtTitle')}
+                  </div>
+                  <div className="text-[11px] text-amber-200 space-y-1">
+                    {round.nonBettorDrinkers.map((id) => {
+                      const p = room.players.find((pl) => pl.id === id);
+                      return (
+                        <div key={id} className="flex items-center justify-between bg-black/40 px-2 py-1 rounded border border-orange-900/50">
+                          <span>
+                            <strong className="text-[#ffd700]">{p?.name || id}</strong> {t('casinoNonBettorCaughtDesc')}
+                          </span>
+                          <span className="text-orange-400 font-mono font-bold text-right ml-2 flex-shrink-0">
+                            {penaltyText}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Payouts list */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-44 overflow-y-auto">
                 {room.players.map((p) => {
                   const pInfo = round.payouts?.[p.id];
                   const isMe = p.id === localPlayer.id;
                   const isElim = p.eliminated;
+                  const isFraud = pInfo?.isFraudulent;
+                  const isNonBettor = pInfo?.isNonBettor || round.nonBettorDrinkers?.includes(p.id);
                   return (
                     <div
                       key={p.id}
                       className={`p-2 rounded-xl border flex items-center justify-between text-xs ${
-                        isMe
+                        isFraud
+                          ? 'bg-red-950/40 border-red-600/70 ring-1 ring-red-500/30'
+                          : isNonBettor && !isElim
+                          ? 'bg-orange-950/40 border-orange-600/60 ring-1 ring-orange-500/30'
+                          : isMe
                           ? 'bg-[#2b1f10]/80 border-[#e8c84a]/70 ring-1 ring-[#e8c84a]/30'
                           : isElim
                           ? 'bg-[#100b0b]/60 border-red-950/40 opacity-75'
@@ -1078,11 +1189,21 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                           {p.name}
                         </span>
                         {isMe && <span className="text-[8px] bg-[#e8c84a]/20 text-[#e8c84a] px-1 rounded font-bold">TU</span>}
+                        {isFraud && <span className="text-[8px] bg-red-900 text-red-200 px-1 rounded font-bold">TRIȘOR</span>}
+                        {isNonBettor && !isElim && <span className="text-[8px] bg-orange-900 text-orange-200 px-1 rounded font-bold">{t('casinoNonBettorBadge')}</span>}
                         {isElim && <span className="text-[8px] bg-red-900 text-red-200 px-1 rounded">ELIMINAT</span>}
                       </div>
 
                       <div className="text-right">
-                        {pInfo && pInfo.netProfit !== 0 ? (
+                        {isFraud ? (
+                          <span className="font-bold text-red-400">
+                            -{pInfo?.fraudFine || 0}🪙 (confiscat)
+                          </span>
+                        ) : isNonBettor && !isElim ? (
+                          <span className="font-bold text-orange-400">
+                            0🪙 (canon băutură)
+                          </span>
+                        ) : pInfo && pInfo.netProfit !== 0 ? (
                           <span
                             className={`font-bold ${
                               pInfo.netProfit > 0 ? 'text-emerald-400' : 'text-red-400'

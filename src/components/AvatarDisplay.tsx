@@ -12,6 +12,30 @@ export const AvatarDisplay: React.FC<AvatarDisplayProps> = ({
   className = 'w-10 h-10',
   showBorder = false,
 }) => {
+  // Support custom user uploaded profile picture (Base64 data URL, blob, or web URL)
+  if (
+    avatarId &&
+    (avatarId.startsWith('data:image/') ||
+      avatarId.startsWith('http://') ||
+      avatarId.startsWith('https://') ||
+      avatarId.startsWith('blob:'))
+  ) {
+    return (
+      <div
+        className={`relative rounded-2xl overflow-hidden flex items-center justify-center select-none flex-shrink-0 bg-[#160f08] ${className} ${
+          showBorder ? 'border border-[#e8c84a]/50 shadow-sm' : ''
+        }`}
+      >
+        <img
+          src={avatarId}
+          alt="Custom Profile"
+          className="w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+        />
+      </div>
+    );
+  }
+
   const avatar = getAvatarById(avatarId);
   const matched = MEDIEVAL_AVATARS.some(a => a.id === avatarId);
 

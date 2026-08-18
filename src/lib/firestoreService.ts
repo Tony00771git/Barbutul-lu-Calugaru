@@ -2,6 +2,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  deleteDoc,
   collection,
   query,
   limit,
@@ -33,7 +34,7 @@ export interface CloudUserProfile {
 export interface CloudLeaderboardEntry {
   id?: string;
   userId: string;
-  profileId?: string;
+  profileId: string;
   accountName?: string;
   displayName: string;
   avatarIcon?: string;
@@ -93,10 +94,17 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
     const existing = await getDoc(doc(db, 'users', userId));
     const now = serverTimestamp();
 
+    // 1. Delete legacy account-level aggregate leaderboard entry if it exists
+    try {
+      await deleteDoc(doc(db, 'leaderboards', userId));
+    } catch {
+      // Ignore if document did not exist
+    }
+
     const sanitizedProfiles: Profile[] = profiles.map(p => ({
       id: p.id,
       name: (p.name || 'Călugăr').substring(0, 50),
-      avatarIcon: (p.avatarIcon || 'monk_drunk').substring(0, 64),
+      avatarIcon: (p.avatarIcon || 'monk_drunk').substring(0, 50000),
       gamesPlayed: Math.max(0, p.gamesPlayed || 0),
       totalSips: Math.max(0, p.totalSips || 0),
       totalChugs: Math.max(0, p.totalChugs || 0),
@@ -121,7 +129,7 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
     const userDocData = {
       userId,
       displayName: accountName.substring(0, 100),
-      avatarIcon: (sanitizedProfiles[0]?.avatarIcon || 'monk_drunk').substring(0, 64),
+      avatarIcon: (sanitizedProfiles[0]?.avatarIcon || 'monk_drunk').substring(0, 50000),
       email: auth.currentUser.email ? auth.currentUser.email.substring(0, 256) : '',
       profiles: sanitizedProfiles,
       gamesPlayed: totalLocalGames,
@@ -137,9 +145,10 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
       updatedAt: now,
     };
 
+    // Save to private user account
     await setDoc(doc(db, 'users', userId), userDocData, { merge: true });
 
-    // Sync each individual profile as its own entry in the global leaderboard!
+    // Sync each INDIVIDUAL sub-profile as its own distinct entry on the global leaderboard
     for (const p of sanitizedProfiles) {
       const entryId = `${userId}_${sanitizeId(p.id)}`;
       const totalScore = p.totalSips + 25 * p.totalChugs;
@@ -179,7 +188,7 @@ export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promi
     const dataToSave = {
       userId,
       displayName: (profile.displayName || auth.currentUser.displayName || 'Călugăr Google').substring(0, 100),
-      avatarIcon: (profile.avatarIcon || 'monk_drunk').substring(0, 64),
+      avatarIcon: (profile.avatarIcon || 'monk_drunk').substring(0, 50000),
       email: auth.currentUser.email ? auth.currentUser.email.substring(0, 256) : '',
       profiles: profile.profiles || existing.data()?.profiles || [],
       gamesPlayed: Math.max(0, profile.gamesPlayed || 0),
@@ -201,20 +210,50 @@ export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promi
   }
 }
 
+/**
+ * Fetches the global leaderboard.
+ * CRITICAL: ONLY returns individual subprofiles! Filters out any master account aggregate docs.
+ */
 export async function fetchGlobalLeaderboard(): Promise<CloudLeaderboardEntry[]> {
   const path = 'leaderboards';
   try {
-    const q = query(collection(db, 'leaderboards'), limit(100));
+    const q = query(collection(db, 'leaderboards'), limit(200));
     const querySnapshot = await getDocs(q);
     const results: CloudLeaderboardEntry[] = [];
-    querySnapshot.forEach((d) => {
+    const currentUid = auth.currentUser?.uid;
+
+    for (const d of querySnapshot.docs) {
       const data = d.data();
+      const docId = d.id;
+      const entryUserId = data.userId || '';
+      const profileId = data.profileId || '';
+
+      // 1. Detect and filter out legacy aggregate master account documents
+      const isLegacyAccountDoc =
+        docId === entryUserId ||
+        !profileId ||
+        profileId === entryUserId ||
+        data.isAccountAggregate === true;
+
+      if (isLegacyAccountDoc) {
+        // If this legacy account document belongs to the currently signed in user or admin, clean it up from Firestore!
+        if (
+          currentUid &&
+          (entryUserId === currentUid ||
+            auth.currentUser?.email === 'antoniu.andrei.radu@gmail.com')
+        ) {
+          deleteDoc(doc(db, 'leaderboards', docId)).catch(() => {});
+        }
+        // Skip from leaderboard results
+        continue;
+      }
+
       const sips = data.totalSips || 0;
       const chugs = data.totalChugs || 0;
       results.push({
-        id: d.id,
-        userId: data.userId || '',
-        profileId: data.profileId || d.id,
+        id: docId,
+        userId: entryUserId,
+        profileId: profileId,
         accountName: data.accountName || '',
         displayName: data.displayName || 'Călugăr Anonim',
         avatarIcon: data.avatarIcon || 'monk_drunk',
@@ -227,10 +266,43 @@ export async function fetchGlobalLeaderboard(): Promise<CloudLeaderboardEntry[]>
         gamesPlayed: data.gamesPlayed || data.duelPlayed || 0,
         updatedAt: data.updatedAt,
       });
-    });
+    }
+
     return results;
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+/**
+ * Resets the global leaderboard entries from Firestore.
+ * Deletes any existing entries and re-synchronizes the individual sub-profiles.
+ */
+export async function resetGlobalLeaderboard(activeProfiles?: Profile[]): Promise<void> {
+  const path = 'leaderboards';
+  try {
+    const q = query(collection(db, 'leaderboards'), limit(300));
+    const querySnapshot = await getDocs(q);
+    const currentUid = auth.currentUser?.uid;
+    const isAdmin = auth.currentUser?.email === 'antoniu.andrei.radu@gmail.com';
+
+    // Delete all eligible entries (user's own or all if admin/owner)
+    const deletePromises: Promise<void>[] = [];
+    querySnapshot.forEach((d) => {
+      const data = d.data();
+      if (isAdmin || !currentUid || data.userId === currentUid || d.id === currentUid) {
+        deletePromises.push(deleteDoc(doc(db, 'leaderboards', d.id)));
+      }
+    });
+
+    await Promise.allSettled(deletePromises);
+
+    // If active profiles are passed, re-sync them as fresh individual subprofiles
+    if (activeProfiles && activeProfiles.length > 0 && currentUid) {
+      await syncAccountProfilesToCloud(activeProfiles);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
 
