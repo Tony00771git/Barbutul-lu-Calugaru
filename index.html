@@ -31,16 +31,26 @@
 
     <!-- Service Worker Registration -->
     <script>
+      // Only register Service Worker for standalone installed PWA outside of iframes and dev
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then((reg) => {
-              console.log('[ServiceWorker] Înregistrat cu succes. Scope:', reg.scope);
-            })
-            .catch((err) => {
-              console.warn('[ServiceWorker] Înregistrarea a eșuat:', err);
-            });
-        });
+        if (window.self === window.top && window.location.protocol === 'https:' && !window.location.hostname.includes('run.app')) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+              .then((reg) => {
+                console.log('[ServiceWorker] Înregistrat cu succes. Scope:', reg.scope);
+              })
+              .catch((err) => {
+                console.warn('[ServiceWorker] Înregistrarea a eșuat:', err);
+              });
+          });
+        } else {
+          // Inside iframe preview or dev server, unregister any existing service worker to prevent stale preview cache
+          navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (const registration of registrations) {
+              registration.unregister();
+            }
+          });
+        }
       }
     </script>
   </head>

@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { PineappleBoard, PineapplePlayerState, PlayingCard } from '../types';
 import { PineappleBoardView } from './PineappleBoardView';
 import { SUIT_SYMBOLS } from '../lib/pineapplePokerEvaluator';
-import { Eye, Maximize2, X, Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { BOT_PROFILES } from '../lib/pineappleBotAi';
+import { Eye, Maximize2, X, Sparkles, CheckCircle2, AlertTriangle, Bot, BrainCircuit } from 'lucide-react';
 
 interface PineappleOpponentWidgetProps {
   opponent: PineapplePlayerState;
@@ -20,6 +21,10 @@ export const PineappleOpponentWidget: React.FC<PineappleOpponentWidgetProps> = (
 
   const board = opponent.board || { top: [], middle: [], bottom: [] };
   const totalPlaced = board.top.length + board.middle.length + board.bottom.length;
+  const isBot = opponent.isBot;
+  const botDiff = opponent.botDifficulty || 'medium';
+  const botProfile = BOT_PROFILES[botDiff] || BOT_PROFILES.medium;
+  const isThinking = isBot && !opponent.handLocked;
 
   const renderMiniSlot = (card: PlayingCard | undefined, key: string) => {
     if (!card) {
@@ -69,6 +74,12 @@ export const PineappleOpponentWidget: React.FC<PineappleOpponentWidgetProps> = (
                 ✨
               </span>
             )}
+            {isThinking && (
+              <span className="absolute -bottom-1 -right-1 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+              </span>
+            )}
           </div>
           <div className="text-left min-w-0">
             <div className="flex items-center gap-1">
@@ -83,6 +94,11 @@ export const PineappleOpponentWidget: React.FC<PineappleOpponentWidgetProps> = (
                 <span className="text-emerald-400 font-bold flex items-center gap-0.5">
                   <CheckCircle2 className="w-2.5 h-2.5" />
                   <span>{language === 'ro' ? 'Gata' : 'Ready'}</span>
+                </span>
+              ) : isThinking ? (
+                <span className="text-amber-400 font-bold animate-pulse flex items-center gap-0.5">
+                  <BrainCircuit className="w-2.5 h-2.5 animate-spin" />
+                  <span>{language === 'ro' ? 'Gândește...' : 'Thinking...'}</span>
                 </span>
               ) : (
                 <span className="text-amber-400/80">
@@ -143,8 +159,15 @@ export const PineappleOpponentWidget: React.FC<PineappleOpponentWidgetProps> = (
                         {opponent.name}
                       </h3>
                       {opponent.isBot && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-cinzel font-bold bg-amber-950/80 border border-amber-500/50 text-amber-300">
-                          AI Bot
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[9px] font-cinzel font-bold border"
+                          style={{
+                            backgroundColor: `${botProfile.color}20`,
+                            borderColor: botProfile.color,
+                            color: botProfile.color,
+                          }}
+                        >
+                          🤖 {botProfile.titleRo}
                         </span>
                       )}
                     </div>
@@ -153,6 +176,8 @@ export const PineappleOpponentWidget: React.FC<PineappleOpponentWidgetProps> = (
                         ? '✨ În Faza Fantezie (13 cărți simultan)'
                         : opponent.handLocked
                         ? '✓ A confirmat runda curentă'
+                        : isThinking
+                        ? '🤖 Calculează decizia optimă...'
                         : '⏳ În curs de plasare a cărților...'}
                     </div>
                   </div>

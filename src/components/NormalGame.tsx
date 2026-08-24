@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Player, Difficulty, CustomDoubles, MonkState } from '../types';
 import { useApp } from '../context/AppContext';
 import { Dice } from './Dice';
@@ -291,6 +291,30 @@ export const NormalGame: React.FC<NormalGameProps> = ({
       specialNote: `Ai băut cele ${sipsToDrink} guri acumulate și predai zarurile!`,
     });
   };
+
+  // Keyboard Shortcuts for Desktop: Space/Enter = Roll / Next Turn, P = Pass
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        if (turnResult) {
+          confirmTurnAndAdvance();
+        } else if (!isRolling) {
+          handleRoll();
+        }
+      } else if (e.code === 'KeyP' && !turnResult && !isRolling) {
+        e.preventDefault();
+        handlePassButton();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [turnResult, isRolling, normalCount, doubleCount, activePlayerIndex]);
 
   return (
     <div className="flex flex-col items-center justify-between min-h-[90vh] px-4 py-4 max-w-lg mx-auto relative select-none">

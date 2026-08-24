@@ -17,6 +17,8 @@ interface PineappleCardProps {
   onReturnToHand?: () => void;
   onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDragEnd?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragOver?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDrop?: (e: React.DragEvent<HTMLDivElement>) => void;
   className?: string;
 }
 
@@ -31,15 +33,17 @@ export const PineappleCard: React.FC<PineappleCardProps> = ({
   onReturnToHand,
   onDragStart,
   onDragEnd,
+  onDragOver,
+  onDrop,
   className = '',
 }) => {
   const isRed = card.suit === 'h' || card.suit === 'd';
   const suitSymbol = SUIT_SYMBOLS[card.suit] || '♠';
 
   const sizeClasses = {
-    sm: 'w-10 h-14 text-xs rounded-lg p-1',
-    md: 'w-14 sm:w-16 h-20 sm:h-24 text-sm sm:text-base rounded-xl p-1.5',
-    lg: 'w-16 sm:w-20 h-24 sm:h-28 text-base sm:text-lg rounded-2xl p-2',
+    sm: 'w-8 sm:w-9 h-11 sm:h-13 text-[10px] sm:text-xs rounded-md sm:rounded-lg p-0.5',
+    md: 'w-11 sm:w-13 md:w-14 h-15 sm:h-18 md:h-20 text-xs sm:text-sm rounded-lg sm:rounded-xl p-1',
+    lg: 'w-13 sm:w-16 h-18 sm:h-22 text-sm sm:text-base rounded-xl p-1.5',
   }[size];
 
   const suitColor = isRed ? 'text-red-600' : 'text-stone-900';
@@ -50,18 +54,21 @@ export const PineappleCard: React.FC<PineappleCardProps> = ({
       onDragStart={e => {
         if (isDisabled) return;
         e.dataTransfer.setData('text/plain', card.id);
+        e.dataTransfer.effectAllowed = 'move';
         if (onDragStart) onDragStart(e);
       }}
       onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       onClick={isDisabled ? undefined : onClick}
-      className={`relative select-none flex flex-col justify-between transition-all duration-200 cursor-pointer ${sizeClasses} ${
+      className={`relative select-none flex flex-col justify-between transition-transform duration-75 cursor-grab active:cursor-grabbing touch-manipulation ${sizeClasses} ${
         isDragging
-          ? 'opacity-40 scale-95 rotate-3'
+          ? 'opacity-30 scale-90'
           : isSelected
           ? 'ring-2 ring-[#ffd700] -translate-y-2 shadow-[0_10px_25px_rgba(255,215,0,0.5)] z-20 scale-105'
           : isUncommitted
           ? 'ring-1 ring-amber-400/80 shadow-[0_0_10px_rgba(255,215,0,0.35)] hover:-translate-y-1'
-          : 'hover:-translate-y-1 hover:shadow-lg active:scale-95'
+          : 'hover:-translate-y-1 hover:shadow-lg'
       } ${
         isDisabled ? 'opacity-50 cursor-not-allowed filter grayscale' : ''
       } bg-gradient-to-b from-[#fdfbf7] via-[#f7f2e7] to-[#eadecc] border-2 ${

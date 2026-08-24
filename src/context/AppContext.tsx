@@ -13,6 +13,8 @@ import {
 } from '../lib/progression';
 
 export interface AchievementEvent {
+  type?: string;
+  count?: number;
   sipsDelta?: number;
   chugsDelta?: number;
   isHeaven?: boolean;
@@ -43,12 +45,34 @@ export interface AchievementEvent {
   isCrapsSnakeEyes?: boolean;
   isCrapsMidnight?: boolean;
   casinoChips?: number;
+  isPineapplePlayed?: boolean;
+  isPineappleWin?: boolean;
+  isPineappleBotWinEasy?: boolean;
+  isPineappleBotWinMedium?: boolean;
+  isPineappleBotWinHard?: boolean;
+  isPineappleFlawlessHand?: boolean;
+  isPineappleFantasyLand?: boolean;
+  isPineappleFantasyStreak?: boolean;
+  isPineappleRoyalties?: boolean;
+  isPineappleRoyalFlush?: boolean;
+  isPineappleScoop?: boolean;
+  isPineappleDragon?: boolean;
+  pineappleHandsPlayed?: number;
   isDoubles?: boolean;
   isAvatarCustomized?: boolean;
   isTriviaCorrect?: boolean;
   isRentPaid?: boolean;
   isPassDice?: boolean;
   hasComebackWin?: boolean;
+  // Crash Dragon mode flags
+  isCrashPlayed?: boolean;
+  isCrashWin?: boolean;
+  isCrashSafeLanding?: boolean;
+  isCrashChickenEgg?: boolean;
+  isCrashHighMultiplier?: boolean;
+  isCrashBotVictor?: boolean;
+  isCrashLegendaryX20?: boolean;
+  isCrashMaster?: boolean;
 }
 
 interface AppContextType {
@@ -61,23 +85,33 @@ interface AppContextType {
   autoSaveNewProfiles: boolean;
   setAutoSaveNewProfiles: (val: boolean) => void;
   profiles: Profile[];
+  drunkenCoins: number;
   addProfile: (name: string, avatarIcon?: string) => Profile | undefined;
   deleteProfile: (id: string) => void;
   updateProfileAvatar: (id: string, avatarIcon: string) => void;
-  updateProfileStats: (playerName: string, sips: number, chugs: number, avatarIcon?: string, winMode?: 'boardgame' | 'duel' | 'casino') => void;
-  batchUpdateProfiles: (playerStats: Array<{ name: string; sips: number; chugs: number; avatarIcon?: string; winMode?: 'boardgame' | 'duel' | 'casino' }>) => void;
-  recordWin: (playerName: string, mode: 'boardgame' | 'duel' | 'casino') => void;
+  updateProfileStats: (playerName: string, sips: number, chugs: number, avatarIcon?: string, winMode?: 'boardgame' | 'duel' | 'casino' | 'pineapple', pineapplePoints?: number) => void;
+  batchUpdateProfiles: (playerStats: Array<{ name: string; sips: number; chugs: number; avatarIcon?: string; winMode?: 'boardgame' | 'duel' | 'casino' | 'pineapple' }>) => void;
+  recordWin: (playerName: string, mode: 'boardgame' | 'duel' | 'casino' | 'pineapple') => void;
   checkAchievement: (playerName: string, event: AchievementEvent) => string[];
+  unlockAchievement: (achId: string, playerName?: string) => string[];
+  recordGameStats: (stats: {
+    mode?: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'crash' | string;
+    isWin?: boolean;
+    sipsDelta?: number;
+    chugsDelta?: number;
+    isCrashWin?: boolean;
+    playerName?: string;
+  }) => void;
   awardMatchXp: (
     playerName: string,
-    mode: 'normal' | 'boardgame' | 'duel' | 'casino',
+    mode: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple',
     isWinner: boolean,
     turnsPlayed?: number,
     newAchievements?: string[],
     extraStats?: { sips?: number; chugs?: number; gold?: number; chips?: number; flawless?: boolean }
   ) => MatchXpBreakdown | null;
-  spendDrunkenCoins: (profileId: string, amount: number) => boolean;
-  addDrunkenCoins: (profileId: string, amount: number) => void;
+  spendDrunkenCoins: (profileIdOrCost: string | number, amount?: number) => boolean;
+  addDrunkenCoins: (amountOrProfileId: string | number, amount?: number) => void;
   activeXpBreakdown: { breakdown: MatchXpBreakdown; playerName: string; avatarIcon: string } | null;
   dismissXpBreakdown: () => void;
   activeLegendaryAchievement: { achievement: Achievement; playerName: string } | null;
@@ -97,6 +131,7 @@ const STORAGE_KEYS = {
   THEME: 'barbut_monk_theme',
   DICE_SKIN: 'barbut_monk_dice_skin',
   PROFILES: 'barbut_monk_profiles',
+  DRUNKEN_COINS: 'barbut_monk_drunken_coins_total',
   AUTO_SAVE_PROFILES: 'barbut_monk_auto_save_profiles',
   CUSTOM_THEME_BGS: 'barbut_monk_custom_theme_bgs',
 };
@@ -264,6 +299,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
   });
 
+  // Global Unified Drunken Coins Treasury Pool (Bănuți Turmentați 🍺🪙) across all profiles
+  const [drunkenCoins, setDrunkenCoins] = useState<number>(() => {
+    try {
+      const savedCoins = localStorage.getItem(STORAGE_KEYS.DRUNKEN_COINS);
+      if (savedCoins !== null) {
+        const parsed = parseInt(savedCoins, 10);
+        if (!isNaN(parsed) && parsed >= 0) return parsed;
+      }
+      // If no global balance saved, calculate initial sum from profiles or default bonus
+      const savedProfiles = localStorage.getItem(STORAGE_KEYS.PROFILES);
+      if (savedProfiles) {
+        const parsed = JSON.parse(savedProfiles);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const sum = parsed.reduce((acc: number, p: any) => acc + (p.drunkenCoins || 0), 0);
+          if (sum > 0) {
+            localStorage.setItem(STORAGE_KEYS.DRUNKEN_COINS, sum.toString());
+            return sum;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse saved drunken coins', e);
+    }
+    const initialDefault = 100; // Monastic treasury starting gold bonus
+    try {
+      localStorage.setItem(STORAGE_KEYS.DRUNKEN_COINS, initialDefault.toString());
+    } catch (e) {}
+    return initialDefault;
+  });
+
+  // Keep local storage synchronized whenever drunkenCoins change
+  const setAndPersistDrunkenCoins = (newValOrUpdater: number | ((prev: number) => number)) => {
+    setDrunkenCoins(prev => {
+      const next = typeof newValOrUpdater === 'function' ? newValOrUpdater(prev) : newValOrUpdater;
+      const safeNext = Math.max(0, Math.round(next));
+      try {
+        localStorage.setItem(STORAGE_KEYS.DRUNKEN_COINS, safeNext.toString());
+      } catch (e) {}
+      return safeNext;
+    });
+  };
+
   // Active XP Breakdown modal state
   const [activeXpBreakdown, setActiveXpBreakdown] = useState<{
     breakdown: MatchXpBreakdown;
@@ -429,6 +506,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           winsBoardgame: 0,
           winsDuel: 0,
           winsCasino: 0,
+          winsPineapple: 0,
           unlockedAchievements: [],
           createdAt: Date.now(),
         };
@@ -442,64 +520,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const bWins = targetProfile.winsBoardgame || 0;
       const dWins = targetProfile.winsDuel || 0;
       const cWins = targetProfile.winsCasino || 0;
+      const pWins = targetProfile.winsPineapple || 0;
 
       const tryUnlock = (achId: string, condition: boolean) => {
-        if (!unlocked.has(achId) && condition) {
+        if (!unlocked.has(achId) && (condition || event.type === achId)) {
           unlocked.add(achId);
           newUnlockedList.push(achId);
         }
       };
 
-      // ================= COMMON (19) =================
-      tryUnlock('first_sip', currSips >= 1 || Boolean(event.sipsDelta && event.sipsDelta > 0));
-      tryUnlock('heaven_blessing', Boolean(event.isHeaven));
-      tryUnlock('first_chug', currChugs >= 1 || Boolean(event.isChug));
-      tryUnlock('first_game', currGames >= 1);
-      tryUnlock('first_property', Boolean(event.boughtProperty));
-      tryUnlock('dungeon_visit', Boolean(event.isJail));
-      tryUnlock('gambler_monk', Boolean(event.isSlot));
-      tryUnlock('fate_card', Boolean(event.isCard));
-      tryUnlock('first_duel', Boolean(event.isDuelPlayed || event.isDuelWin || dWins > 0));
-      tryUnlock('first_casino', Boolean(event.isCasinoPlayed || event.isCasinoWin || cWins > 0));
-      tryUnlock('pass_dice_turn', Boolean(event.isPassDice));
-      tryUnlock('quick_reflex', Boolean(event.isDuelQuickReflex));
+      // ================= COMMON =================
+      tryUnlock('first_sip', currSips >= 1 || Boolean(event.sipsDelta && event.sipsDelta > 0) || event.type === 'first_sip');
+      tryUnlock('heaven_blessing', Boolean(event.isHeaven) || event.type === 'heaven_blessing');
+      tryUnlock('first_chug', currChugs >= 1 || Boolean(event.isChug) || event.type === 'first_chug');
+      tryUnlock('first_game', currGames >= 1 || event.type === 'first_game');
+      tryUnlock('first_property', Boolean(event.boughtProperty) || event.type === 'first_property');
+      tryUnlock('dungeon_visit', Boolean(event.isJail) || event.type === 'dungeon_visit');
+      tryUnlock('gambler_monk', Boolean(event.isSlot) || event.type === 'gambler_monk');
+      tryUnlock('fate_card', Boolean(event.isCard) || event.type === 'fate_card');
+      tryUnlock('first_duel', Boolean(event.isDuelPlayed || event.isDuelWin || dWins > 0) || event.type === 'first_duel');
+      tryUnlock('first_casino', Boolean(event.isCasinoPlayed || event.isCasinoWin || cWins > 0) || event.type === 'first_casino');
+      tryUnlock('first_pineapple', Boolean(event.isPineapplePlayed || event.isPineappleWin || pWins > 0) || event.type === 'pineapple_played' || event.type === 'first_pineapple');
+      tryUnlock('first_crash', Boolean(event.isCrashPlayed || event.isCrashWin) || event.type === 'first_crash');
+      tryUnlock('crash_safe_landing', Boolean(event.isCrashSafeLanding) || event.type === 'crash_safe_landing');
+      tryUnlock('crash_chicken_egg', Boolean(event.isCrashChickenEgg) || event.type === 'crash_chicken_egg');
+      tryUnlock('pineapple_bot_easy', Boolean(event.isPineappleBotWinEasy) || event.type === 'pineapple_bot_easy');
+      tryUnlock('pineapple_flawless_hand', Boolean(event.isPineappleFlawlessHand) || event.type === 'pineapple_flawless_hand');
+      tryUnlock('pineapple_fantasyland', Boolean(event.isPineappleFantasyLand) || event.type === 'pineapple_fantasyland');
+      tryUnlock('pineapple_royalties', Boolean(event.isPineappleRoyalties) || event.type === 'pineapple_royalties');
+      tryUnlock('pass_dice_turn', Boolean(event.isPassDice) || event.type === 'pass_dice_turn');
+      tryUnlock('quick_reflex', Boolean(event.isDuelQuickReflex) || event.type === 'quick_reflex');
       tryUnlock('sip_apprentice_10', currSips >= 10);
-      tryUnlock('monopoly_rent_pay', Boolean(event.isRentPaid));
-      tryUnlock('craps_passline_win', Boolean(event.isCrapsPassLineWin));
-      tryUnlock('dice_doubles_master', Boolean(event.isDoubles));
+      tryUnlock('monopoly_rent_pay', Boolean(event.isRentPaid) || event.type === 'monopoly_rent_pay');
+      tryUnlock('craps_passline_win', Boolean(event.isCrapsPassLineWin) || event.type === 'craps_passline_win');
+      tryUnlock('dice_doubles_master', Boolean(event.isDoubles) || event.type === 'dice_doubles_master');
       tryUnlock('avatar_customizer', Boolean(event.isAvatarCustomized || (targetProfile.avatarIcon && targetProfile.avatarIcon !== 'monk_drunk')));
-      tryUnlock('duel_rebound', Boolean(event.isDuelRebound));
-      tryUnlock('trivia_scholar', Boolean(event.isTriviaCorrect));
+      tryUnlock('duel_rebound', Boolean(event.isDuelRebound) || event.type === 'duel_rebound');
+      tryUnlock('trivia_scholar', Boolean(event.isTriviaCorrect) || event.type === 'trivia_scholar');
 
-      // ================= RARE (18) =================
-      tryUnlock('chug_trio', Boolean(event.singleGameChugs && event.singleGameChugs >= 3));
-      tryUnlock('chug_quintet', Boolean(event.singleGameChugs && event.singleGameChugs >= 5));
-      tryUnlock('drinker_50', Boolean(event.singleGameSips && event.singleGameSips >= 50));
-      tryUnlock('monopoly_full_color', Boolean(event.currentBoardProps && event.currentBoardProps >= 3));
-      tryUnlock('jailbreak_key', Boolean(event.isJailEscape));
-      tryUnlock('give_up_surrender', Boolean(event.isGiveUp));
-      tryUnlock('podium_winner', Boolean(event.isPodiumWinner));
-      tryUnlock('duel_victory', Boolean(event.isDuelWin || dWins >= 1));
-      tryUnlock('casino_highroller', Boolean(event.isCasinoWin || cWins >= 1));
+      // ================= RARE =================
+      tryUnlock('chug_trio', Boolean(event.singleGameChugs && event.singleGameChugs >= 3) || event.type === 'chug_trio');
+      tryUnlock('chug_quintet', Boolean(event.singleGameChugs && event.singleGameChugs >= 5) || event.type === 'chug_quintet');
+      tryUnlock('drinker_50', Boolean(event.singleGameSips && event.singleGameSips >= 50) || event.type === 'drinker_50');
+      tryUnlock('monopoly_full_color', Boolean(event.currentBoardProps && event.currentBoardProps >= 3) || event.type === 'monopoly_full_color');
+      tryUnlock('jailbreak_key', Boolean(event.isJailEscape) || event.type === 'jailbreak_key');
+      tryUnlock('give_up_surrender', Boolean(event.isGiveUp) || event.type === 'give_up_surrender');
+      tryUnlock('podium_winner', Boolean(event.isPodiumWinner) || event.type === 'podium_winner');
+      tryUnlock('duel_victory', Boolean(event.isDuelWin || dWins >= 1) || event.type === 'duel_victory');
+      tryUnlock('casino_highroller', Boolean(event.isCasinoWin || cWins >= 1) || event.type === 'casino_highroller');
+      tryUnlock('pineapple_victory', Boolean(event.isPineappleWin || pWins >= 1) || event.type === 'pineapple_win' || event.type === 'pineapple_victory');
+      tryUnlock('pineapple_bot_medium', Boolean(event.isPineappleBotWinMedium) || event.type === 'pineapple_bot_medium');
+      tryUnlock('pineapple_scoop', Boolean(event.isPineappleScoop) || event.type === 'pineapple_scoop');
+      tryUnlock('pineapple_dragon', Boolean(event.isPineappleDragon) || event.type === 'pineapple_dragon');
+      tryUnlock('pineapple_fantasyland_streak', Boolean(event.isPineappleFantasyStreak) || event.type === 'pineapple_fantasyland_streak');
+      tryUnlock('crash_high_multiplier', Boolean(event.isCrashHighMultiplier) || event.type === 'crash_high_multiplier');
+      tryUnlock('crash_bot_victor', Boolean(event.isCrashBotVictor) || event.type === 'crash_bot_victor');
       tryUnlock('sips_century_100', currSips >= 100);
       tryUnlock('chug_veteran_10', currChugs >= 10);
-      tryUnlock('monopoly_land_baron', Boolean(event.currentBoardProps && event.currentBoardProps >= 5));
-      tryUnlock('craps_snake_eyes', Boolean(event.isCrapsSnakeEyes));
-      tryUnlock('craps_midnight', Boolean(event.isCrapsMidnight));
-      tryUnlock('duel_streak_3', Boolean(event.duelStreak && event.duelStreak >= 3));
-      tryUnlock('gold_hoarder_100', Boolean(event.currentBoardGold && event.currentBoardGold >= 100));
-      tryUnlock('speed_demon_trivia', Boolean(event.isDuelQuickReflex));
-      tryUnlock('resurrected_phoenix', Boolean(event.hasComebackWin));
+      tryUnlock('monopoly_land_baron', Boolean(event.currentBoardProps && event.currentBoardProps >= 5) || event.type === 'monopoly_land_baron');
+      tryUnlock('craps_snake_eyes', Boolean(event.isCrapsSnakeEyes) || event.type === 'craps_snake_eyes');
+      tryUnlock('craps_midnight', Boolean(event.isCrapsMidnight) || event.type === 'craps_midnight');
+      tryUnlock('duel_streak_3', Boolean(event.duelStreak && event.duelStreak >= 3) || event.type === 'duel_streak_3');
+      tryUnlock('gold_hoarder_100', Boolean(event.currentBoardGold && event.currentBoardGold >= 100) || event.type === 'gold_hoarder_100');
+      tryUnlock('speed_demon_trivia', Boolean(event.isDuelQuickReflex) || event.type === 'speed_demon_trivia');
+      tryUnlock('resurrected_phoenix', Boolean(event.hasComebackWin) || event.type === 'resurrected_phoenix');
 
-      // ================= LEGENDARY (16) =================
+      // ================= LEGENDARY =================
       tryUnlock('legend_1000_sips', currSips >= 1000);
       tryUnlock('legend_50_chugs', currChugs >= 50);
       tryUnlock('legend_25_games', currGames >= 25);
       tryUnlock('legend_tycoon', Boolean(event.currentBoardProps && event.currentBoardProps >= 8 && event.currentBoardGold && event.currentBoardGold >= 150));
       tryUnlock('legend_ascended', Boolean(event.matchTurns && event.matchTurns >= 20 && event.matchChugs === 0));
       tryUnlock('legend_tri_champion', bWins >= 1 && dWins >= 1 && cWins >= 1);
+      tryUnlock('legend_quad_champion', bWins >= 1 && dWins >= 1 && cWins >= 1 && pWins >= 1);
       tryUnlock('legend_duel_grandmaster', dWins >= 10);
       tryUnlock('legend_craps_king', cWins >= 10);
+      tryUnlock('legend_pineapple_master', pWins >= 10);
+      tryUnlock('legend_crash_master', Boolean(event.isCrashMaster) || event.type === 'legend_crash_master');
+      tryUnlock('crash_legendary_x20', Boolean(event.isCrashLegendaryX20) || event.type === 'crash_legendary_x20');
+      tryUnlock('pineapple_bot_hard', Boolean(event.isPineappleBotWinHard) || event.type === 'pineapple_bot_hard');
+      tryUnlock('legend_pineapple_royal_flush', Boolean(event.isPineappleRoyalFlush) || event.type === 'legend_pineapple_royal_flush');
       tryUnlock('legend_boardgame_emperor', bWins >= 10);
       tryUnlock('legend_flawless_duel', Boolean(event.isDuelFlawless));
       tryUnlock('legend_500_sips', currSips >= 500);
@@ -563,7 +663,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       totalSips: 0,
       totalChugs: 0,
       totalXP: 0,
-      drunkenCoins: 50, // Welcome bonus of 50 Drunken Coins 🍺🪙
       currentLevel: 1,
       currentTitle_ro: prog.titleRo,
       currentTitle_en: prog.titleEn,
@@ -592,33 +691,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const spendDrunkenCoins = (profileId: string, amount: number): boolean => {
-    let success = false;
-    setProfiles(prev => {
-      const target = prev.find(p => p.id === profileId);
-      if (!target || (target.drunkenCoins || 0) < amount) {
-        return prev;
-      }
-      success = true;
-      return prev.map(p => (p.id === profileId ? { ...p, drunkenCoins: (p.drunkenCoins || 0) - amount } : p));
-    });
-    return success;
+  // Unified global drunken coins spending (supports either spendDrunkenCoins(cost) or legacy spendDrunkenCoins(profileId, cost))
+  const spendDrunkenCoins = (profileIdOrCost: string | number, amount?: number): boolean => {
+    const cost = typeof profileIdOrCost === 'number' ? profileIdOrCost : (amount || 0);
+    if (cost <= 0) return true;
+    if (drunkenCoins < cost) {
+      return false;
+    }
+
+    setAndPersistDrunkenCoins(prev => Math.max(0, prev - cost));
+    return true;
   };
 
-  const addDrunkenCoins = (profileId: string, amount: number) => {
-    setProfiles(prev => {
-      return prev.map(p => (p.id === profileId ? { ...p, drunkenCoins: (p.drunkenCoins || 0) + amount } : p));
-    });
+  // Unified global drunken coins earning (supports addDrunkenCoins(amount) or legacy addDrunkenCoins(profileId, amount))
+  const addDrunkenCoins = (amountOrProfileId: string | number, amount?: number) => {
+    const earned = typeof amountOrProfileId === 'number' ? amountOrProfileId : (amount || 0);
+    if (earned <= 0) return;
+
+    setAndPersistDrunkenCoins(prev => prev + earned);
   };
 
   const awardMatchXp = (
     playerName: string,
-    mode: 'normal' | 'boardgame' | 'duel' | 'casino',
+    mode: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple',
     isWinner: boolean,
     turnsPlayed: number = 5,
     newAchievements: string[] = [],
     extraStats?: { sips?: number; chugs?: number; gold?: number; chips?: number; flawless?: boolean }
   ): MatchXpBreakdown | null => {
+    // CRITICAL ANTI-FARMING RULE: If game ended under 2 turns, NO XP or Coins are awarded!
+    if (turnsPlayed < 2) {
+      return null;
+    }
+
     const trimmed = playerName.trim();
     if (!trimmed) return null;
     const lowerName = trimmed.toLowerCase();
@@ -631,14 +736,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       totalSips: 0,
       totalChugs: 0,
       totalXP: 0,
-      drunkenCoins: 50,
       currentLevel: 1,
       currentTitle_ro: 'Ucenic de Tavernă',
       currentTitle_en: 'Tavern Apprentice',
       createdAt: Date.now(),
     };
 
-    const breakdown = calculateMatchXpGain(existingProfile, mode, isWinner, turnsPlayed, newAchievements, extraStats);
+    const breakdown = calculateMatchXpGain(existingProfile, mode, isWinner, turnsPlayed, newAchievements, extraStats, drunkenCoins);
+    if (!breakdown) return null;
+
+    // Add gained coins to the global pool!
+    if (breakdown.drunkenCoinsGained > 0) {
+      setAndPersistDrunkenCoins(prev => prev + breakdown.drunkenCoinsGained);
+    }
 
     setProfiles(prev => {
       const idx = prev.findIndex(p => p.name.trim().toLowerCase() === lowerName);
@@ -648,7 +758,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         next[idx] = {
           ...next[idx],
           totalXP: breakdown.newTotalXP,
-          drunkenCoins: (next[idx].drunkenCoins || 0) + breakdown.drunkenCoinsGained,
           currentLevel: prog.currentLevel,
           currentTitle_ro: prog.titleRo,
           currentTitle_en: prog.titleEn,
@@ -660,7 +769,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           {
             ...existingProfile,
             totalXP: breakdown.newTotalXP,
-            drunkenCoins: (existingProfile.drunkenCoins || 50) + breakdown.drunkenCoinsGained,
             currentLevel: prog.currentLevel,
             currentTitle_ro: prog.titleRo,
             currentTitle_en: prog.titleEn,
@@ -678,7 +786,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return breakdown;
   };
 
-  const recordWin = (playerName: string, mode: 'boardgame' | 'duel' | 'casino') => {
+  const recordWin = (playerName: string, mode: 'boardgame' | 'duel' | 'casino' | 'pineapple') => {
     const trimmed = playerName.trim();
     if (!trimmed) return;
     const lowerName = trimmed.toLowerCase();
@@ -691,6 +799,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             winsBoardgame: mode === 'boardgame' ? (p.winsBoardgame || 0) + 1 : (p.winsBoardgame || 0),
             winsDuel: mode === 'duel' ? (p.winsDuel || 0) + 1 : (p.winsDuel || 0),
             winsCasino: mode === 'casino' ? (p.winsCasino || 0) + 1 : (p.winsCasino || 0),
+            winsPineapple: mode === 'pineapple' ? (p.winsPineapple || 0) + 1 : (p.winsPineapple || 0),
           };
         }
         return p;
@@ -701,6 +810,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       checkAchievement(trimmed, {
         isDuelWin: mode === 'duel',
         isCasinoWin: mode === 'casino',
+        isPineappleWin: mode === 'pineapple',
         isPodiumWinner: true,
       });
     }, 0);
@@ -711,7 +821,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sips: number,
     chugs: number,
     avatarIcon?: string,
-    winMode?: 'boardgame' | 'duel' | 'casino'
+    winMode?: 'boardgame' | 'duel' | 'casino' | 'pineapple',
+    pineapplePoints?: number
   ) => {
     const trimmed = playerName.trim();
     if (!trimmed) return;
@@ -722,6 +833,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (winMode === 'duel') baseMatchXp += 35;
     else if (winMode === 'casino') baseMatchXp += 60;
     else if (winMode === 'boardgame') baseMatchXp += 50;
+    else if (winMode === 'pineapple') baseMatchXp += 55;
 
     setProfiles(prev => {
       let matched = false;
@@ -743,6 +855,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             winsBoardgame: winMode === 'boardgame' ? (p.winsBoardgame || 0) + 1 : (p.winsBoardgame || 0),
             winsDuel: winMode === 'duel' ? (p.winsDuel || 0) + 1 : (p.winsDuel || 0),
             winsCasino: winMode === 'casino' ? (p.winsCasino || 0) + 1 : (p.winsCasino || 0),
+            winsPineapple: winMode === 'pineapple' ? (p.winsPineapple || 0) + 1 : (p.winsPineapple || 0),
+            totalPineapplePoints: (p.totalPineapplePoints || 0) + (pineapplePoints || 0),
           };
         }
         return p;
@@ -764,6 +878,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           winsBoardgame: winMode === 'boardgame' ? 1 : 0,
           winsDuel: winMode === 'duel' ? 1 : 0,
           winsCasino: winMode === 'casino' ? 1 : 0,
+          winsPineapple: winMode === 'pineapple' ? 1 : 0,
+          totalPineapplePoints: pineapplePoints || 0,
           createdAt: Date.now(),
         });
       }
@@ -776,15 +892,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         chugsDelta: chugs,
         isDuelWin: winMode === 'duel',
         isCasinoWin: winMode === 'casino',
+        isPineappleWin: winMode === 'pineapple',
         isDuelPlayed: winMode === 'duel' || sips > 0,
         isCasinoPlayed: winMode === 'casino',
+        isPineapplePlayed: winMode === 'pineapple',
         isPodiumWinner: Boolean(winMode),
       });
     }, 0);
   };
 
   const batchUpdateProfiles = (
-    playerStats: Array<{ name: string; sips: number; chugs: number; avatarIcon?: string; winMode?: 'boardgame' | 'duel' | 'casino' }>
+    playerStats: Array<{ name: string; sips: number; chugs: number; avatarIcon?: string; winMode?: 'boardgame' | 'duel' | 'casino' | 'pineapple' }>
   ) => {
     if (!playerStats || playerStats.length === 0) return;
 
@@ -800,6 +918,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (stat.winMode === 'duel') baseMatchXp += 35;
         else if (stat.winMode === 'casino') baseMatchXp += 60;
         else if (stat.winMode === 'boardgame') baseMatchXp += 50;
+        else if (stat.winMode === 'pineapple') baseMatchXp += 55;
 
         const existingIdx = updated.findIndex(p => p.name.trim().toLowerCase() === lower);
         if (existingIdx >= 0) {
@@ -820,6 +939,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             winsBoardgame: stat.winMode === 'boardgame' ? (current.winsBoardgame || 0) + 1 : (current.winsBoardgame || 0),
             winsDuel: stat.winMode === 'duel' ? (current.winsDuel || 0) + 1 : (current.winsDuel || 0),
             winsCasino: stat.winMode === 'casino' ? (current.winsCasino || 0) + 1 : (current.winsCasino || 0),
+            winsPineapple: stat.winMode === 'pineapple' ? (current.winsPineapple || 0) + 1 : (current.winsPineapple || 0),
           };
         } else {
           const prog = calculateProgression(baseMatchXp);
@@ -837,6 +957,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             winsBoardgame: stat.winMode === 'boardgame' ? 1 : 0,
             winsDuel: stat.winMode === 'duel' ? 1 : 0,
             winsCasino: stat.winMode === 'casino' ? 1 : 0,
+            winsPineapple: stat.winMode === 'pineapple' ? 1 : 0,
             createdAt: Date.now(),
           });
         }
@@ -858,6 +979,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 0);
   };
 
+  const unlockAchievement = (achId: string, playerName?: string): string[] => {
+    const targetName = playerName || profiles[0]?.name || 'Jucător';
+    return checkAchievement(targetName, { type: achId });
+  };
+
+  const recordGameStats = (stats: {
+    mode?: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'crash' | string;
+    isWin?: boolean;
+    sipsDelta?: number;
+    chugsDelta?: number;
+    isCrashWin?: boolean;
+    playerName?: string;
+  }) => {
+    const targetName = stats.playerName || profiles[0]?.name || 'Jucător';
+    const sips = stats.sipsDelta || 0;
+    const chugs = stats.chugsDelta || 0;
+    updateProfileStats(
+      targetName,
+      sips,
+      chugs,
+      undefined,
+      stats.isWin && stats.mode !== 'crash' ? (stats.mode as any) : undefined
+    );
+    if (stats.mode === 'crash') {
+      checkAchievement(targetName, {
+        isCrashPlayed: true,
+        isCrashWin: Boolean(stats.isWin || stats.isCrashWin),
+        sipsDelta: sips,
+      });
+    }
+  };
+
   const resetAllStats = async () => {
     const defaultProg = calculateProgression(0);
     const wiped: Profile[] = profiles.map(p => ({
@@ -877,6 +1030,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setProfiles(wiped);
     localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(wiped));
+    setAndPersistDrunkenCoins(100);
     resetAllHeadToHead();
 
     if (user) {
@@ -911,6 +1065,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       autoSaveNewProfiles,
       setAutoSaveNewProfiles,
       profiles,
+      drunkenCoins,
       addProfile,
       deleteProfile,
       updateProfileAvatar,
@@ -918,6 +1073,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       batchUpdateProfiles,
       recordWin,
       checkAchievement,
+      unlockAchievement,
+      recordGameStats,
       awardMatchXp,
       spendDrunkenCoins,
       addDrunkenCoins,

@@ -9,7 +9,7 @@ import {
   resetGlobalLeaderboard,
 } from '../lib/firestoreService';
 
-type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'totalScore';
+type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'pineapple' | 'totalScore';
 
 interface GlobalLeaderboardSectionProps {
   className?: string;
@@ -111,6 +111,12 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
         if (winsB !== winsA) return winsB - winsA;
         return (b.totalScore || 0) - (a.totalScore || 0);
       }
+      if (activeCategory === 'pineapple') {
+        const winsA = a.winsPineapple || 0;
+        const winsB = b.winsPineapple || 0;
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
       // 'totalScore' (sips + chugs * 25)
       const scoreA = a.totalScore ?? (a.totalSips + 25 * a.totalChugs);
       const scoreB = b.totalScore ?? (b.totalSips + 25 * b.totalChugs);
@@ -149,6 +155,12 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
           primary: `${entry.winsCasino || 0} ${language === 'ro' ? 'victorii' : 'wins'}`,
           secondary: `${language === 'ro' ? 'Jocuri' : 'Games'}: ${entry.gamesPlayed || 0}`,
           badgeBg: 'bg-yellow-950/80 text-yellow-300 border-yellow-500/40',
+        };
+      case 'pineapple':
+        return {
+          primary: `${entry.winsPineapple || 0} ${language === 'ro' ? 'victorii' : 'wins'}`,
+          secondary: `${language === 'ro' ? 'Jocuri' : 'Games'}: ${entry.gamesPlayed || 0}`,
+          badgeBg: 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40',
         };
       case 'totalScore':
       default: {
@@ -260,11 +272,11 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
         </div>
       )}
 
-      {/* 4 Category Tabs Switcher */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-[#0b0805] p-1 rounded-xl border border-[#261c11]">
+      {/* 5 Category Tabs Switcher */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 bg-[#0b0805] p-1 rounded-xl border border-[#261c11]">
         <button
           onClick={() => setActiveCategory('monopoly')}
-          className={`py-1.5 px-1.5 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
+          className={`py-1.5 px-1 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
             activeCategory === 'monopoly'
               ? 'bg-gradient-to-r from-[#8a5d17] to-[#b3822b] text-white shadow-md border border-[#ffd700]/60'
               : 'text-gray-400 hover:text-gray-200'
@@ -276,38 +288,50 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
 
         <button
           onClick={() => setActiveCategory('duel')}
-          className={`py-1.5 px-1.5 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
+          className={`py-1.5 px-1 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
             activeCategory === 'duel'
               ? 'bg-gradient-to-r from-[#8a2417] to-[#bd3828] text-white shadow-md border border-[#ff7b6b]/60'
               : 'text-gray-400 hover:text-gray-200'
           }`}
         >
           <span className="text-sm">⚔️</span>
-          <span className="truncate">Duel 1v1</span>
+          <span className="truncate">Duel</span>
         </button>
 
         <button
           onClick={() => setActiveCategory('casino')}
-          className={`py-1.5 px-1.5 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
+          className={`py-1.5 px-1 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
             activeCategory === 'casino'
               ? 'bg-gradient-to-r from-[#8a6817] to-[#c79d28] text-black font-black shadow-md border border-[#ffd700]/70'
               : 'text-gray-400 hover:text-gray-200'
           }`}
         >
           <span className="text-sm">🎲</span>
-          <span className="truncate">Casino</span>
+          <span className="truncate">Craps</span>
+        </button>
+
+        <button
+          onClick={() => setActiveCategory('pineapple')}
+          className={`py-1.5 px-1 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
+            activeCategory === 'pineapple'
+              ? 'bg-gradient-to-r from-[#176636] to-[#2ca058] text-white font-black shadow-md border border-[#52e88a]/70'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          <span className="text-sm">🍍</span>
+          <span className="truncate">Pineapple</span>
         </button>
 
         <button
           onClick={() => setActiveCategory('totalScore')}
-          className={`py-1.5 px-1.5 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
+          className={`py-1.5 px-1 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
             activeCategory === 'totalScore'
               ? 'bg-gradient-to-r from-[#4b1d6d] to-[#782cb0] text-white shadow-md border border-[#ba6bf0]/60'
               : 'text-gray-400 hover:text-gray-200'
           }`}
         >
           <span className="text-sm">🔥</span>
-          <span className="truncate">{language === 'ro' ? 'Scor Total' : 'Total Score'}</span>
+          <span className="truncate">{language === 'ro' ? 'Total' : 'Total'}</span>
         </button>
       </div>
 

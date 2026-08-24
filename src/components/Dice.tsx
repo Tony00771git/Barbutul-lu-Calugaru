@@ -157,20 +157,26 @@ export const Dice: React.FC<DiceProps> = ({
         <button
           disabled={disabled || isRolling}
           onClick={onRoll}
-          className={`${buttonClasses} transition-all duration-200 active:scale-95 flex items-center justify-center gap-1.5 shadow ${
+          className={`${buttonClasses} transition-all duration-200 active:scale-95 flex items-center justify-center gap-2 shadow cursor-pointer ${
             disabled || isRolling
               ? 'bg-gray-600 cursor-not-allowed opacity-60'
               : 'bg-gradient-to-r from-[#e8c84a] to-[#ffd700] hover:brightness-110 gold-glow'
           }`}
         >
-          {isRolling ? '...' : t('rollDice')}
+          <span>{isRolling ? '...' : t('rollDice')}</span>
+          {!disabled && !isRolling && (
+            <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-black/20 text-black text-[10px] font-mono border border-black/30 font-bold">
+              Space ⏎
+            </kbd>
+          )}
         </button>
       )}
 
       {onRoll && size !== 'sm' && (
-        <span className="text-xs text-[#888] font-barlow flex items-center gap-1">
-          {t('shakeDevice')}
-        </span>
+        <div className="flex items-center gap-2 text-xs text-[#888] font-barlow">
+          <span>{t('shakeDevice')}</span>
+          <span className="hidden sm:inline text-gray-500">• Tasta Space / Enter</span>
+        </div>
       )}
     </div>
   );

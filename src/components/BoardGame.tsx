@@ -556,6 +556,43 @@ export const BoardGame: React.FC<BoardGameProps> = ({
     return { border: 'border-purple-600/70', colorBar: 'bg-purple-500', badge: 'bg-purple-800/80', text: 'text-purple-300' };
   };
 
+  // Keyboard Shortcuts for Desktop: Space/Enter = Roll / Next Turn / Confirm
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        if (turnResult) {
+          advanceTurn();
+        } else if (showJailModal) {
+          setShowJailModal(false);
+          advanceTurn();
+        } else if (!isMoving && !activePlayer.inJail && !showGiveUpConfirm && !showSlotModal && !showMerchantModal && !showTwoTruthsModal && !activeTrivia && !activeCard && !pendingBuyTile && !inspectTile) {
+          handleRollAndMove();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    turnResult,
+    pendingBuyTile,
+    inspectTile,
+    showJailModal,
+    isMoving,
+    activePlayer,
+    showGiveUpConfirm,
+    showSlotModal,
+    showMerchantModal,
+    showTwoTruthsModal,
+    activeTrivia,
+    activeCard,
+  ]);
+
   return (
     <div className="flex flex-col items-center justify-between min-h-[92vh] px-2 py-2 max-w-3xl mx-auto relative select-none">
       <ParticleOverlay type={particleType} onComplete={() => setParticleType(null)} />

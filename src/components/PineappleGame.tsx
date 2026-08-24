@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   PineappleBoard,
+  PineappleBotDifficulty,
   PineappleMatchSettings,
   PineapplePlayerState,
   PineappleRoomState,
@@ -11,18 +12,23 @@ import { PineappleBoardView } from './PineappleBoardView';
 import { PineappleCard } from './PineappleCard';
 import { PineappleOpponentWidget } from './PineappleOpponentWidget';
 import { PineappleScoringModal } from './PineappleScoringModal';
+import { HeadToHeadTracker } from './HeadToHeadTracker';
+import { BOT_PROFILES } from '../lib/pineappleBotAi';
 import {
   addPineappleBot,
   removePineappleBot,
   removePineapplePlayer,
   createEmptyBoard,
+  endPineappleMatch,
   lockPineapplePlayerHand,
+  sortFantasyLandCards,
   startNextPineappleHand,
   startPineappleMatch,
   subscribeToPineappleRoom,
   updatePineapplePlayerBoard,
 } from '../lib/pineappleFirestoreService';
 import { checkIsFoul } from '../lib/pineapplePokerEvaluator';
+import { getHeadToHeadStats, recordHeadToHeadMatch } from '../lib/headToHeadService';
 
 interface PineappleGameProps {
   roomCode: string;
@@ -37,7 +43,7 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
   isHost,
   onHome,
 }) => {
-  const { language, t, addXpForPlayer } = useApp();
+  const { language, t, addXpForPlayer, recordWin, checkAchievement, updateProfileStats, awardMatchXp } = useApp();
   const [roomState, setRoomState] = useState<PineappleRoomState | null>(null);
   const [selectedSource, setSelectedSource] = useState<
     | { type: 'hand'; card: PlayingCard }
@@ -46,6 +52,11 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
   >(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showFantasyLandIntro, setShowFantasyLandIntro] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+
+  // Match completion reward guard ref
+  const rewardedMatchIdRef = React.useRef<string | null>(null);
+  const hasShownFantasyIntroForHandRef = React.useRef<number | null>(null);
 
   // Local placement state during current round
   const [localBoard, setLocalBoard] = useState<PineappleBoard>(createEmptyBoard());
@@ -85,7 +96,8 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
     // Check if new cards were dealt or new round began
     if (!myPlayerState.handLocked && (!roundSnapshot || roundSnapshot.key !== currentKey)) {
       const startingBoard = myPlayerState.board || createEmptyBoard();
-      const startingHand = myPlayerState.currentHandCards || [];
+      const rawHand = myPlayerState.currentHandCards || [];
+      const startingHand = myPlayerState.inFantasyLand ? sortFantasyLandCards(rawHand) : rawHand;
       const startingDiscard = myPlayerState.discarded || [];
 
       setLocalBoard(startingBoard);
@@ -106,9 +118,10 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
 
       // Trigger Fantasy Land banner if just entered
       if (myPlayerState.inFantasyLand && roomState.currentRoundInHand === 1) {
-        setShowFantasyLandIntro(true);
-        const timer = setTimeout(() => setShowFantasyLandIntro(false), 3500);
-        return () => clearTimeout(timer);
+        if (hasShownFantasyIntroForHandRef.current !== roomState.currentHand) {
+          hasShownFantasyIntroForHandRef.current = roomState.currentHand;
+          setShowFantasyLandIntro(true);
+        }
       }
     }
   }, [
@@ -121,6 +134,141 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
 
   const myState = roomState?.players.find(p => p.id === localPlayer.id);
   const opponentState = roomState?.players.find(p => p.id !== localPlayer.id);
+
+  // Match completion XP, Win & Achievements award
+  useEffect(() => {
+    if (!roomState || roomState.status !== 'finished') return;
+    const matchKey = `${roomCode}_finished_${roomState.winnerId || 'end'}`;
+    if (rewardedMatchIdRef.current === matchKey) return;
+    rewardedMatchIdRef.current = matchKey;
+
+    const isWinner = roomState.winnerId === localPlayer.id;
+    const myAccumulatedSips = myState?.sipsAccumulated || 0;
+    const myPoints = myState?.pointsAccumulated || 0;
+    const oppPoints = opponentState?.pointsAccumulated || 0;
+
+    const totalRoundsPlayed = (roomState.currentHand || 1) * 5;
+    const isAntiFarming = (roomState.currentHand || 1) < 2 && (roomState.currentRoundInHand || 1) < 2;
+
+    // Record stats and award match XP/coins
+    updateProfileStats(
+      localPlayer.name || localPlayer.id,
+      Math.round(myAccumulatedSips),
+      0,
+      undefined,
+      isWinner ? 'pineapple' : undefined,
+      myPoints
+    );
+
+    if (opponentState) {
+      const winnerName = isWinner
+        ? localPlayer.name
+        : roomState.winnerId === opponentState.id
+        ? opponentState.name
+        : null;
+      recordHeadToHeadMatch(
+        localPlayer.name,
+        opponentState.name,
+        winnerName,
+        'pineapple',
+        !winnerName,
+        myPoints,
+        oppPoints
+      );
+    }
+    
+    if (!isAntiFarming) {
+      awardMatchXp(localPlayer.name || localPlayer.id, 'pineapple', isWinner, totalRoundsPlayed, [], {
+        sips: Math.round(myAccumulatedSips),
+      });
+    }
+    checkAchievement(localPlayer.name || localPlayer.id, { type: 'pineapple_played', count: 1 });
+
+    if (isWinner) {
+      recordWin(localPlayer.name || localPlayer.id, 'pineapple');
+      checkAchievement(localPlayer.name || localPlayer.id, { type: 'pineapple_win', count: 1 });
+
+      // Bot-specific victory achievements (3 difficulties)
+      if (opponentState?.isBot) {
+        if (opponentState.botDifficulty === 'easy') {
+          checkAchievement(localPlayer.name || localPlayer.id, { isPineappleBotWinEasy: true });
+        } else if (opponentState.botDifficulty === 'medium') {
+          checkAchievement(localPlayer.name || localPlayer.id, { isPineappleBotWinMedium: true });
+        } else if (opponentState.botDifficulty === 'hard') {
+          checkAchievement(localPlayer.name || localPlayer.id, { isPineappleBotWinHard: true });
+        }
+      }
+    }
+  }, [roomState?.status, roomState?.winnerId, localPlayer.id, localPlayer.name, roomCode, myState?.sipsAccumulated, myState?.pointsAccumulated, opponentState?.name, opponentState?.id, opponentState?.pointsAccumulated, opponentState?.isBot, opponentState?.botDifficulty]);
+
+  // Round / Hand specific achievements (Flawless Hand, Royalties, Scoop, Fantasy Land, Dragon & Royal Flush)
+  useEffect(() => {
+    if (!roomState) return;
+
+    // Fantasy Land trigger
+    if (myState?.qualifiesNextFantasyLand || myState?.inFantasyLand) {
+      checkAchievement(localPlayer.name || localPlayer.id, { type: 'pineapple_fantasyland', count: 1 });
+    }
+
+    // Fantasy Land streak / re-entry
+    if (myState?.inFantasyLand && myState?.qualifiesNextFantasyLand) {
+      checkAchievement(localPlayer.name || localPlayer.id, { isPineappleFantasyStreak: true });
+    }
+
+    // Hand Scoring evaluations
+    if (roomState.status === 'hand_scoring' && roomState.lastHandResult) {
+      const result = roomState.lastHandResult;
+      const playerA = roomState.players[0];
+      const playerB = roomState.players[1];
+      const isPlayerA = playerA?.id === localPlayer.id;
+      const isPlayerB = playerB?.id === localPlayer.id;
+
+      const myFoul = isPlayerA ? result.foulA : isPlayerB ? result.foulB : true;
+      const myRoyalties = isPlayerA ? result.totalRoyaltiesA : isPlayerB ? result.totalRoyaltiesB : 0;
+      const myDesc = isPlayerA ? result.handDescriptionA : isPlayerB ? result.handDescriptionB : null;
+
+      // 1. Flawless hand without fouls
+      if (!myFoul) {
+        checkAchievement(localPlayer.name || localPlayer.id, { isPineappleFlawlessHand: true });
+      }
+
+      // 2. High Royalties (10+)
+      if (myRoyalties >= 10) {
+        checkAchievement(localPlayer.name || localPlayer.id, { isPineappleRoyalties: true });
+      }
+
+      // 3. Scoop 3/3
+      const isPlayerScoop =
+        (result.scoopWinner === 'A' && isPlayerA) ||
+        (result.scoopWinner === 'B' && isPlayerB);
+      if (isPlayerScoop) {
+        checkAchievement(localPlayer.name || localPlayer.id, { type: 'pineapple_scoop', count: 1 });
+      }
+
+      // 4. Dragon / Royalties on bottom row or High Combos
+      if (myDesc && !myFoul) {
+        const bottomText = (myDesc.bottom || '').toLowerCase();
+        if (
+          bottomText.includes('full house') ||
+          bottomText.includes('culoare') ||
+          bottomText.includes('flush') ||
+          bottomText.includes('careu') ||
+          bottomText.includes('chintă') ||
+          bottomText.includes('straight')
+        ) {
+          checkAchievement(localPlayer.name || localPlayer.id, { isPineappleDragon: true });
+        }
+        if (
+          bottomText.includes('chintă regală') ||
+          bottomText.includes('royal flush') ||
+          bottomText.includes('careu de a') ||
+          bottomText.includes('four aces')
+        ) {
+          checkAchievement(localPlayer.name || localPlayer.id, { isPineappleRoyalFlush: true });
+        }
+      }
+    }
+  }, [roomState?.status, roomState?.currentHand, myState?.inFantasyLand, myState?.qualifiesNextFantasyLand, localPlayer.id, localPlayer.name, roomState?.lastHandResult]);
 
   // Derived set of cards that were committed from PREVIOUS rounds
   const committedCardIds = React.useMemo(() => {
@@ -154,15 +302,157 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
     isUncommitted: boolean
   ) => {
     if (!isUncommitted) {
-      // Locked card from earlier round
+      // Locked card from earlier round - cannot be modified
       return;
     }
 
+    // Case 1: A card from Hand is currently selected -> Swap it with this uncommitted card on the board!
+    if (selectedSource?.type === 'hand') {
+      const handCard = selectedSource.card;
+      handleSwapHandAndBoardCard(handCard, card, row);
+      return;
+    }
+
+    // Case 2: A different card from the Board is currently selected -> Swap positions between the two board cards
+    if (selectedSource?.type === 'board' && selectedSource.card.id !== card.id) {
+      handleSwapBoardCards(selectedSource.card, selectedSource.fromRow, card, row);
+      return;
+    }
+
+    // Case 3: Toggle selection of this board card
     if (selectedSource?.type === 'board' && selectedSource.card.id === card.id) {
       setSelectedSource(null);
     } else {
       setSelectedSource({ type: 'board', card, fromRow: row });
     }
+  };
+
+  // Swap a card in player's hand with an uncommitted card on the board
+  const handleSwapHandAndBoardCard = (
+    handCard: PlayingCard,
+    boardCard: PlayingCard,
+    targetRow: 'top' | 'middle' | 'bottom'
+  ) => {
+    // Replace boardCard with handCard on targetRow
+    const updatedRow = localBoard[targetRow].map(c => (c.id === boardCard.id ? handCard : c));
+    const updatedBoard: PineappleBoard = {
+      ...localBoard,
+      [targetRow]: updatedRow,
+    };
+
+    // Replace handCard with boardCard in localHandCards
+    const updatedHand = localHandCards.map(c => (c.id === handCard.id ? boardCard : c));
+
+    setLocalBoard(updatedBoard);
+    setLocalHandCards(updatedHand);
+    setSelectedSource(null);
+
+    if (roomCode && !myState?.inFantasyLand) {
+      updatePineapplePlayerBoard(
+        roomCode,
+        localPlayer.id,
+        updatedBoard,
+        updatedHand,
+        localDiscarded
+      );
+    }
+  };
+
+  // Swap two uncommitted cards on the board
+  const handleSwapBoardCards = (
+    cardA: PlayingCard,
+    rowA: 'top' | 'middle' | 'bottom',
+    cardB: PlayingCard,
+    rowB: 'top' | 'middle' | 'bottom'
+  ) => {
+    if (cardA.id === cardB.id) {
+      setSelectedSource(null);
+      return;
+    }
+
+    let updatedBoard: PineappleBoard;
+    if (rowA === rowB) {
+      const newRow = localBoard[rowA].map(c => {
+        if (c.id === cardA.id) return cardB;
+        if (c.id === cardB.id) return cardA;
+        return c;
+      });
+      updatedBoard = {
+        ...localBoard,
+        [rowA]: newRow,
+      };
+    } else {
+      const newRowA = localBoard[rowA].map(c => (c.id === cardA.id ? cardB : c));
+      const newRowB = localBoard[rowB].map(c => (c.id === cardB.id ? cardA : c));
+      updatedBoard = {
+        ...localBoard,
+        [rowA]: newRowA,
+        [rowB]: newRowB,
+      };
+    }
+
+    setLocalBoard(updatedBoard);
+    setSelectedSource(null);
+
+    if (roomCode && !myState?.inFantasyLand) {
+      updatePineapplePlayerBoard(
+        roomCode,
+        localPlayer.id,
+        updatedBoard,
+        localHandCards,
+        localDiscarded
+      );
+    }
+  };
+
+  // Handle dropping a card directly onto another card on the board
+  const handleDropOnCard = (
+    targetCard: PlayingCard,
+    targetRow: 'top' | 'middle' | 'bottom',
+    droppedCardId: string
+  ) => {
+    if (committedCardIds.has(targetCard.id)) {
+      // If target card is committed, just try placing on the row if room allows
+      const droppedCard =
+        localHandCards.find(c => c.id === droppedCardId) ||
+        localBoard.top.find(c => c.id === droppedCardId) ||
+        localBoard.middle.find(c => c.id === droppedCardId) ||
+        localBoard.bottom.find(c => c.id === droppedCardId);
+      if (droppedCard) handlePlaceCardOnRow(targetRow, droppedCard);
+      return;
+    }
+
+    // Is dropped card in hand?
+    const handCard = localHandCards.find(c => c.id === droppedCardId);
+    if (handCard) {
+      handleSwapHandAndBoardCard(handCard, targetCard, targetRow);
+      return;
+    }
+
+    // Is dropped card on board?
+    const fromRow = localBoard.top.some(c => c.id === droppedCardId)
+      ? 'top'
+      : localBoard.middle.some(c => c.id === droppedCardId)
+      ? 'middle'
+      : localBoard.bottom.some(c => c.id === droppedCardId)
+      ? 'bottom'
+      : null;
+
+    if (fromRow) {
+      const sourceCard = localBoard[fromRow].find(c => c.id === droppedCardId);
+      if (sourceCard && !committedCardIds.has(sourceCard.id)) {
+        handleSwapBoardCards(sourceCard, fromRow, targetCard, targetRow);
+        return;
+      }
+    }
+
+    // Fallback: place on row
+    const droppedCard =
+      localHandCards.find(c => c.id === droppedCardId) ||
+      localBoard.top.find(c => c.id === droppedCardId) ||
+      localBoard.middle.find(c => c.id === droppedCardId) ||
+      localBoard.bottom.find(c => c.id === droppedCardId);
+    if (droppedCard) handlePlaceCardOnRow(targetRow, droppedCard);
   };
 
   const handleReturnCardToHand = (card: PlayingCard, fromRow: 'top' | 'middle' | 'bottom') => {
@@ -171,7 +461,8 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
       ...localBoard,
       [fromRow]: updatedRow,
     };
-    const updatedHand = [...localHandCards, card];
+    const rawHand = [...localHandCards, card];
+    const updatedHand = myState?.inFantasyLand ? sortFantasyLandCards(rawHand) : rawHand;
 
     setLocalBoard(updatedBoard);
     setLocalHandCards(updatedHand);
@@ -349,7 +640,8 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
     if (localDiscarded.length <= committedDiscardCount) return;
     const cardToReturn = localDiscarded[localDiscarded.length - 1];
     const updatedDiscarded = localDiscarded.slice(0, localDiscarded.length - 1);
-    const updatedHand = [...localHandCards, cardToReturn];
+    const rawHand = [...localHandCards, cardToReturn];
+    const updatedHand = myState?.inFantasyLand ? sortFantasyLandCards(rawHand) : rawHand;
 
     setLocalDiscarded(updatedDiscarded);
     setLocalHandCards(updatedHand);
@@ -388,15 +680,43 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
     }
   };
 
+  // Check if placement allows auto-discard (2 cards placed out of 3 dealt in rounds 2..5, OR 13 cards placed in Fantasy Land)
+  const isAutoDiscardReady = (): boolean => {
+    if (!roomState || !myState) return false;
+
+    if (myState.inFantasyLand) {
+      const totalPlaced =
+        localBoard.top.length + localBoard.middle.length + localBoard.bottom.length;
+      return (
+        totalPlaced === 13 &&
+        localHandCards.length === 1 &&
+        localDiscarded.length === 0
+      );
+    }
+
+    if (roomState.currentRoundInHand <= 1) return false;
+    const totalPlaced =
+      localBoard.top.length + localBoard.middle.length + localBoard.bottom.length;
+    const placedThisRound = totalPlaced - initialBoardCount;
+    return (
+      placedThisRound === 2 &&
+      localHandCards.length === 1 &&
+      localDiscarded.length === committedDiscardCount
+    );
+  };
+
   // Check if placement requirements for current round are strictly met
   const isRoundComplete = (): boolean => {
     if (!roomState || !myState) return false;
 
     if (myState.inFantasyLand) {
-      // Fantasy Land: All 13 cards must be placed across 3 rows
+      // Fantasy Land: All 13 cards must be placed across 3 rows, with 1 card discarded (or auto-discard ready)
       const totalPlaced =
         localBoard.top.length + localBoard.middle.length + localBoard.bottom.length;
-      return totalPlaced === 13 && localHandCards.length === 0;
+      if (totalPlaced !== 13) return false;
+      if (localDiscarded.length === 1 && localHandCards.length === 0) return true;
+      if (isAutoDiscardReady()) return true;
+      return false;
     }
 
     if (roomState.currentRoundInHand === 1) {
@@ -407,10 +727,11 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
     }
 
     // Pineapple rounds 2, 3, 4, 5:
-    // Round 2: 7 total placed (5 + 2), 1 discarded
-    // Round 3: 9 total placed (7 + 2), 2 discarded
-    // Round 4: 11 total placed (9 + 2), 3 discarded
-    // Round 5: 13 total placed (11 + 2), 4 discarded
+    // If user placed 2 cards, the 1 remaining card will be auto-discarded when clicking Continue!
+    if (isAutoDiscardReady()) {
+      return true;
+    }
+
     const expectedPlaced = 5 + (roomState.currentRoundInHand - 1) * 2;
     const expectedDiscarded = roomState.currentRoundInHand - 1;
     const totalPlaced =
@@ -426,16 +747,71 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
   const handleConfirmLockRound = async () => {
     if (!roomCode || !isRoundComplete()) return;
     try {
+      let finalDiscarded = [...localDiscarded];
+      // Auto-discard remaining 1 card if user placed all required cards without manual discard
+      if (isAutoDiscardReady() && localHandCards.length === 1) {
+        finalDiscarded = [...localDiscarded, localHandCards[0]];
+      }
+
       await lockPineapplePlayerHand(
         roomCode,
         localPlayer.id,
         localBoard,
-        localDiscarded
+        finalDiscarded
       );
     } catch (e) {
       console.error('Error locking hand round:', e);
     }
   };
+
+  // Keyboard Shortcuts for Desktop: Space/Enter = Confirm round, 1/2/3/T/M/B = Place on Row, D = Discard
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.code === 'Space' || e.code === 'Enter') {
+        if (showFantasyLandIntro) {
+          e.preventDefault();
+          setShowFantasyLandIntro(false);
+        } else if (roomState?.status === 'finished' && isHost) {
+          e.preventDefault();
+          handleStartMatch();
+        } else if (roomState?.status === 'in_hand' && !myState?.handLocked && isRoundComplete()) {
+          e.preventDefault();
+          handleConfirmLockRound();
+        }
+      } else if (selectedSource && !myState?.handLocked) {
+        if (e.key === '1' || e.key.toLowerCase() === 't') {
+          e.preventDefault();
+          handlePlaceCardOnRow('top');
+        } else if (e.key === '2' || e.key.toLowerCase() === 'm') {
+          e.preventDefault();
+          handlePlaceCardOnRow('middle');
+        } else if (e.key === '3' || e.key.toLowerCase() === 'b' || e.key.toLowerCase() === 'j') {
+          e.preventDefault();
+          handlePlaceCardOnRow('bottom');
+        } else if (e.key.toLowerCase() === 'd' || e.key === '4') {
+          e.preventDefault();
+          handleDiscardCard();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    showFantasyLandIntro,
+    roomState?.status,
+    isHost,
+    myState?.handLocked,
+    isRoundComplete(),
+    selectedSource,
+    localBoard,
+    localHandCards,
+    localDiscarded,
+  ]);
 
   const handleStartMatch = async () => {
     if (!roomCode) return;
@@ -446,9 +822,19 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
     }
   };
 
-  const handleAddBot = async () => {
+  const handleEndGame = async () => {
     if (!roomCode) return;
-    await addPineappleBot(roomCode);
+    try {
+      await endPineappleMatch(roomCode);
+      setShowEndConfirm(false);
+    } catch (e) {
+      console.error('Error ending pineapple match:', e);
+    }
+  };
+
+  const handleAddBot = async (diff: PineappleBotDifficulty = 'medium') => {
+    if (!roomCode) return;
+    await addPineappleBot(roomCode, diff);
   };
 
   const handleRemovePlayer = async (playerId: string) => {
@@ -549,20 +935,30 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
               </label>
 
               {isHost && roomState.players.length < 2 && (
-                <button
-                  type="button"
-                  onClick={handleAddBot}
-                  className="px-2.5 py-1 text-xs bg-[#2b1f14] hover:bg-[#3d2c1c] text-[#ffd700] border border-[#61452a] hover:border-[#ffd700]/70 rounded-lg font-cinzel font-bold transition-all active:scale-95 flex items-center gap-1 cursor-pointer shadow"
-                >
-                  <span>🤖</span>
-                  <span>+ Adaugă Bot AI</span>
-                </button>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-gray-400 font-cinzel hidden xs:inline">+ Bot:</span>
+                  {(['easy', 'medium', 'hard'] as PineappleBotDifficulty[]).map((diff) => {
+                    const label = diff === 'easy' ? '🟢 Ușor' : diff === 'medium' ? '🟡 Mediu' : '🔴 Greu';
+                    return (
+                      <button
+                        key={diff}
+                        type="button"
+                        onClick={() => handleAddBot(diff)}
+                        className="px-2 py-1 text-[10px] bg-[#2b1f14] hover:bg-[#3d2c1c] text-[#ffd700] border border-[#61452a] hover:border-[#ffd700]/70 rounded-lg font-cinzel font-bold transition-all active:scale-95 flex items-center gap-0.5 cursor-pointer shadow"
+                        title={`Adaugă bot ${BOT_PROFILES[diff]?.name}`}
+                      >
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {roomState.players.map((p) => {
                 const isMe = p.id === localPlayer.id;
+                const botProfile = p.isBot ? BOT_PROFILES[p.botDifficulty || 'medium'] : null;
                 return (
                   <div
                     key={p.id}
@@ -579,8 +975,21 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
                           <span style={{ color: p.color || '#e8c84a' }}>{p.name}</span>
                           {isMe && <span className="text-amber-400 text-[10px]">(Tu)</span>}
                         </div>
-                        <div className="text-[10px] text-amber-400/80">
-                          {p.isHost ? '👑 Gazdă' : p.isBot ? '🤖 AI Monk (Bot)' : '⚔️ Oaspete'}
+                        <div className="text-[10px] text-amber-400/80 flex items-center gap-1">
+                          {p.isHost ? (
+                            '👑 Gazdă'
+                          ) : p.isBot ? (
+                            <span className="flex items-center gap-1 text-amber-300">
+                              <span>🤖 AI Bot</span>
+                              {botProfile && (
+                                <span className="px-1 py-0.2 rounded text-[9px] bg-stone-900 border border-stone-700">
+                                  {botProfile.titleRo}
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            '⚔️ Oaspete'
+                          )}
                         </div>
                       </div>
                     </div>
@@ -605,6 +1014,26 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
                 </div>
               )}
             </div>
+
+            {/* 1v1 Head-to-Head Tracker in Lobby */}
+            {roomState.players.length === 2 && (
+              <div className="pt-2">
+                <HeadToHeadTracker
+                  player1={{
+                    name: roomState.players[0].name,
+                    avatarIcon: roomState.players[0].avatarIcon,
+                    color: roomState.players[0].color,
+                  }}
+                  player2={{
+                    name: roomState.players[1].name,
+                    avatarIcon: roomState.players[1].avatarIcon,
+                    color: roomState.players[1].color,
+                  }}
+                  variant="banner"
+                  currentMode="pineapple"
+                />
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -648,6 +1077,9 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
     const winner = roomState.players.find(p => p.id === roomState.winnerId);
     const loser = roomState.players.find(p => p.id === roomState.loserId);
     const isWinner = roomState.winnerId === localPlayer.id;
+    const p0 = roomState.players[0];
+    const p1 = roomState.players[1];
+    const h2hStats = p0 && p1 ? getHeadToHeadStats(p0.name, p1.name) : null;
 
     return (
       <div className="max-w-xl mx-auto p-3 sm:p-4 space-y-4 animate-fade-in select-none">
@@ -676,13 +1108,13 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
             </p>
           </div>
 
-          {/* Stats Breakdown */}
+          {/* Current Match Stats Breakdown */}
           <div className="grid grid-cols-2 gap-3 text-xs font-cinzel pt-2">
             <div className="bg-emerald-950/40 p-3 rounded-2xl border border-emerald-500/50">
               <span className="text-emerald-400 font-bold block">CÂȘTIGĂTOR</span>
               <div className="text-base font-black text-white mt-1">{winner?.name}</div>
               <div className="text-[11px] text-gray-400 mt-0.5">
-                {winner?.sipsAccumulated.toFixed(1)} guri totale
+                {winner?.sipsAccumulated.toFixed(1)} guri • <strong className="text-[#ffd700]">{winner?.pointsAccumulated || 0} pct</strong>
               </div>
             </div>
 
@@ -690,10 +1122,28 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
               <span className="text-red-400 font-bold block">PIERZĂTOR</span>
               <div className="text-base font-black text-white mt-1">{loser?.name}</div>
               <div className="text-[11px] text-gray-400 mt-0.5">
-                {loser?.sipsAccumulated.toFixed(1)} guri totale
+                {loser?.sipsAccumulated.toFixed(1)} guri • <strong className="text-red-300">{loser?.pointsAccumulated || 0} pct</strong>
               </div>
             </div>
           </div>
+
+          {/* 1v1 ALL-TIME POINTS COUNTER */}
+          {h2hStats && p0 && p1 && (
+            <div className="bg-[#0c0804] border-2 border-[#ffd700]/60 rounded-2xl p-3 sm:p-4 text-center space-y-2 shadow-inner">
+              <div className="text-[11px] font-cinzel text-amber-300 font-bold uppercase tracking-wider flex items-center justify-center gap-1.5">
+                <span className="text-base">🏆</span>
+                <span>{language === 'ro' ? 'Puncte All-Time 1v1 Directe' : '1v1 All-Time Total Points'}</span>
+              </div>
+              <div className="flex items-center justify-center gap-4 text-2xl sm:text-3xl font-bebas font-black">
+                <span className="text-[#ffd700] gold-text-glow">{p0.name}: {h2hStats.player1Points || 0} pct</span>
+                <span className="text-gray-500 text-sm font-cinzel">⚔️</span>
+                <span className="text-[#e05c3a]">{p1.name}: {h2hStats.player2Points || 0} pct</span>
+              </div>
+              <div className="text-[11px] font-cinzel text-gray-400">
+                Palmares Meciuri: <strong className="text-[#ffd700]">{h2hStats.player1Wins} Victorii</strong> vs <strong className="text-[#ffd700]">{h2hStats.player2Wins} Victorii</strong> ({h2hStats.totalMatches} meciuri în total)
+              </div>
+            </div>
+          )}
 
           <div className="pt-3 space-y-2">
             {isHost && (
@@ -721,33 +1171,54 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
 
   // 3. IN_HAND / PLAYING VIEW
   return (
-    <div className="max-w-5xl mx-auto p-2 sm:p-3 space-y-3 animate-fade-in select-none">
-      {/* Fantasy Land Dramatic Screen Overlay */}
+    <div className="max-w-4xl mx-auto p-1 sm:p-1.5 space-y-1 sm:space-y-1.5 animate-fade-in select-none">
+      {/* Fantasy Land Dramatic Screen Overlay (Click anywhere to skip) */}
       {showFantasyLandIntro && (
         <div
           style={{ zIndex: 99999 }}
-          className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-lg flex flex-col items-center justify-center p-4 text-center animate-fade-in pointer-events-none select-none"
+          onClick={() => setShowFantasyLandIntro(false)}
+          className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-4 text-center animate-fade-in select-none cursor-pointer group"
+          role="button"
+          tabIndex={0}
+          aria-label="Fantasy Land Intro"
         >
-          <div className="text-6xl sm:text-7xl animate-bounce">✨👑✨</div>
-          <h1 className="text-3xl sm:text-5xl font-cinzel font-black text-[#ffd700] gold-text-glow mt-3 animate-pulse">
-            FANTASY LAND!
-          </h1>
-          <p className="text-sm sm:text-base font-cinzel text-amber-200 mt-2 max-w-md">
-            {language === 'ro'
-              ? 'Ai primit toate cele 13 cărți deodată! Aranjează-le liber într-o fază privată!'
-              : 'You received all 13 cards at once! Arrange them freely in private!'}
-          </p>
+          <div className="relative max-w-md w-full p-6 rounded-3xl bg-[#1a1209]/90 border-2 border-[#ffd700] shadow-[0_0_50px_rgba(255,215,0,0.4)] flex flex-col items-center space-y-3 transform transition-all group-hover:scale-102">
+            <div className="text-6xl sm:text-7xl animate-bounce">✨👑✨</div>
+            <h1 className="text-2xl sm:text-4xl font-cinzel font-black text-[#ffd700] gold-text-glow animate-pulse">
+              FANTASY LAND!
+            </h1>
+            <p className="text-xs sm:text-sm font-cinzel text-amber-200">
+              {language === 'ro'
+                ? 'Ai primit 14 cărți deodată în ordine (2 ➔ As)! Plasează 13 pe rânduri și aruncă 1 la Discard!'
+                : 'You received 14 cards sorted (2 ➔ Ace)! Place 13 on rows and discard 1!'}
+            </p>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowFantasyLandIntro(false);
+                }}
+                className="px-5 py-2 rounded-xl bg-gradient-to-r from-[#d4a017] via-[#ffd700] to-[#b8860b] text-black font-cinzel font-black text-xs sm:text-sm shadow-lg hover:shadow-[0_0_20px_rgba(255,215,0,0.6)] active:scale-95 transition-all cursor-pointer"
+              >
+                {language === 'ro' ? 'Începe Plasarea Cărților ➔ (Skip)' : 'Start Placing Cards ➔ (Skip)'}
+              </button>
+            </div>
+            <div className="text-[11px] text-gray-400 font-cinzel">
+              {language === 'ro' ? 'Apasă oriunde pe ecran pentru a închide' : 'Click / tap anywhere to dismiss'}
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Top Match Bar with Integrated Opponent Mini Widget */}
-      <div className="bg-[#140e08]/90 border border-[#2d1e12] rounded-2xl p-2 sm:p-2.5 flex items-center justify-between gap-2 shadow-lg">
-        {/* Left: Home & Round Info */}
-        <div className="flex items-center gap-2 min-w-0">
+      {/* Top Match Bar with Integrated Opponent Mini Widget & End Game button */}
+      <div className="bg-[#140e08]/90 border border-[#2d1e12] rounded-xl p-1 sm:p-1.5 flex items-center justify-between gap-1.5 sm:gap-2 shadow-md">
+        {/* Left: Home, Round Info & End Match */}
+        <div className="flex items-center gap-1.5 min-w-0">
           <button
             type="button"
             onClick={onHome}
-            className="w-8 h-8 rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-700 text-gray-300 hover:text-white text-xs font-cinzel font-bold flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors"
+            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-stone-900 hover:bg-stone-800 border border-stone-700 text-gray-300 hover:text-white text-xs font-cinzel font-bold flex items-center justify-center cursor-pointer flex-shrink-0 transition-colors"
             title={language === 'ro' ? 'Meniul principal' : 'Main menu'}
           >
             ✕
@@ -756,7 +1227,7 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
             <div className="text-xs sm:text-sm font-cinzel font-black text-[#ffd700] truncate">
               Pineapple 1v1 • Mâna #{roomState.currentHand}
             </div>
-            <div className="text-[10px] sm:text-[11px] font-cinzel text-gray-400 truncate">
+            <div className="text-[9px] sm:text-[10px] font-cinzel text-gray-400 truncate">
               {myState?.inFantasyLand
                 ? '✨ Faza Fantasy Land (13 cărți)'
                 : `Runda #${roomState.currentRoundInHand}/5 (${
@@ -767,26 +1238,38 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
         </div>
 
         {/* Center: Live Sips Tracker */}
-        <div className="hidden md:flex items-center bg-[#0a0704] px-3 py-1.5 rounded-xl border border-stone-800 text-xs font-cinzel">
+        <div className="hidden md:flex items-center bg-[#0a0704] px-2.5 py-1 rounded-lg border border-stone-800 text-[11px] font-cinzel">
           <div className="text-center">
-            <div className="text-[9px] text-gray-400 uppercase tracking-wider">Guri Acumulate</div>
+            <div className="text-[8px] text-gray-400 uppercase tracking-wider">Guri Acumulate</div>
             <div className="font-black">
               <span className="text-emerald-400 font-bold">{myState?.sipsAccumulated.toFixed(1)} (Tu)</span>
               <span className="text-gray-600"> vs </span>
               <span className="text-red-400 font-bold">{opponentState?.sipsAccumulated.toFixed(1)} ({opponentState?.name})</span>
-              <span className="text-gray-500 text-[10px]"> / {roomState.settings.sipsToEndGame}</span>
+              <span className="text-gray-500 text-[9px]"> / {roomState.settings.sipsToEndGame}</span>
             </div>
           </div>
         </div>
 
-        {/* Right: Interactive Opponent Mini Board & Smooth Expander Widget */}
-        {opponentState && (
-          <PineappleOpponentWidget
-            opponent={opponentState}
-            language={language}
-            sipsThreshold={roomState.settings.sipsToEndGame}
-          />
-        )}
+        {/* Right: End Match button & Interactive Opponent Mini Board */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowEndConfirm(true)}
+            className="px-2 py-1 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-500/50 text-red-200 text-[10px] sm:text-xs font-cinzel font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow flex-shrink-0"
+            title={language === 'ro' ? 'Încheie meciul curent' : 'End match now'}
+          >
+            <span>🏁</span>
+            <span className="hidden sm:inline">{language === 'ro' ? 'Încheie' : 'End'}</span>
+          </button>
+
+          {opponentState && (
+            <PineappleOpponentWidget
+              opponent={opponentState}
+              language={language}
+              sipsThreshold={roomState.settings.sipsToEndGame}
+            />
+          )}
+        </div>
       </div>
 
       {/* Main Center Area: Player's Interactive Board */}
@@ -799,6 +1282,7 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
             selectedCard={selectedCard}
             onSlotClick={(row) => handlePlaceCardOnRow(row)}
             onCardClick={handleCardClickOnBoard}
+            onCardDrop={handleDropOnCard}
             onReturnToHand={handleReturnCardToHand}
             onDropCard={(row, cardId) => {
               const card =
@@ -819,22 +1303,47 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
 
       {/* Hand Cards & Action Deck Controls (Only when not locked) */}
       {!myState?.handLocked ? (
-        <div className="bg-gradient-to-r from-[#1c130a] via-[#24170c] to-[#1c130a] border-2 border-[#ffd700] rounded-2xl p-3 space-y-2.5 shadow-xl gold-glow">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-[#2d1e12] pb-2">
+        <div className="bg-gradient-to-r from-[#1c130a] via-[#24170c] to-[#1c130a] border border-[#ffd700]/70 rounded-xl p-1.5 sm:p-2 space-y-1 sm:space-y-1.5 shadow-lg">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-[#2d1e12] pb-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-cinzel font-bold text-amber-300">
+              <span className="text-[11px] sm:text-xs font-cinzel font-bold text-amber-300">
                 {myState?.inFantasyLand
-                  ? '🃏 Fantezie: Plasează toate cele 13 cărți:'
+                  ? (language === 'ro' ? '🃏 Fantezie: Plasează 13 cărți și aruncă 1 (Discard):' : '🃏 Fantasy Land: Place 13 cards and discard 1:')
                   : roomState.currentRoundInHand === 1
                   ? '🃏 Runda 1: Plasează cele 5 cărți pe rânduri (0 discard):'
                   : `🃏 Runda ${roomState.currentRoundInHand}: Plasează 2 cărți pe rânduri și aruncă 1 (Discard):`}
               </span>
 
+              {/* Progress Chips for Fantasy Land */}
+              {myState?.inFantasyLand && (
+                <div className="flex items-center gap-1 text-[10px] font-cinzel">
+                  <span
+                    className={`px-1.5 py-0.2 rounded border font-bold ${
+                      (localBoard.top.length + localBoard.middle.length + localBoard.bottom.length) === 13
+                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                        : 'bg-amber-950/60 border-amber-500/50 text-amber-300'
+                    }`}
+                  >
+                    Plasate:{' '}
+                    {localBoard.top.length + localBoard.middle.length + localBoard.bottom.length}/13
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded border font-bold ${
+                      localDiscarded.length === 1
+                        ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                        : 'bg-red-950/60 border-red-500/50 text-red-300'
+                    }`}
+                  >
+                    Discard: {localDiscarded.length}/1
+                  </span>
+                </div>
+              )}
+
               {/* Progress Chips for Rounds 2..5 */}
               {roomState.currentRoundInHand > 1 && !myState?.inFantasyLand && (
-                <div className="flex items-center gap-1.5 text-[11px] font-cinzel">
+                <div className="flex items-center gap-1 text-[10px] font-cinzel">
                   <span
-                    className={`px-2 py-0.5 rounded-md border font-bold ${
+                    className={`px-1.5 py-0.2 rounded border font-bold ${
                       (localBoard.top.length + localBoard.middle.length + localBoard.bottom.length) - initialBoardCount === 2
                         ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
                         : 'bg-amber-950/60 border-amber-500/50 text-amber-300'
@@ -845,7 +1354,7 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
                     /2
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded-md border font-bold ${
+                    className={`px-1.5 py-0.2 rounded border font-bold ${
                       localDiscarded.length - committedDiscardCount === 1
                         ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
                         : 'bg-red-950/60 border-red-500/50 text-red-300'
@@ -857,48 +1366,123 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
               )}
             </div>
 
-            {/* Reset turn button */}
-            <button
-              type="button"
-              onClick={handleResetTurn}
-              className="self-end sm:self-auto px-2.5 py-1 text-[11px] rounded-lg bg-stone-900 hover:bg-stone-800 border border-stone-700 text-gray-300 hover:text-white font-cinzel font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
-              title="Resetează plasările din această rundă"
-            >
-              <span>↺</span>
-              <span>{language === 'ro' ? 'Resetează Runda' : 'Reset Round'}</span>
-            </button>
+            {/* Quick Actions: Sort 2-A & Reset Turn */}
+            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              {myState?.inFantasyLand && localHandCards.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setLocalHandCards(sortFantasyLandCards(localHandCards))}
+                  className="px-2 py-0.5 text-[10px] sm:text-[11px] rounded-lg bg-amber-950/70 hover:bg-amber-900 border border-amber-500/50 text-amber-200 hover:text-white font-cinzel font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow"
+                  title={language === 'ro' ? 'Ordonează cărțile din mână crescător de la 2 la As' : 'Sort hand cards ascending from 2 to Ace'}
+                >
+                  <span>📶</span>
+                  <span>{language === 'ro' ? 'Ordonează (2➔A)' : 'Sort (2➔A)'}</span>
+                </button>
+              )}
+
+              {/* Reset turn button */}
+              <button
+                type="button"
+                onClick={handleResetTurn}
+                className="px-2 py-0.5 text-[10px] sm:text-[11px] rounded-lg bg-stone-900 hover:bg-stone-800 border border-stone-700 text-gray-300 hover:text-white font-cinzel font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                title="Resetează plasările din această rundă"
+              >
+                <span>↺</span>
+                <span>{language === 'ro' ? 'Resetează' : 'Reset'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Context feedback message */}
           {selectedSource ? (
-            <div className="text-[11px] font-cinzel text-[#ffd700] font-bold bg-amber-950/40 border border-amber-500/40 px-2.5 py-1 rounded-lg flex items-center justify-between animate-pulse">
-              <span>
+            <div className="text-[10px] sm:text-[11px] font-cinzel text-[#ffd700] font-bold bg-amber-950/40 border border-amber-500/40 px-2 py-0.5 rounded-lg flex items-center justify-between animate-pulse">
+              <span className="truncate">
                 {selectedSource.type === 'hand'
-                  ? `Selectat din Mână: ${selectedSource.card.rank}${selectedSource.card.suit} ➔ Alege un rând sau apasă pe Discard`
-                  : `Selectat de pe Tablă (${selectedSource.fromRow.toUpperCase()}): ${selectedSource.card.rank}${selectedSource.card.suit} ➔ Apasă pe alt rând pt. mutare, sau pe Discard`}
+                  ? `Selectat din Mână: ${selectedSource.card.rank}${selectedSource.card.suit} ➔ Schimb (Swap) sau Slot Liber`
+                  : `Selectat de pe Tablă (${selectedSource.fromRow.toUpperCase()}): ${selectedSource.card.rank}${selectedSource.card.suit} ➔ Schimb sau Discard`}
               </span>
               <button
                 type="button"
                 onClick={() => setSelectedSource(null)}
-                className="text-amber-200 hover:text-white ml-2 text-xs font-bold"
+                className="text-amber-200 hover:text-white ml-2 text-[10px] font-bold cursor-pointer flex-shrink-0"
               >
                 ✕ Deselectează
               </button>
             </div>
           ) : (
-            <div className="text-[10px] font-cinzel text-gray-400">
-              💡 <em>Sfat: Poți muta orice carte plasată în această rundă făcând clic pe ea sau pe pictograma ⮌ de pe carte.</em>
+            <div className="text-[9px] sm:text-[10px] font-cinzel text-gray-400 truncate">
+              💡 <em>Sfat: Schimbă cărți (Swap) prin tap consecutiv sau Drag & Drop direct peste altă carte!</em>
             </div>
           )}
 
           {/* Cards Tray */}
-          <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap min-h-[85px] py-1 bg-[#0d0905]/60 rounded-xl border border-[#2d1e12]/60 p-2">
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const droppedId = e.dataTransfer.getData('text/plain');
+              // If dropped from board uncommitted to hand, return it to hand
+              const fromTop = localBoard.top.find(c => c.id === droppedId);
+              if (fromTop && !committedCardIds.has(fromTop.id)) {
+                handleReturnCardToHand(fromTop, 'top');
+                return;
+              }
+              const fromMid = localBoard.middle.find(c => c.id === droppedId);
+              if (fromMid && !committedCardIds.has(fromMid.id)) {
+                handleReturnCardToHand(fromMid, 'middle');
+                return;
+              }
+              const fromBot = localBoard.bottom.find(c => c.id === droppedId);
+              if (fromBot && !committedCardIds.has(fromBot.id)) {
+                handleReturnCardToHand(fromBot, 'bottom');
+                return;
+              }
+            }}
+            className="flex items-center justify-center gap-1.5 sm:gap-2 flex-wrap min-h-[68px] sm:min-h-[76px] py-1 bg-[#0d0905]/60 rounded-lg sm:rounded-xl border border-[#2d1e12]/60 p-1.5"
+          >
             {localHandCards.map((card) => (
               <PineappleCard
                 key={card.id}
                 card={card}
                 isSelected={selectedSource?.type === 'hand' && selectedSource.card.id === card.id}
-                onClick={() => handleSelectCardFromHand(card)}
+                onClick={() => {
+                  if (selectedSource?.type === 'board') {
+                    // Selected card on board -> click hand card -> swap!
+                    handleSwapHandAndBoardCard(card, selectedSource.card, selectedSource.fromRow);
+                  } else {
+                    handleSelectCardFromHand(card);
+                  }
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.dataTransfer.dropEffect = 'move';
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const droppedId = e.dataTransfer.getData('text/plain');
+                  if (droppedId && droppedId !== card.id) {
+                    const fromTop = localBoard.top.find(c => c.id === droppedId);
+                    if (fromTop && !committedCardIds.has(fromTop.id)) {
+                      handleSwapHandAndBoardCard(card, fromTop, 'top');
+                      return;
+                    }
+                    const fromMid = localBoard.middle.find(c => c.id === droppedId);
+                    if (fromMid && !committedCardIds.has(fromMid.id)) {
+                      handleSwapHandAndBoardCard(card, fromMid, 'middle');
+                      return;
+                    }
+                    const fromBot = localBoard.bottom.find(c => c.id === droppedId);
+                    if (fromBot && !committedCardIds.has(fromBot.id)) {
+                      handleSwapHandAndBoardCard(card, fromBot, 'bottom');
+                      return;
+                    }
+                  }
+                }}
                 size="md"
               />
             ))}
@@ -912,10 +1496,10 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
           </div>
 
           {/* Discard Zone & Lock Button Strip */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-1.5 border-t border-[#2d1e12]">
-            {/* Discard Target Box (for rounds 2..5) */}
-            {roomState.currentRoundInHand > 1 && !myState?.inFantasyLand && (
-              <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-1.5 sm:gap-2 pt-1 border-t border-[#2d1e12]">
+            {/* Discard Target Box (for rounds 2..5 or Fantasy Land) */}
+            {(roomState.currentRoundInHand > 1 || myState?.inFantasyLand) && (
+              <div className="flex items-center gap-1.5">
                 <div
                   onClick={() => selectedSource && handleDiscardCard()}
                   onDragOver={(e) => e.preventDefault()}
@@ -929,23 +1513,25 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
                       localBoard.bottom.find((c) => c.id === cardId);
                     if (card) handleDiscardCard(card);
                   }}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-dashed transition-all cursor-pointer flex-1 sm:flex-initial ${
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border-2 border-dashed transition-all cursor-pointer flex-1 sm:flex-initial ${
                     selectedSource
                       ? 'border-red-500 bg-red-950/50 text-red-200 hover:bg-red-950/70 shadow-[0_0_12px_rgba(239,68,68,0.4)] animate-pulse'
                       : 'border-stone-800 bg-[#0d0905] text-gray-500'
                   }`}
                 >
-                  <span className="text-lg">🔥</span>
+                  <span className="text-base">🔥</span>
                   <div className="text-left">
-                    <div className="text-xs font-cinzel font-bold">
+                    <div className="text-[10px] sm:text-[11px] font-cinzel font-bold">
                       {language === 'ro' ? 'Zona Discard (Aruncă 1)' : 'Discard Zone (Burn 1)'}
                     </div>
-                    <div className="text-[10px] text-gray-400">
+                    <div className="text-[9px] text-gray-400">
                       {localDiscarded.length - committedDiscardCount > 0
-                        ? `1 carte aruncată în această rundă`
+                        ? (language === 'ro' ? '1 carte aruncată' : '1 card discarded')
+                        : isAutoDiscardReady()
+                        ? (language === 'ro' ? '✨ Continuă (auto-discard)' : '✨ Continue (auto-discard)')
                         : selectedSource
-                        ? 'Apasă pt. a arunca cartea selectată'
-                        : 'Selectează o carte și apasă aici'}
+                        ? (language === 'ro' ? 'Apasă pt. a arunca' : 'Click to discard')
+                        : (language === 'ro' ? 'Selectează o carte' : 'Select a card')}
                     </div>
                   </div>
                 </div>
@@ -955,11 +1541,11 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
                   <button
                     type="button"
                     onClick={handleUndoDiscard}
-                    className="px-2.5 py-2 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/60 text-amber-200 text-xs font-cinzel font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow"
+                    className="px-2 py-1 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-500/60 text-amber-200 text-[10px] font-cinzel font-bold flex items-center gap-1 transition-all active:scale-95 cursor-pointer shadow"
                     title="Anulează discard-ul din această rundă"
                   >
                     <span>⮌</span>
-                    <span>Anulează</span>
+                    <span>{language === 'ro' ? 'Anulează' : 'Undo'}</span>
                   </button>
                 )}
               </div>
@@ -970,27 +1556,35 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
               type="button"
               onClick={handleConfirmLockRound}
               disabled={!isRoundComplete()}
-              className={`px-5 py-2.5 rounded-xl font-cinzel font-black text-xs sm:text-sm transition-all shadow-md cursor-pointer ${
+              className={`px-4 py-1.5 sm:py-2 rounded-xl font-cinzel font-black text-xs sm:text-sm transition-all shadow-md cursor-pointer ${
                 isRoundComplete()
                   ? 'bg-gradient-to-r from-[#d4a017] via-[#ffd700] to-[#b8860b] hover:from-[#e5b128] hover:via-[#ffe033] hover:to-[#c9971c] text-black shadow-[0_0_15px_rgba(255,215,0,0.5)] active:scale-95 animate-pulse'
                   : 'bg-stone-800 text-gray-500 cursor-not-allowed'
               }`}
             >
-              {isRoundComplete()
-                ? 'Confirmă Plasarea Rundei ➔'
+              {isAutoDiscardReady()
+                ? language === 'ro'
+                  ? 'Continuă ➔ (Aruncă 1 automat)'
+                  : 'Continue ➔ (Auto-discard 1)'
+                : isRoundComplete()
+                ? language === 'ro'
+                  ? 'Confirmă Plasarea Rundei ➔'
+                  : 'Confirm Round ➔'
+                : myState?.inFantasyLand
+                ? (language === 'ro' ? 'Plasează 13 cărți (1 discard)' : 'Place 13 cards (1 discard)')
                 : roomState.currentRoundInHand === 1
-                ? 'Plasează toate cele 5 cărți pe rânduri'
-                : `Plasează 2 cărți și aruncă 1`}
+                ? (language === 'ro' ? 'Plasează toate cele 5 cărți' : 'Place all 5 cards')
+                : (language === 'ro' ? 'Plasează 2 cărți pe rânduri' : 'Place 2 cards on rows')}
             </button>
           </div>
         </div>
       ) : (
-        <div className="bg-[#120d07] border border-[#2d1e12] rounded-2xl p-4 text-center space-y-1">
+        <div className="bg-[#120d07] border border-[#2d1e12] rounded-xl p-2.5 sm:p-3 text-center space-y-1">
           <div className="text-xs font-cinzel text-emerald-400 font-bold flex items-center justify-center gap-1.5">
             <span>✓</span>
             <span>{language === 'ro' ? 'Ai confirmat runda!' : 'Round locked!'}</span>
           </div>
-          <p className="text-[11px] font-cinzel text-gray-400">
+          <p className="text-[10px] sm:text-[11px] font-cinzel text-gray-400">
             {opponentState?.handLocked
               ? 'Ambii jucători sunt gata! Se calculează rezultatul...'
               : `Așteptăm ca ${opponentState?.name || 'adversarul'} să își termine runda...`}
@@ -1009,7 +1603,41 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
           isHost={isHost}
           language={language}
           onNextHand={handleNextHand}
+          onEndGame={() => setShowEndConfirm(true)}
         />
+      )}
+
+      {/* End Match Confirmation Modal */}
+      {showEndConfirm && (
+        <div style={{ zIndex: 99998 }} className="fixed inset-0 z-[99998] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1c1208] border-2 border-[#ffd700] rounded-2xl p-5 max-w-sm w-full text-center space-y-3 shadow-2xl animate-fade-in">
+            <div className="text-4xl animate-bounce">🏁</div>
+            <h3 className="text-lg font-cinzel font-bold text-[#ffd700]">
+              {language === 'ro' ? 'Închei meciul de Pineapple?' : 'End Pineapple Match?'}
+            </h3>
+            <p className="text-xs text-gray-300 font-barlow">
+              {language === 'ro'
+                ? 'Meciul se va opri acum și se vor salva scorul all-time, punctele și clasamentul final!'
+                : 'The match will stop now and all-time scores, points, and final standings will be recorded!'}
+            </p>
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowEndConfirm(false)}
+                className="py-2 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-gray-300 text-xs font-cinzel font-bold cursor-pointer transition-colors"
+              >
+                {language === 'ro' ? 'Anulează' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={handleEndGame}
+                className="py-2 px-3 rounded-xl bg-gradient-to-r from-red-700 to-red-800 hover:from-red-600 hover:to-red-700 text-white text-xs font-cinzel font-bold shadow-lg active:scale-95 cursor-pointer transition-all"
+              >
+                {language === 'ro' ? 'Încheie Meciul' : 'End Match'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

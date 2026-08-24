@@ -35,6 +35,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
 }) => {
   const {
     profiles,
+    drunkenCoins,
     addProfile,
     deleteProfile,
     updateProfileAvatar,
@@ -371,6 +372,35 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
           {/* TAB 2: ALL-TIME PROFILES & STATS */}
           {activeTab === 'alltime' && (
             <div className="space-y-4">
+              {/* Global Unified Drunken Coins Treasury Overview */}
+              <div className="p-3 rounded-2xl bg-gradient-to-r from-[#20150a] via-[#160e06] to-[#0c0804] border border-[#ffd700]/50 flex items-center justify-between shadow-md">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl">🍺🪙</span>
+                  <div>
+                    <div className="text-xs font-cinzel font-bold text-amber-200">
+                      {language === 'ro' ? 'Tezaur Global de Bănuți' : 'Global Drunken Coins Treasury'}
+                    </div>
+                    <div className="text-[10px] font-barlow text-gray-400">
+                      {language === 'ro' ? 'Comun pentru toate profilurile & jocurile' : 'Shared across all monk profiles & modes'}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-base sm:text-lg font-cinzel font-black text-[#ffd700] gold-text-glow">
+                    {drunkenCoins.toLocaleString()} 🍺🪙
+                  </span>
+                  {onOpenBazaar && (
+                    <button
+                      type="button"
+                      onClick={onOpenBazaar}
+                      className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-700 to-yellow-600 hover:brightness-110 text-black font-cinzel font-black text-[11px] shadow transition-all active:scale-95 cursor-pointer"
+                    >
+                      {language === 'ro' ? 'Bazar 🛒' : 'Bazaar 🛒'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Add Profile Form with Avatar Selector Button [+] */}
               <form onSubmit={handleAddProfile} className="flex items-center gap-2 bg-[#120e0a] p-2 rounded-2xl border border-[#2a2219]">
                 {/* Avatar Picker Square with [+] */}
@@ -464,6 +494,14 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
                               </div>
                               <div className="text-xs text-gray-400 mt-0.5">
                                 Jocuri: <b className="text-gray-300">{prof.gamesPlayed}</b> | 🍺 <b className="text-amber-300">{prof.totalSips}</b> guri | 🔥 <b className="text-red-400">{prof.totalChugs}</b> gropi | ⚡ <b className="text-[#ffd700]">{prof.totalXP || 0} XP</b>
+                                {Boolean((prof.winsBoardgame || 0) + (prof.winsDuel || 0) + (prof.winsCasino || 0) + (prof.winsPineapple || 0)) && (
+                                  <div className="mt-1 flex items-center gap-2 text-[10px] text-amber-200/90 flex-wrap">
+                                    {Boolean(prof.winsBoardgame) && <span>🏰 Monopoly: <b>{prof.winsBoardgame}</b></span>}
+                                    {Boolean(prof.winsDuel) && <span>⚔️ Duel: <b>{prof.winsDuel}</b></span>}
+                                    {Boolean(prof.winsCasino) && <span>🎲 Craps: <b>{prof.winsCasino}</b></span>}
+                                    {Boolean(prof.winsPineapple) && <span>🍍 Pineapple: <b>{prof.winsPineapple}</b></span>}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -477,22 +515,37 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
                           </button>
                         </div>
 
-                        {/* XP Progress Bar */}
-                        <div className="bg-[#0b0805] px-2.5 py-1.5 rounded-xl border border-stone-800/80">
-                          <div className="flex justify-between items-center text-[10px] font-cinzel mb-1">
+                        {/* XP Progress Bar & Next Title Milestone */}
+                        <div className="bg-[#0b0805] px-2.5 py-1.5 rounded-xl border border-stone-800/80 space-y-1">
+                          <div className="flex justify-between items-center text-[10px] font-cinzel">
                             <span className="text-gray-400">
                               {isRo ? `Progres Nivel ${prog.currentLevel}` : `Level ${prog.currentLevel} Progress`}
                             </span>
-                            <span className="text-[#e8c84a] font-bold">
-                              {prog.xpInCurrentLevel} / {prog.xpNeededForNextLevel} XP
+                            <span className="text-[#ffd700] font-bold font-mono">
+                              {prog.xpInCurrentLevel} / {prog.xpNeededForNextLevel} XP ({prog.progressPercent}%)
                             </span>
                           </div>
                           <div className="w-full h-2 bg-[#1c140c] rounded-full overflow-hidden border border-stone-800">
                             <div
-                              className="h-full bg-gradient-to-r from-amber-600 to-[#ffd700] rounded-full transition-all duration-500"
+                              className="h-full bg-gradient-to-r from-amber-600 via-yellow-400 to-[#ffd700] rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(255,215,0,0.5)]"
                               style={{ width: `${Math.max(3, prog.progressPercent)}%` }}
                             />
                           </div>
+                          {(() => {
+                            const nextTitle = getNextRankTitle(prog.currentLevel);
+                            if (!nextTitle) return null;
+                            const nextXpTotal = getTotalXpForLevel(nextTitle.minLevel);
+                            const xpLeft = Math.max(0, nextXpTotal - (prof.totalXP || 0));
+                            return (
+                              <div className="flex justify-between items-center text-[9px] text-gray-400 font-barlow pt-0.5">
+                                <span>Mai ai: <b className="text-[#ffd700] font-mono">{xpLeft.toLocaleString()} XP</b></span>
+                                <span className={`font-cinzel ${nextTitle.color} flex items-center gap-1`}>
+                                  <span>{nextTitle.icon}</span>
+                                  <span>{isRo ? nextTitle.titleRo : nextTitle.titleEn} (Nv. {nextTitle.minLevel})</span>
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -919,32 +972,43 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
                               </div>
                             )}
 
-                            {/* Progress Bar if multi-tier or cumulative */}
-                            {ach.target && (
-                              <div className="mt-2 space-y-1">
-                                <div className="flex items-center justify-between text-[10px] font-barlow text-gray-400">
-                                  <span>{language === 'ro' ? 'Progres realizare' : 'Achievement progress'}</span>
-                                  <span className="font-bold text-[#ffd700]">
-                                    {ach.current} / {ach.target}{' '}
-                                    ({Math.min(100, Math.round(((ach.current || 0) / ach.target) * 100))}%)
+                            {/* Progress Bar for multi-tier or cumulative achievements */}
+                            {ach.target && ach.target > 1 ? (
+                              <div className="mt-2.5 space-y-1.5 bg-[#0b0805]/70 p-2 rounded-xl border border-[#231a10]">
+                                <div className="flex items-center justify-between text-[11px] font-cinzel">
+                                  <span className="text-gray-400 font-bold flex items-center gap-1">
+                                    <span>🎯</span>
+                                    <span>{language === 'ro' ? 'Progres Trofeu:' : 'Trophy Progress:'}</span>
                                   </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-black text-[#ffd700] gold-text-glow">
+                                      {ach.current ?? 0} / {ach.target}
+                                    </span>
+                                    <span className={`text-[10px] px-1.5 py-0.2 rounded font-black ${
+                                      isUnlocked
+                                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
+                                        : 'bg-[#181109] text-amber-300 border border-amber-500/30'
+                                    }`}>
+                                      {Math.min(100, Math.round(((ach.current || 0) / ach.target) * 100))}%
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="w-full h-2 bg-[#090604] rounded-full overflow-hidden border border-[#2a2219]">
+                                <div className="w-full h-2.5 bg-[#070503] rounded-full overflow-hidden border border-[#2a2219] p-0.5">
                                   <div
                                     className={`h-full rounded-full transition-all duration-500 ${
                                       isUnlocked
-                                        ? 'bg-gradient-to-r from-emerald-500 to-green-400'
+                                        ? 'bg-gradient-to-r from-emerald-500 to-green-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'
                                         : willTriggerLevelUp
-                                        ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-[#ffd700]'
-                                        : 'bg-gradient-to-r from-amber-700 to-yellow-600'
+                                        ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-[#ffd700] shadow-[0_0_8px_rgba(255,215,0,0.5)]'
+                                        : 'bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500'
                                     }`}
                                     style={{
-                                      width: `${Math.min(100, Math.round(((ach.current || 0) / ach.target) * 100))}%`,
+                                      width: `${Math.min(100, Math.max(isUnlocked ? 100 : 3, Math.round(((ach.current || 0) / ach.target) * 100)))}%`,
                                     }}
                                   />
                                 </div>
                               </div>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </div>

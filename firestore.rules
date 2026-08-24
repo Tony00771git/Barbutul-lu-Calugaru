@@ -89,12 +89,58 @@ service cloud.firestore {
         data.createdAt is timestamp;
     }
 
+    // Public Profile Validation (Search index by shortId)
+    function isValidPublicProfile(data) {
+      return data.keys().hasAll(['uid', 'shortId', 'displayName']) &&
+        data.uid is string && data.uid == request.auth.uid &&
+        data.shortId is string && data.shortId.size() >= 4 && data.shortId.size() <= 16 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+        (!('avatarIcon' in data) || (data.avatarIcon is string && data.avatarIcon.size() <= 50000)) &&
+        (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
+        (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100)) &&
+        (!('currentTitle_en' in data) || (data.currentTitle_en is string && data.currentTitle_en.size() <= 100));
+    }
+
+    // Friend Record Validation (Within user's friends subcollection)
+    function isValidFriendRecord(data) {
+      return data.keys().hasAll(['friendUid', 'displayName']) &&
+        data.friendUid is string && data.friendUid.size() <= 128 &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+        (!('avatarIcon' in data) || (data.avatarIcon is string && data.avatarIcon.size() <= 50000)) &&
+        (!('shortId' in data) || (data.shortId is string && data.shortId.size() <= 16)) &&
+        (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
+        (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100));
+    }
+
+    // Friend Request Validation
+    function isValidFriendRequest(data) {
+      return data.keys().hasAll(['fromUid', 'fromName', 'toUid', 'status']) &&
+        data.fromUid is string && data.fromUid == request.auth.uid &&
+        data.toUid is string && data.toUid.size() <= 128 &&
+        data.fromName is string && data.fromName.size() >= 1 && data.fromName.size() <= 100 &&
+        data.status in ['pending', 'accepted', 'declined'] &&
+        (!('fromAvatar' in data) || (data.fromAvatar is string && data.fromAvatar.size() <= 50000)) &&
+        (!('fromShortId' in data) || (data.fromShortId is string && data.fromShortId.size() <= 16));
+    }
+
+    // Game Invite Validation (1v1 Duel, Pineapple, Crash)
+    function isValidGameInvite(data) {
+      return data.keys().hasAll(['fromUid', 'fromName', 'toUid', 'mode', 'roomCode', 'status']) &&
+        data.fromUid is string && data.fromUid == request.auth.uid &&
+        data.toUid is string && data.toUid.size() <= 128 &&
+        data.fromName is string && data.fromName.size() >= 1 && data.fromName.size() <= 100 &&
+        data.mode in ['duel', 'pineapple', 'crash'] &&
+        data.roomCode is string && data.roomCode.size() <= 10 &&
+        data.status in ['pending', 'accepted', 'declined', 'expired'] &&
+        (!('fromAvatar' in data) || (data.fromAvatar is string && data.fromAvatar.size() <= 50000));
+    }
+
     // Default deny all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // User Profiles Collection
+    // User Profiles Collection & Friends Subcollection
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow list: if false; // Private profiles cannot be listed
@@ -107,9 +153,39 @@ service cloud.firestore {
         isValidId(userId) &&
         isValidUserProfile(incoming()) &&
         incoming().userId == existing().userId &&
-        incoming().createdAt == existing().createdAt &&
+        ((!('createdAt' in existing()) || !(existing().createdAt is timestamp)) ? incoming().createdAt == request.time : incoming().createdAt == existing().createdAt) &&
         incoming().updatedAt == request.time;
       allow delete: if isOwner(userId);
+
+      // User's private friends subcollection
+      match /friends/{friendUid} {
+        allow get, list: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidId(friendUid) && isValidFriendRecord(incoming());
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // Public Profiles Directory (Search by shortId)
+    match /public_profiles/{shortId} {
+      allow get, list: if true;
+      allow create, update: if isSignedIn() && isValidId(shortId) && isValidPublicProfile(incoming()) && incoming().uid == request.auth.uid;
+      allow delete: if isSignedIn() && existing().uid == request.auth.uid;
+    }
+
+    // Friend Requests Collection
+    match /friend_requests/{requestId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(requestId) && isValidFriendRequest(incoming());
+      allow update: if isSignedIn() && (existing().toUid == request.auth.uid || existing().fromUid == request.auth.uid);
+      allow delete: if isSignedIn() && (existing().toUid == request.auth.uid || existing().fromUid == request.auth.uid);
+    }
+
+    // Direct 1v1 Game Invites Collection
+    match /game_invites/{inviteId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(inviteId) && isValidGameInvite(incoming());
+      allow update: if isSignedIn() && (existing().toUid == request.auth.uid || existing().fromUid == request.auth.uid);
+      allow delete: if isSignedIn() && (existing().toUid == request.auth.uid || existing().fromUid == request.auth.uid);
     }
 
     // Global Leaderboard Collection (Per-profile leaderboard entries)
@@ -156,6 +232,13 @@ service cloud.firestore {
     // Realtime Pineapple Poker Rooms Collection (2 Players OFC Pineapple)
     match /pineapple_rooms/{roomCode} {
       allow get, list: if true; // Players can lookup and join pineapple rooms
+      allow create, update: if isValidId(roomCode);
+      allow delete: if isValidId(roomCode);
+    }
+
+    // Realtime Crash Dragon Rooms Collection (1v1 Dragon Flight)
+    match /crash_rooms/{roomCode} {
+      allow get, list: if true; // Players can lookup and join crash rooms
       allow create, update: if isValidId(roomCode);
       allow delete: if isValidId(roomCode);
     }

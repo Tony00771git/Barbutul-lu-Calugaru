@@ -6,12 +6,15 @@ import { AvatarDisplay } from './AvatarDisplay';
 interface PodiumProps {
   mode: GameMode;
   players: Player[];
+  turnsPlayed?: number;
   onPlayAgain: () => void;
+  onRematch?: () => void;
   onHome?: () => void;
 }
 
-export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHome }) => {
+export const Podium: React.FC<PodiumProps> = ({ mode, players, turnsPlayed, onPlayAgain, onRematch, onHome }) => {
   const { t, language, batchUpdateProfiles, awardMatchXp } = useApp();
+  const isRo = language === 'ro';
 
   // Sort players depending on mode
   const sortedPlayers = [...players].sort((a, b) => {
@@ -32,8 +35,9 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
     }
   });
 
-  // Calculate turns played estimate for formula
+  // Calculate turns played estimate for formula if not explicitly passed
   const getTurnsEstimate = (p: Player) => {
+    if (turnsPlayed !== undefined) return turnsPlayed;
     if (mode === 'normal') {
       return Math.max(5, Math.floor((p.sipsTotal + (p.passesCount || 0) + 4) / 1.4));
     } else if (mode === 'boardgame') {
@@ -43,6 +47,8 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
     }
     return 6;
   };
+
+  const isTooShort = turnsPlayed !== undefined && turnsPlayed < 2;
 
   // Save profile stats and award XP & Drunken Coins on mount
   useEffect(() => {
@@ -64,8 +70,8 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
       batchUpdateProfiles(stats);
     }
 
-    // Award XP and Drunken Coins for top player / participants
-    if (topPlayer && topPlayer.name) {
+    // Award XP and Drunken Coins for top player / participants ONLY if 2+ turns played
+    if (topPlayer && topPlayer.name && !isTooShort) {
       const turns = getTurnsEstimate(topPlayer);
       const isWinner = mode === 'boardgame' ? !topPlayer.hasGivenUp : true;
       setTimeout(() => {
@@ -93,6 +99,26 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
   const top2 = sortedPlayers[1];
   const top3 = sortedPlayers[2];
 
+  // Global Keyboard shortcut for instant rematch: Space / Enter
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        if (onRematch) {
+          onRematch();
+        } else {
+          onPlayAgain();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onRematch, onPlayAgain]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[90vh] px-4 py-6 max-w-xl mx-auto space-y-6 select-none">
       <div className="text-center space-y-1 animate-fade-in">
@@ -107,6 +133,13 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
             ? (language === 'ro' ? '⚔️ Modul Duel 1v1 (Trivia)' : '⚔️ 1v1 Duel Mode (Trivia)')
             : (language === 'ro' ? 'Modul Boardgame (Aventură)' : 'Board Game Mode (Adventure)')}
         </p>
+
+        {/* Anti-farming warning if match was abandoned under 2 turns */}
+        {isTooShort && (
+          <div className="mt-2 px-3 py-1.5 rounded-xl bg-amber-950/70 border border-amber-500/60 text-amber-300 text-xs font-cinzel font-bold animate-pulse">
+            ⚠️ {isRo ? 'Meci încheiat prea repede (< 2 ture). Nu s-a acordat XP sau Bănuți Turmentați.' : 'Match ended too quickly (< 2 turns). No XP or Drunken Coins awarded.'}
+          </div>
+        )}
       </div>
 
       {/* Top 3 Visual Podium */}
@@ -281,7 +314,26 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
       </div>
 
       {/* Action Buttons */}
-      <div className="w-full space-y-2">
+      <div className="w-full space-y-2.5">
+        {/* Massive 1-Click Instant Rematch Button */}
+        <button
+          id="btn-instant-rematch"
+          type="button"
+          onClick={onRematch || onPlayAgain}
+          className="w-full py-4 sm:py-5 px-4 rounded-2xl bg-gradient-to-r from-[#ffd700] via-[#ffe066] to-[#e8c84a] text-black font-cinzel font-black text-lg sm:text-xl hover:brightness-110 gold-glow transition-all active:scale-98 shadow-[0_0_30px_rgba(255,215,0,0.5)] border-2 border-white/80 flex flex-col items-center justify-center cursor-pointer group"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-2xl group-hover:rotate-180 transition-transform duration-500">🔄</span>
+            <span>{isRo ? 'Revanșă Imediată' : 'Instant Rematch'}</span>
+            <span className="text-2xl group-hover:-rotate-180 transition-transform duration-500">🔄</span>
+          </div>
+          <div className="text-[11px] font-barlow font-bold text-amber-950 mt-0.5 flex items-center gap-1.5 opacity-90">
+            <span>{isRo ? 'Aceiași jucători & aceleași reguli • Repornire sub 1s' : 'Same players & rules • Instant restart'}</span>
+            <kbd className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-black/20 text-black text-[10px] font-mono border border-black/30">Space ⏎</kbd>
+          </div>
+        </button>
+
+        {/* View Match XP & Drunken Coins Progress */}
         <button
           onClick={() => {
             const top = sortedPlayers[0];
@@ -294,28 +346,31 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, onPlayAgain, onHo
               });
             }
           }}
-          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-950 via-[#2e1d0f] to-amber-950 border-2 border-[#ffd700] text-[#ffd700] font-cinzel font-black text-sm hover:brightness-125 transition-all active:scale-98 shadow-lg flex items-center justify-center gap-2"
+          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-950 via-[#2e1d0f] to-amber-950 border border-[#ffd700]/70 text-[#ffd700] font-cinzel font-bold text-xs sm:text-sm hover:brightness-125 transition-all active:scale-98 shadow-md flex items-center justify-center gap-2 cursor-pointer"
         >
           <span>⚡</span>
           <span>{language === 'ro' ? 'Vezi Progresul XP & Bănuți Turmentați' : 'View Match XP & Drunken Coins Progress'}</span>
           <span>🍺🪙</span>
         </button>
 
-        <button
-          onClick={onPlayAgain}
-          className="w-full py-4 rounded-xl bg-gradient-to-r from-[#e8c84a] to-[#ffd700] text-black font-cinzel font-black text-xl hover:brightness-110 gold-glow transition-all active:scale-98 shadow-lg uppercase"
-        >
-          {t('playAgainBtn')}
-        </button>
-
-        {onHome && (
+        {/* Change Players / Setup or Main Menu */}
+        <div className="flex gap-2">
           <button
-            onClick={onHome}
-            className="w-full py-3 rounded-xl bg-[#1e150f] border border-[#e8c84a]/50 text-[#ffd700] font-cinzel font-bold text-sm hover:bg-[#2b1d14] transition-all active:scale-98"
+            onClick={onPlayAgain}
+            className="flex-1 py-3 rounded-xl bg-[#1e150f] border border-[#e8c84a]/50 text-[#ffd700] font-cinzel font-bold text-xs sm:text-sm hover:bg-[#2b1d14] transition-all active:scale-98 cursor-pointer"
           >
-            🏠 {language === 'ro' ? 'Meniul Principal (Toate Modurile)' : 'Main Menu (All Modes)'}
+            ⚙️ {isRo ? 'Schimbă Jucătorii / Modul' : 'Setup & Settings'}
           </button>
-        )}
+
+          {onHome && (
+            <button
+              onClick={onHome}
+              className="flex-1 py-3 rounded-xl bg-[#140e08] border border-stone-800 text-stone-300 font-cinzel font-bold text-xs sm:text-sm hover:text-white hover:bg-stone-900 transition-all active:scale-98 cursor-pointer"
+            >
+              🏠 {language === 'ro' ? 'Meniu Principal' : 'Main Menu'}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

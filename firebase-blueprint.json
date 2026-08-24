@@ -66,6 +66,10 @@
           "type": "number",
           "description": "Total Casino duel victories across account"
         },
+        "winsPineapple": {
+          "type": "number",
+          "description": "Total Pineapple OFC poker victories across account"
+        },
         "totalXP": {
           "type": "number",
           "description": "Total accumulated progression experience points across account"
@@ -151,6 +155,10 @@
         "winsCasino": {
           "type": "number",
           "description": "Total Casino Barbut craps matches won"
+        },
+        "winsPineapple": {
+          "type": "number",
+          "description": "Total Pineapple OFC poker matches won"
         },
         "gamesPlayed": {
           "type": "number",
@@ -395,6 +403,118 @@
         }
       },
       "required": ["code", "startingChips", "hostPlayerId", "players", "status", "currentRound", "phase", "bets"]
+    },
+    "CrashRoom": {
+      "title": "CrashRoom",
+      "description": "Real-time 1v1 to 6 player Crash Dragon multiplier room state",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Room 4-letter code",
+          "maxLength": 10
+        },
+        "hostPlayerId": {
+          "type": "string",
+          "description": "Host player ID",
+          "maxLength": 128
+        },
+        "players": {
+          "type": "array",
+          "description": "Array of active players in room"
+        },
+        "settings": {
+          "type": "object",
+          "description": "Match settings such as sips threshold"
+        },
+        "status": {
+          "type": "string",
+          "description": "Room status: lobby, in_game, finished",
+          "enum": ["lobby", "in_game", "finished"]
+        },
+        "currentRound": {
+          "type": "object",
+          "description": "Current active crash round data"
+        },
+        "winnerId": {
+          "type": "string",
+          "description": "Winner player ID or null"
+        },
+        "loserId": {
+          "type": "string",
+          "description": "Loser player ID or null"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last update"
+        }
+      },
+      "required": ["code", "hostPlayerId", "players", "settings", "status", "currentRound"]
+    },
+    "PublicFriendProfile": {
+      "title": "PublicFriendProfile",
+      "description": "Public search record indexed by player unique short ID",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "shortId": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "avatarIcon": { "type": "string", "maxLength": 50000 },
+        "currentLevel": { "type": "number" },
+        "currentTitle_ro": { "type": "string", "maxLength": 100 },
+        "currentTitle_en": { "type": "string", "maxLength": 100 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "shortId", "displayName"]
+    },
+    "FriendRecord": {
+      "title": "FriendRecord",
+      "description": "Friend item inside user's private friends subcollection",
+      "type": "object",
+      "properties": {
+        "friendUid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "avatarIcon": { "type": "string", "maxLength": 50000 },
+        "shortId": { "type": "string", "maxLength": 16 },
+        "currentLevel": { "type": "number" },
+        "currentTitle_ro": { "type": "string", "maxLength": 100 },
+        "addedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["friendUid", "displayName"]
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "Cross-user friend request document",
+      "type": "object",
+      "properties": {
+        "fromUid": { "type": "string", "maxLength": 128 },
+        "fromName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "fromAvatar": { "type": "string", "maxLength": 50000 },
+        "fromShortId": { "type": "string", "maxLength": 16 },
+        "toUid": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromUid", "fromName", "toUid", "status"]
+    },
+    "GameInvite": {
+      "title": "GameInvite",
+      "description": "Direct 1v1 multiplayer game invite document",
+      "type": "object",
+      "properties": {
+        "fromUid": { "type": "string", "maxLength": 128 },
+        "fromName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "fromAvatar": { "type": "string", "maxLength": 50000 },
+        "toUid": { "type": "string", "maxLength": 128 },
+        "mode": { "type": "string", "enum": ["duel", "pineapple", "crash"] },
+        "roomCode": { "type": "string", "maxLength": 10 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined", "expired"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fromUid", "fromName", "toUid", "mode", "roomCode", "status"]
     }
   },
   "firestore": {
@@ -402,7 +522,7 @@
       "schema": "UserProfile",
       "description": "Private and editable user player profile"
     },
-    "/leaderboards/{userId}": {
+    "/leaderboards/{entryId}": {
       "schema": "LeaderboardEntry",
       "description": "Publicly readable tavern leaderboard scores"
     },
@@ -417,6 +537,30 @@
     "/casino_rooms/{roomCode}": {
       "schema": "CasinoRoom",
       "description": "Real-time synced 2-6 player casino room document"
+    },
+    "/pineapple_rooms/{roomCode}": {
+      "schema": "object",
+      "description": "Real-time synced 2-player Pineapple OFC poker room document"
+    },
+    "/crash_rooms/{roomCode}": {
+      "schema": "CrashRoom",
+      "description": "Real-time synced 1v1 to 6 player Crash Dragon room document"
+    },
+    "/public_profiles/{shortId}": {
+      "schema": "PublicFriendProfile",
+      "description": "Public directory of players indexed by unique short ID for easy friend search"
+    },
+    "/users/{userId}/friends/{friendUid}": {
+      "schema": "FriendRecord",
+      "description": "User's individual private friends subcollection"
+    },
+    "/friend_requests/{requestId}": {
+      "schema": "FriendRequest",
+      "description": "Cross-user friend invitations and requests"
+    },
+    "/game_invites/{inviteId}": {
+      "schema": "GameInvite",
+      "description": "Direct 1v1 game invitations (Duel, Pineapple, Crash)"
     },
     "/time_sync/{syncId}": {
       "schema": "object",

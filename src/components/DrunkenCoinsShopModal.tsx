@@ -7,17 +7,13 @@ interface DrunkenCoinsShopModalProps {
 }
 
 export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({ isOpen, onClose }) => {
-  const { profiles, language, spendDrunkenCoins, diceSkin, setDiceSkin, theme, setTheme } = useApp();
+  const { drunkenCoins, language, spendDrunkenCoins, diceSkin, setDiceSkin, theme, setTheme } = useApp();
   const isRo = language === 'ro';
 
   const [activeTab, setActiveTab] = useState<'dice' | 'themes' | 'perks' | 'titles' | 'ideas'>('dice');
-  const [selectedProfileId, setSelectedProfileId] = useState<string>(profiles[0]?.id || '');
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   if (!isOpen) return null;
-
-  const currentProfile = profiles.find(p => p.id === selectedProfileId) || profiles[0];
-  const userCoins = currentProfile?.drunkenCoins || 0;
 
   const showToast = (text: string, type: 'success' | 'error') => {
     setFeedbackMsg({ text, type });
@@ -25,27 +21,25 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({ is
   };
 
   const handlePurchase = (cost: number, itemName: string, onApply?: () => void) => {
-    if (userCoins < cost) {
+    if (drunkenCoins < cost) {
       showToast(
         isRo
-          ? `❌ Fonduri insuficiente! Ai nevoie de ${cost} 🍺🪙 (ai doar ${userCoins} 🍺🪙). Joacă mai multe meciuri!`
-          : `❌ Not enough coins! You need ${cost} 🍺🪙 (you have ${userCoins} 🍺🪙). Play more matches!`,
+          ? `❌ Fonduri insuficiente în Tezaur! Ai nevoie de ${cost} 🍺🪙 (ai doar ${drunkenCoins} 🍺🪙). Joacă mai multe meciuri!`
+          : `❌ Not enough coins in Treasury! You need ${cost} 🍺🪙 (you have ${drunkenCoins} 🍺🪙). Play more matches!`,
         'error'
       );
       return;
     }
 
-    if (currentProfile) {
-      const success = spendDrunkenCoins(currentProfile.id, cost);
-      if (success) {
-        if (onApply) onApply();
-        showToast(
-          isRo
-            ? `🎉 Ai cumpărat cu succes: ${itemName} (-${cost} 🍺🪙)!`
-            : `🎉 Successfully purchased: ${itemName} (-${cost} 🍺🪙)!`,
-          'success'
-        );
-      }
+    const success = spendDrunkenCoins(cost);
+    if (success) {
+      if (onApply) onApply();
+      showToast(
+        isRo
+          ? `🎉 Ai cumpărat cu succes: ${itemName} (-${cost} 🍺🪙)!`
+          : `🎉 Successfully purchased: ${itemName} (-${cost} 🍺🪙)!`,
+        'success'
+      );
     }
   };
 
@@ -75,7 +69,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({ is
                 {isRo ? 'Bazarul Călugăresc & Tezaur' : 'Monastic Bazaar & Treasury'}
               </h2>
               <p className="text-[10px] sm:text-[11px] text-amber-200/70 font-barlow truncate">
-                {isRo ? 'Magazinul oficial pentru Bănuți Turmentați (Drunken Coins)' : 'Official Store for Drunken Coins'}
+                {isRo ? 'Tezaur global unificat pentru toate jocurile & profilurile' : 'Unified global treasury for all gamemodes & profiles'}
               </p>
             </div>
           </div>
@@ -83,12 +77,12 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({ is
           <div className="flex items-center gap-2 flex-shrink-0">
             {/* Balance Pill */}
             <div className="bg-[#24170c] border border-[#ffd700] px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl flex items-center gap-1.5 shadow-md">
-              <span className="text-[10px] sm:text-xs font-cinzel text-gray-300 hidden md:inline">
-                {isRo ? 'Sold:' : 'Balance:'}
+              <span className="text-[10px] sm:text-xs font-cinzel text-amber-300/80 hidden sm:inline">
+                {isRo ? 'Tezaur Total:' : 'Treasury:'}
               </span>
               <span className="text-sm sm:text-base font-cinzel font-black text-[#ffd700] gold-text-glow flex items-center gap-1">
                 <span>🍺🪙</span>
-                <span>{userCoins.toLocaleString()}</span>
+                <span>{drunkenCoins.toLocaleString()}</span>
               </span>
             </div>
 
@@ -103,24 +97,6 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({ is
             </button>
           </div>
         </div>
-
-        {/* Profile Selector if multiple profiles */}
-        {profiles.length > 1 && (
-          <div className="flex items-center gap-2 my-2.5 px-3 py-1.5 rounded-xl bg-[#140e08] border border-[#2b1f13] text-xs font-cinzel text-gray-300 relative z-10 flex-shrink-0">
-            <span>👤 {isRo ? 'Profil Activ:' : 'Active Profile:'}</span>
-            <select
-              value={selectedProfileId}
-              onChange={e => setSelectedProfileId(e.target.value)}
-              className="bg-[#20150c] text-[#ffd700] border border-[#ffd700]/40 rounded-lg px-2 py-0.5 font-bold outline-none"
-            >
-              {profiles.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.drunkenCoins || 0} 🍺🪙)
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
         {/* Toast Feedback */}
         {feedbackMsg && (

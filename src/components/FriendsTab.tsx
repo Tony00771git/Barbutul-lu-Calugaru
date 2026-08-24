@@ -1,0 +1,833 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
+import {
+  UserFriendProfile,
+  FriendEntry,
+  FriendRequest,
+  GameInvite,
+  DuelSubmode,
+  DuelDifficulty,
+  PineappleMatchSettings,
+  CrashMatchSettings,
+} from '../types';
+import {
+  ensureUserPublicProfile,
+  searchPlayerByShortId,
+  sendFriendRequest,
+  acceptFriendRequest,
+  declineFriendRequest,
+  removeFriend,
+  subscribeToFriends,
+  subscribeToIncomingFriendRequests,
+  sendGameInvite,
+  respondToGameInvite,
+  subscribeToIncomingGameInvites,
+} from '../lib/friendsService';
+import { createDuelRoom } from '../lib/duelFirestoreService';
+import { createPineappleRoom } from '../lib/pineappleFirestoreService';
+import { createCrashRoom } from '../lib/crashFirestoreService';
+import { AvatarDisplay } from './AvatarDisplay';
+
+interface FriendsTabProps {
+  onClose?: () => void;
+  onLaunchGameFromInvite: (
+    mode: 'duel' | 'pineapple' | 'crash',
+    role: 'host' | 'join',
+    roomCode: string,
+    duelSettings?: { submode: DuelSubmode; difficulty: DuelDifficulty; targetPoints: number },
+    pineappleSettings?: PineappleMatchSettings,
+    crashSettings?: CrashMatchSettings
+  ) => void;
+}
+
+export const FriendsTab: React.FC<FriendsTabProps> = ({
+  onClose,
+  onLaunchGameFromInvite,
+}) => {
+  const { user, cloudProfile, signInWithGoogle, isSigningIn, authError, clearAuthError } = useAuth();
+  const { language, t } = useApp();
+
+  const [myFriendProfile, setMyFriendProfile] = useState<UserFriendProfile | null>(null);
+  const [friends, setFriends] = useState<FriendEntry[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
+  const [incomingInvites, setIncomingInvites] = useState<GameInvite[]>([]);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [searchResult, setSearchResult] = useState<UserFriendProfile | null>(null);
+  const [searchFeedback, setSearchFeedback] = useState<{ text: string; isError: boolean } | null>(null);
+  const [isSendingRequest, setIsSendingRequest] = useState<boolean>(false);
+
+  // Clipboard copy state
+  const [copiedId, setCopiedId] = useState<boolean>(false);
+
+  // Invite modal state
+  const [selectedFriendToInvite, setSelectedFriendToInvite] = useState<FriendEntry | null>(null);
+  const [inviteGameMode, setInviteGameMode] = useState<'duel' | 'pineapple' | 'crash'>('duel');
+  const [isCreatingInvite, setIsCreatingInvite] = useState<boolean>(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // Ensure public profile registration whenever user is logged in
+  useEffect(() => {
+    if (user) {
+      ensureUserPublicProfile(
+        user.uid,
+        cloudProfile?.displayName || user.displayName || 'Călugăr Pelerin',
+        cloudProfile?.avatarIcon || 'monk_drunk',
+        cloudProfile?.currentLevel || 1,
+        cloudProfile?.currentTitle_ro || 'Frate Pelerin',
+        cloudProfile?.currentTitle_en || 'Pilgrim Brother'
+      ).then((p) => {
+        if (p) setMyFriendProfile(p);
+      });
+    } else {
+      setMyFriendProfile(null);
+      setFriends([]);
+      setIncomingRequests([]);
+      setIncomingInvites([]);
+    }
+  }, [user, cloudProfile]);
+
+  // Real-time subscriptions for friends, requests, and game invites
+  useEffect(() => {
+    if (!user) return;
+
+    const unsubFriends = subscribeToFriends(user.uid, (list) => {
+      setFriends(list);
+    });
+
+    const unsubRequests = subscribeToIncomingFriendRequests(user.uid, (reqs) => {
+      setIncomingRequests(reqs);
+    });
+
+    const unsubInvites = subscribeToIncomingGameInvites(user.uid, (invs) => {
+      setIncomingInvites(invs);
+    });
+
+    return () => {
+      unsubFriends();
+      unsubRequests();
+      unsubInvites();
+    };
+  }, [user]);
+
+  // Copy Short ID to clipboard
+  const handleCopyShortId = async () => {
+    if (!myFriendProfile?.shortId) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(myFriendProfile.shortId);
+      } else {
+        const tempInput = document.createElement('input');
+        tempInput.value = myFriendProfile.shortId;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempInput);
+      }
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2500);
+    } catch (err) {
+      console.warn('Clipboard copy failed:', err);
+    }
+  };
+
+  // Search for player
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    setSearchFeedback(null);
+    setSearchResult(null);
+
+    const result = await searchPlayerByShortId(searchQuery.trim());
+    setIsSearching(false);
+
+    if (result) {
+      if (result.uid === user?.uid) {
+        setSearchFeedback({
+          text: language === 'ro' ? 'Acesta este propriul tău ID!' : 'This is your own ID!',
+          isError: true,
+        });
+      } else {
+        const isAlreadyFriend = friends.some((f) => f.friendUid === result.uid);
+        if (isAlreadyFriend) {
+          setSearchFeedback({
+            text: language === 'ro' ? 'Sunteți deja prieteni!' : 'Already friends!',
+            isError: false,
+          });
+        }
+        setSearchResult(result);
+      }
+    } else {
+      setSearchFeedback({
+        text: language === 'ro' ? 'Niciun jucător găsit cu acest ID.' : 'No player found with this ID.',
+        isError: true,
+      });
+    }
+  };
+
+  // Send friend request
+  const handleSendRequest = async () => {
+    if (!searchResult || !user || !myFriendProfile) return;
+
+    setIsSendingRequest(true);
+    const res = await sendFriendRequest(searchResult, {
+      uid: user.uid,
+      displayName: cloudProfile?.displayName || user.displayName || 'Călugăr Pelerin',
+      avatarIcon: cloudProfile?.avatarIcon || 'monk_drunk',
+      shortId: myFriendProfile.shortId,
+    });
+    setIsSendingRequest(false);
+
+    if (res.success) {
+      setSearchFeedback({
+        text: language === 'ro' ? '✅ Cerere de prietenie trimisă cu succes!' : '✅ Friend request sent successfully!',
+        isError: false,
+      });
+      setSearchResult(null);
+      setSearchQuery('');
+    } else {
+      setSearchFeedback({
+        text: res.message || (language === 'ro' ? 'Eroare la trimiterea cererii.' : 'Failed to send request.'),
+        isError: true,
+      });
+    }
+  };
+
+  // Accept friend request
+  const handleAcceptRequest = async (request: FriendRequest) => {
+    if (!user) return;
+    await acceptFriendRequest(request, {
+      uid: user.uid,
+      displayName: cloudProfile?.displayName || user.displayName || 'Călugăr Pelerin',
+      avatarIcon: cloudProfile?.avatarIcon || 'monk_drunk',
+      shortId: myFriendProfile?.shortId || '',
+      currentLevel: cloudProfile?.currentLevel || 1,
+      currentTitle_ro: cloudProfile?.currentTitle_ro || 'Frate Pelerin',
+    });
+  };
+
+  // Decline friend request
+  const handleDeclineRequest = async (requestId?: string) => {
+    if (!requestId) return;
+    await declineFriendRequest(requestId);
+  };
+
+  // Remove friend
+  const handleRemoveFriend = async (friendUid: string) => {
+    if (!user) return;
+    const confirmText = language === 'ro' ? 'Sigur dorești să ștergi acest prieten?' : 'Remove this friend?';
+    if (window.confirm(confirmText)) {
+      await removeFriend(user.uid, friendUid);
+    }
+  };
+
+  // Accept game invite & join room
+  const handleAcceptGameInvite = async (invite: GameInvite) => {
+    if (invite.id) {
+      await respondToGameInvite(invite.id, 'accepted');
+    }
+    onLaunchGameFromInvite(invite.mode, 'join', invite.roomCode);
+  };
+
+  // Decline game invite
+  const handleDeclineGameInvite = async (inviteId?: string) => {
+    if (!inviteId) return;
+    await respondToGameInvite(inviteId, 'declined');
+  };
+
+  // Create room & send direct game invite to friend
+  const handleCreateAndSendInvite = async () => {
+    if (!selectedFriendToInvite || !user) return;
+
+    setIsCreatingInvite(true);
+    setInviteError(null);
+
+    const localPlayer = {
+      id: user.uid,
+      name: cloudProfile?.displayName || user.displayName || 'Gazda',
+      avatarIcon: cloudProfile?.avatarIcon || 'monk_drunk',
+      color: '#e8c84a',
+    };
+
+    try {
+      let createdRoomCode = '';
+
+      if (inviteGameMode === 'duel') {
+        createdRoomCode = await createDuelRoom(localPlayer, 'general', 'easy', 30);
+      } else if (inviteGameMode === 'pineapple') {
+        createdRoomCode = await createPineappleRoom(localPlayer, {
+          sipsPerPoint: 0.5,
+          sipsToEndGame: 25,
+        });
+      } else if (inviteGameMode === 'crash') {
+        createdRoomCode = await createCrashRoom(localPlayer, {
+          sipsThreshold: 55,
+          stakeMode: 'dynamic',
+          groapaThreshold: 3,
+        });
+      }
+
+      if (!createdRoomCode) {
+        throw new Error('Could not generate room code.');
+      }
+
+      // Send the invite in Firestore to the friend
+      const res = await sendGameInvite({
+        fromUid: user.uid,
+        fromName: localPlayer.name,
+        fromAvatar: localPlayer.avatarIcon,
+        toUid: selectedFriendToInvite.friendUid,
+        mode: inviteGameMode,
+        roomCode: createdRoomCode,
+      });
+
+      if (!res.success) {
+        throw new Error(res.message || 'Failed to send invite.');
+      }
+
+      // Launch current user as host into the room!
+      setSelectedFriendToInvite(null);
+      setIsCreatingInvite(false);
+
+      onLaunchGameFromInvite(
+        inviteGameMode,
+        'host',
+        createdRoomCode,
+        inviteGameMode === 'duel' ? { submode: 'general', difficulty: 'easy', targetPoints: 30 } : undefined,
+        inviteGameMode === 'pineapple' ? { sipsPerPoint: 0.5, sipsToEndGame: 25 } : undefined,
+        inviteGameMode === 'crash' ? { sipsThreshold: 55, stakeMode: 'dynamic', groapaThreshold: 3 } : undefined
+      );
+    } catch (err: any) {
+      console.error('Error creating 1v1 invite:', err);
+      setInviteError(err?.message || 'Eroare la crearea camerei 1v1.');
+      setIsCreatingInvite(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-start min-h-[85vh] px-3 sm:px-4 py-4 max-w-lg mx-auto space-y-4 select-none animate-fade-in pb-12">
+      {/* Header Bar */}
+      <div className="w-full flex items-center justify-between border-b border-[#2d1e12] pb-3">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl">👥</span>
+          <div>
+            <h2 className="text-lg sm:text-xl font-cinzel font-bold text-[#ffd700] gold-text-glow leading-tight">
+              {language === 'ro' ? 'Prieteni & Invitații 1v1' : 'Friends & 1v1 Invites'}
+            </h2>
+            <span className="text-[10px] text-gray-400 font-barlow tracking-wider uppercase block">
+              {language === 'ro' ? 'Comunitatea Tavernei Monahale' : 'Monastery Tavern Community'}
+            </span>
+          </div>
+        </div>
+
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-[#181109] border border-[#3a2817] hover:border-[#ffd700] text-gray-400 hover:text-white flex items-center justify-center font-bold text-sm transition-all"
+            title="Închide"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* CASE A: USER IS NOT LOGGED IN */}
+      {!user ? (
+        <div className="w-full bg-[#161009] border-2 border-[#e8c84a]/60 rounded-2xl p-5 sm:p-6 shadow-2xl gold-glow text-center space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-b from-[#3a2612] to-[#1a1107] border-2 border-[#ffd700] flex items-center justify-center text-3xl shadow-inner animate-pulse">
+            📜
+          </div>
+
+          <div className="space-y-1.5">
+            <h3 className="text-lg sm:text-xl font-cinzel font-bold text-[#ffd700] gold-text-glow">
+              {language === 'ro' ? 'Conectează-te pentru a Juca cu Prietenii' : 'Sign in to Play with Friends'}
+            </h3>
+            <p className="text-xs sm:text-sm text-stone-300 font-barlow max-w-sm mx-auto leading-relaxed">
+              {language === 'ro'
+                ? 'Primești un ID unic de jucător, poți adăuga prieteni și trimite invitații instant la partide 1v1 fără a mai introduce coduri de cameră!'
+                : 'Get a unique player ID, add tavern friends, and send instant 1v1 match invites without typing room codes!'}
+            </p>
+          </div>
+
+          {authError && (
+            <div className="p-3 bg-red-950/80 border border-red-500/80 rounded-xl text-xs text-red-200 font-barlow flex items-start gap-2 text-left">
+              <span className="text-red-400 font-bold">⚠️</span>
+              <div className="flex-1">
+                <span>{authError}</span>
+                <button
+                  type="button"
+                  onClick={clearAuthError}
+                  className="block text-[10px] text-red-300 underline mt-1"
+                >
+                  Închide mesajul
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={signInWithGoogle}
+              disabled={isSigningIn}
+              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#ffd700] via-[#f7c844] to-[#ffd700] text-black font-cinzel font-black text-sm uppercase tracking-wider hover:brightness-110 active:scale-98 shadow-xl transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+            >
+              <span className="text-lg">🇬</span>
+              <span>
+                {isSigningIn
+                  ? language === 'ro' ? 'Se conectează...' : 'Signing in...'
+                  : language === 'ro' ? 'Conectează-te cu Google' : 'Sign In with Google'}
+              </span>
+            </button>
+          </div>
+
+          <div className="pt-2 grid grid-cols-3 gap-2 text-[10px] text-stone-400 font-barlow">
+            <div className="p-2 rounded-lg bg-[#110b06] border border-[#2b1f13]">
+              <span className="block text-base mb-0.5">🆔</span>
+              <span>{language === 'ro' ? 'ID Scurt Unic' : 'Unique Short ID'}</span>
+            </div>
+            <div className="p-2 rounded-lg bg-[#110b06] border border-[#2b1f13]">
+              <span className="block text-base mb-0.5">⚔️</span>
+              <span>{language === 'ro' ? 'Invitații 1v1' : 'Direct 1v1'}</span>
+            </div>
+            <div className="p-2 rounded-lg bg-[#110b06] border border-[#2b1f13]">
+              <span className="block text-base mb-0.5">☁️</span>
+              <span>{language === 'ro' ? 'Progres Salvat' : 'Cloud Sync'}</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* CASE B: USER IS LOGGED IN */
+        <div className="w-full space-y-4">
+          {/* USER'S OWN ID & PROFILE BANNER */}
+          <div className="w-full bg-gradient-to-r from-[#1f150c] via-[#2a1a0f] to-[#1f150c] border-2 border-[#e8c84a]/70 rounded-2xl p-3.5 shadow-lg space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-12 h-12 rounded-xl bg-[#140e08] border border-[#ffd700] flex-shrink-0 flex items-center justify-center shadow overflow-hidden">
+                  <AvatarDisplay
+                    avatarId={cloudProfile?.avatarIcon || 'monk_drunk'}
+                    className="w-full h-full p-0.5"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-cinzel font-bold text-sm sm:text-base text-[#ffd700] truncate">
+                      {cloudProfile?.displayName || user.displayName || 'Călugăr Pelerin'}
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+                      Nv. {cloudProfile?.currentLevel || 1}
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-gray-300 font-barlow truncate block">
+                    {cloudProfile?.currentTitle_ro || 'Frate Pelerin'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Unique Short ID Box with Copy Button */}
+            <div className="bg-[#120c07] border border-[#ffd700]/50 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-inner">
+              <div className="min-w-0">
+                <span className="text-[10px] font-cinzel text-gray-400 uppercase tracking-wider block">
+                  {language === 'ro' ? 'ID-ul Tău Unic de Prieten:' : 'Your Unique Friend ID:'}
+                </span>
+                <span className="text-base sm:text-lg font-mono font-black text-[#ffd700] tracking-widest">
+                  {myFriendProfile?.shortId || '...'}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopyShortId}
+                className={`py-1.5 px-3 rounded-lg font-cinzel font-bold text-xs transition-all flex items-center gap-1.5 shadow ${
+                  copiedId
+                    ? 'bg-emerald-600 text-white animate-bounce-short'
+                    : 'bg-[#2d1f13] border border-[#e8c84a] text-[#ffd700] hover:bg-[#3d2a1a] active:scale-95'
+                }`}
+                title={language === 'ro' ? 'Copiază ID-ul în clipboard' : 'Copy ID to clipboard'}
+              >
+                <span>{copiedId ? '✅' : '📋'}</span>
+                <span>{copiedId ? (language === 'ro' ? 'Copiat!' : 'Copied!') : (language === 'ro' ? 'Copiază' : 'Copy')}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* INCOMING GAME INVITES (IF ANY) */}
+          {incomingInvites.length > 0 && (
+            <div className="w-full bg-gradient-to-r from-red-950/90 via-stone-900/90 to-red-950/90 border-2 border-red-500 rounded-2xl p-3.5 shadow-xl space-y-2 animate-pulse-border">
+              <div className="flex items-center justify-between">
+                <h3 className="font-cinzel font-bold text-xs sm:text-sm text-red-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="animate-bounce">⚔️</span>
+                  <span>{language === 'ro' ? 'Invitații la Joc Primite' : 'Incoming Game Invites'}</span>
+                  <span className="px-1.5 py-0.2 bg-red-600 text-white rounded-full text-[10px] font-bold">
+                    {incomingInvites.length}
+                  </span>
+                </h3>
+              </div>
+
+              <div className="space-y-2">
+                {incomingInvites.map((inv) => (
+                  <div
+                    key={inv.id}
+                    className="p-2.5 rounded-xl bg-[#140b08] border border-red-500/60 flex items-center justify-between gap-2 shadow"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="text-2xl flex-shrink-0">
+                        {inv.mode === 'duel' ? '⚔️' : inv.mode === 'pineapple' ? '🍍' : '🐉'}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-cinzel font-bold text-xs text-[#ffd700] truncate">
+                          {inv.fromName}
+                        </div>
+                        <div className="text-[10px] text-gray-300 font-barlow">
+                          {inv.mode === 'duel'
+                            ? 'Trivia Duel 1v1'
+                            : inv.mode === 'pineapple'
+                            ? 'Pineapple Poker 1v1'
+                            : 'Dragon Crash 1v1'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleAcceptGameInvite(inv)}
+                        className="py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-cinzel font-bold text-xs shadow active:scale-95 transition-all"
+                      >
+                        {language === 'ro' ? 'Acceptă ➔' : 'Accept ➔'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeclineGameInvite(inv.id)}
+                        className="py-1 px-2 rounded-lg bg-[#251814] border border-red-800 text-red-400 hover:text-white font-bold text-xs transition-all"
+                        title="Refuză"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* INCOMING FRIEND REQUESTS (IF ANY) */}
+          {incomingRequests.length > 0 && (
+            <div className="w-full bg-[#18120a] border border-amber-500/70 rounded-2xl p-3.5 space-y-2 shadow-lg">
+              <div className="flex items-center justify-between">
+                <h3 className="font-cinzel font-bold text-xs text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>✉️</span>
+                  <span>{language === 'ro' ? 'Cereri de Prietenie Primite' : 'Friend Requests'}</span>
+                  <span className="px-1.5 py-0.2 bg-amber-600 text-black rounded-full text-[10px] font-bold">
+                    {incomingRequests.length}
+                  </span>
+                </h3>
+              </div>
+
+              <div className="space-y-2">
+                {incomingRequests.map((req) => (
+                  <div
+                    key={req.id}
+                    className="p-2.5 rounded-xl bg-[#110c07] border border-[#3a2817] flex items-center justify-between gap-2 shadow"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-[#1a120b] border border-[#e8c84a]/50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <AvatarDisplay avatarId={req.fromAvatar || 'monk_drunk'} className="w-full h-full p-0.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-cinzel font-bold text-xs text-[#f0ebe0] truncate">
+                          {req.fromName}
+                        </div>
+                        <div className="text-[10px] font-mono text-amber-400/80">
+                          {req.fromShortId || 'ID'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleAcceptRequest(req)}
+                        className="py-1 px-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-cinzel font-bold text-xs shadow active:scale-95 transition-all"
+                      >
+                        {language === 'ro' ? 'Acceptă' : 'Accept'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeclineRequest(req.id)}
+                        className="py-1 px-2 rounded-lg bg-[#251814] border border-gray-700 text-gray-400 hover:text-white font-bold text-xs transition-all"
+                        title="Refuză"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* SEARCH & ADD FRIEND FORM */}
+          <div className="w-full bg-[#161009] border border-[#2d1e12] rounded-2xl p-3.5 space-y-2.5 shadow-md">
+            <h3 className="font-cinzel font-bold text-xs text-[#ffd700] uppercase tracking-wider flex items-center gap-1.5">
+              <span>🔍</span>
+              <span>{language === 'ro' ? 'Caută Prieten după ID' : 'Search Friend by ID'}</span>
+            </h3>
+
+            <form onSubmit={handleSearch} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value.toUpperCase())}
+                placeholder={language === 'ro' ? 'Ex: M8F29A' : 'e.g. M8F29A'}
+                maxLength={12}
+                className="flex-1 bg-[#100a06] border border-[#3a2717] focus:border-[#ffd700] rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-[#ffd700] focus:outline-none uppercase tracking-wider"
+              />
+              <button
+                type="submit"
+                disabled={isSearching || !searchQuery.trim()}
+                className="py-2 px-3.5 rounded-xl bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black font-cinzel font-bold text-xs hover:brightness-110 active:scale-95 disabled:opacity-40 transition-all shadow"
+              >
+                {isSearching ? '...' : language === 'ro' ? 'Caută' : 'Search'}
+              </button>
+            </form>
+
+            {/* Search feedback */}
+            {searchFeedback && (
+              <div
+                className={`p-2 rounded-lg text-xs font-barlow ${
+                  searchFeedback.isError
+                    ? 'bg-red-950/60 border border-red-800/80 text-red-300'
+                    : 'bg-emerald-950/60 border border-emerald-800/80 text-emerald-300'
+                }`}
+              >
+                {searchFeedback.text}
+              </div>
+            )}
+
+            {/* Search Result Card */}
+            {searchResult && (
+              <div className="p-3 rounded-xl bg-[#110c07] border border-[#ffd700]/70 flex items-center justify-between gap-3 shadow-md animate-fade-in">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-[#1a120b] border border-[#ffd700] flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <AvatarDisplay avatarId={searchResult.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-cinzel font-bold text-xs sm:text-sm text-[#ffd700] truncate">
+                      {searchResult.displayName}
+                    </div>
+                    <div className="text-[10px] text-gray-300 font-barlow truncate">
+                      Nv. {searchResult.currentLevel || 1} • {searchResult.currentTitle_ro || 'Frate Pelerin'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSendRequest}
+                  disabled={isSendingRequest}
+                  className="py-1.5 px-3 rounded-xl bg-[#ffd700] text-black font-cinzel font-bold text-xs hover:brightness-110 active:scale-95 shadow transition-all flex-shrink-0 disabled:opacity-50"
+                >
+                  {isSendingRequest
+                    ? '...'
+                    : language === 'ro'
+                    ? 'Trimite Cerere ➔'
+                    : 'Add Friend ➔'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* SAVED FRIENDS LIST */}
+          <div className="w-full bg-[#161009] border border-[#2d1e12] rounded-2xl p-3.5 space-y-3 shadow-md">
+            <div className="flex items-center justify-between">
+              <h3 className="font-cinzel font-bold text-xs sm:text-sm text-[#ffd700] uppercase tracking-wider flex items-center gap-1.5">
+                <span>⚔️</span>
+                <span>{language === 'ro' ? 'Lista Ta de Prieteni' : 'Your Friends List'}</span>
+                <span className="text-gray-400 font-normal">({friends.length})</span>
+              </h3>
+            </div>
+
+            {friends.length === 0 ? (
+              <div className="text-center py-6 px-4 bg-[#110c07] rounded-xl border border-dashed border-[#3a2717] space-y-1">
+                <span className="text-2xl block mb-1">🏰</span>
+                <p className="text-xs text-gray-300 font-cinzel font-bold">
+                  {language === 'ro' ? 'Niciun prieten adăugat încă' : 'No friends added yet'}
+                </p>
+                <p className="text-[11px] text-gray-400 font-barlow max-w-xs mx-auto">
+                  {language === 'ro'
+                    ? 'Partajează ID-ul tău scurt sau caută prietenii după ID pentru a le trimite o cerere!'
+                    : 'Share your short ID or search your friends by ID to send a request!'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {friends.map((friend) => (
+                  <div
+                    key={friend.friendUid}
+                    className="p-3 rounded-xl bg-[#110c07] border border-[#2d1e12] hover:border-[#ffd700]/50 transition-all flex items-center justify-between gap-2 shadow"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-[#1a120b] border border-[#e8c84a]/60 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <AvatarDisplay avatarId={friend.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-cinzel font-bold text-xs sm:text-sm text-[#f0ebe0] truncate">
+                          {friend.displayName}
+                        </div>
+                        <div className="text-[10px] text-amber-400/90 font-barlow flex items-center gap-1.5">
+                          {friend.shortId && <span className="font-mono">{friend.shortId}</span>}
+                          {friend.currentTitle_ro && (
+                            <span className="text-gray-400 truncate">• {friend.currentTitle_ro}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedFriendToInvite(friend)}
+                        className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-[#ffd700] to-[#f7c844] text-black font-cinzel font-black text-xs hover:brightness-110 active:scale-95 shadow flex items-center gap-1 transition-all"
+                      >
+                        <span>⚔️</span>
+                        <span>{language === 'ro' ? 'Invită la Joc' : 'Invite'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFriend(friend.friendUid)}
+                        className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-950/30 transition-all"
+                        title={language === 'ro' ? 'Șterge prieten' : 'Remove friend'}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* QUICK 1v1 DIRECT GAME INVITE MODAL */}
+      {selectedFriendToInvite && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#18120c] border-2 border-[#ffd700] rounded-2xl p-4 sm:p-5 max-w-sm w-full space-y-4 gold-glow shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#2d1e12] pb-2.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-2xl">⚔️</span>
+                <div>
+                  <h3 className="font-cinzel font-bold text-sm sm:text-base text-[#ffd700] truncate">
+                    {language === 'ro' ? 'Invită la Partidă 1v1' : '1v1 Match Invite'}
+                  </h3>
+                  <span className="text-[10px] text-gray-400 font-barlow truncate block">
+                    {language === 'ro' ? `Adversar: ${selectedFriendToInvite.displayName}` : `Opponent: ${selectedFriendToInvite.displayName}`}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedFriendToInvite(null)}
+                className="text-gray-400 hover:text-white font-bold text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Mode selection */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-cinzel font-bold text-gray-300 uppercase tracking-wider block">
+                {language === 'ro' ? 'Alege Modul de Joc:' : 'Select Game Mode:'}
+              </label>
+
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setInviteGameMode('duel')}
+                  className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                    inviteGameMode === 'duel'
+                      ? 'border-[#ff7a6b] bg-[#2d1410] text-[#ff9b8f] font-bold shadow ring-1 ring-[#ff7a6b]'
+                      : 'border-[#2b1f14] bg-[#110c07] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="text-xl">⚔️</span>
+                  <span className="font-cinzel text-[10px] leading-tight">Trivia Duel</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setInviteGameMode('pineapple')}
+                  className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                    inviteGameMode === 'pineapple'
+                      ? 'border-[#38ef7d] bg-[#0c2415] text-[#70f2a4] font-bold shadow ring-1 ring-[#38ef7d]'
+                      : 'border-[#2b1f14] bg-[#110c07] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="text-xl">🍍</span>
+                  <span className="font-cinzel text-[10px] leading-tight">Pineapple</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setInviteGameMode('crash')}
+                  className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                    inviteGameMode === 'crash'
+                      ? 'border-[#f5af19] bg-[#291708] text-[#f7c844] font-bold shadow ring-1 ring-[#f5af19]'
+                      : 'border-[#2b1f14] bg-[#110c07] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="text-xl">🐉</span>
+                  <span className="font-cinzel text-[10px] leading-tight">Crash 1v1</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Explanation */}
+            <div className="p-2.5 rounded-xl bg-[#110c07] border border-[#2b1f13] text-[11px] text-stone-300 font-barlow">
+              {inviteGameMode === 'duel' && (
+                <span>⚔️ Duel Trivia de Tavernă — 30 de puncte limită, cine greșește bea gurile!</span>
+              )}
+              {inviteGameMode === 'pineapple' && (
+                <span>🍍 Pineapple Poker OFC — 0.5 guri/punct, duel tactic de cărți pe 3 rânduri!</span>
+              )}
+              {inviteGameMode === 'crash' && (
+                <span>🐉 Dragon Crash — Multiplicator crescător, sari din zbor înainte de prăbușire!</span>
+              )}
+            </div>
+
+            {inviteError && (
+              <div className="p-2 rounded-lg bg-red-950/70 border border-red-700 text-xs text-red-200 font-barlow">
+                ⚠️ {inviteError}
+              </div>
+            )}
+
+            {/* Confirm & Launch */}
+            <button
+              type="button"
+              onClick={handleCreateAndSendInvite}
+              disabled={isCreatingInvite}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#ffd700] via-[#f7c844] to-[#ffd700] text-black font-cinzel font-black text-xs sm:text-sm uppercase tracking-wider hover:brightness-110 active:scale-98 shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            >
+              <span>{isCreatingInvite ? '⏳' : '🚀'}</span>
+              <span>
+                {isCreatingInvite
+                  ? language === 'ro' ? 'Se creează camera...' : 'Creating room...'
+                  : language === 'ro' ? 'Trimite Invitația & Deschide Camera ➔' : 'Send Invite & Open Room ➔'}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

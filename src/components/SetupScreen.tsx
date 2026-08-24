@@ -1,12 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { GameMode, Difficulty, CustomDoubles, Player, DuelSubmode, DuelDifficulty, Profile, PineappleMatchSettings } from '../types';
+import {
+  GameMode,
+  Difficulty,
+  CustomDoubles,
+  Player,
+  DuelSubmode,
+  DuelDifficulty,
+  Profile,
+  PineappleMatchSettings,
+  PineappleBotDifficulty,
+  CrashMatchSettings,
+  CrashBotStyle,
+} from '../types';
 import { useApp, generateUniqueId } from '../context/AppContext';
+import { BOT_PROFILES } from '../lib/pineappleBotAi';
 import { AvatarDisplay } from './AvatarDisplay';
 import { AvatarModal } from './AvatarModal';
 import { ProfilePickerModal } from './ProfilePickerModal';
 import { ProfilesManagementModal } from './ProfilesManagementModal';
 import { GlobalLeaderboardSection } from './GlobalLeaderboardSection';
 import { HeadToHeadTracker } from './HeadToHeadTracker';
+import { FriendsTab } from './FriendsTab';
 
 interface SetupScreenProps {
   onStartGame: (
@@ -37,7 +51,16 @@ interface SetupScreenProps {
     localPlayer: { id: string; name: string; avatarIcon: string; color: string },
     settings: PineappleMatchSettings,
     roomCode?: string,
-    autoAddBot?: boolean
+    autoAddBot?: boolean,
+    botDifficulty?: PineappleBotDifficulty
+  ) => void;
+  onStartCrash?: (
+    role: 'host' | 'join',
+    localPlayer: { id: string; name: string; avatarIcon: string; color: string },
+    settings: CrashMatchSettings,
+    roomCode?: string,
+    autoAddBot?: boolean,
+    botStyle?: CrashBotStyle
   ) => void;
   onOpenAchievements: () => void;
   onOpenProfiles?: () => void;
@@ -70,6 +93,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   onStartDuel,
   onStartCasino,
   onStartPineapple,
+  onStartCrash,
   onOpenAchievements,
   onOpenProfiles,
   onOpenCustomize,
@@ -79,8 +103,8 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
 }) => {
   const { t, profiles, addProfile, autoSaveNewProfiles, language } = useApp();
 
-  // Screen View Switcher: 'play' (Game setup + profiles) vs 'leaderboard' (Dedicated Global Leaderboard)
-  const [mainTab, setMainTab] = useState<'play' | 'leaderboard'>('play');
+  // Screen View Switcher: 'play' (Game setup + profiles) vs 'leaderboard' vs 'friends'
+  const [mainTab, setMainTab] = useState<'play' | 'leaderboard' | 'friends'>('play');
 
   // Pop-up modal for "Profilurile Tale" (hidden until button is clicked)
   const [showProfilesModal, setShowProfilesModal] = useState<boolean>(false);
@@ -89,6 +113,61 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   const [playerCount, setPlayerCount] = useState<number>(3);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [boardDiceCount, setBoardDiceCount] = useState<1 | 2>(1);
+
+  const handleLaunchGameFromInvite = (
+    gameMode: 'duel' | 'pineapple' | 'crash',
+    role: 'host' | 'join',
+    roomCode: string,
+    duelSettings?: { submode: DuelSubmode; difficulty: DuelDifficulty; targetPoints: number },
+    pineappleSettings?: PineappleMatchSettings,
+    crashSettings?: CrashMatchSettings
+  ) => {
+    const myName = playerNames[0]?.trim() || (role === 'host' ? 'Gazda' : 'Luptătorul');
+    let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
+    const myAvatar = playerAvatars[0] || matchedProfile?.avatarIcon || 'monk_drunk';
+
+    const localPlayer = {
+      id: generateUniqueId(`${gameMode}_player`),
+      name: myName,
+      avatarIcon: myAvatar,
+      color: role === 'host' ? '#e8c84a' : '#50e3c2',
+    };
+
+    if (gameMode === 'duel' && onStartDuel) {
+      onStartDuel(
+        role,
+        localPlayer,
+        duelSettings?.submode || 'general',
+        duelSettings?.difficulty || 'easy',
+        roomCode,
+        duelSettings?.targetPoints || 30
+      );
+    } else if (gameMode === 'pineapple' && onStartPineapple) {
+      onStartPineapple(
+        role,
+        localPlayer,
+        pineappleSettings || { sipsPerPoint: 0.5, sipsToEndGame: 25 },
+        roomCode
+      );
+    } else if (gameMode === 'crash' && onStartCrash) {
+      onStartCrash(
+        role,
+        localPlayer,
+        crashSettings || { sipsThreshold: 55, stakeMode: 'dynamic', groapaThreshold: 3 },
+        roomCode
+      );
+    }
+  };
+
+  // Crash mode state
+  const [crashRole, setCrashRole] = useState<'bot' | 'host' | 'join'>('bot');
+  const [crashBotStyle, setCrashBotStyle] = useState<CrashBotStyle>('prudent');
+  const [crashStakeMode, setCrashStakeMode] = useState<'dynamic' | 'guri' | 'groapa'>('dynamic');
+  const [crashGroapaThreshold, setCrashGroapaThreshold] = useState<number>(3);
+  const [crashSipsThreshold, setCrashSipsThreshold] = useState<number>(55);
+  const [customCrashThresholdInput, setCustomCrashThresholdInput] = useState<string>('55');
+  const [isCustomCrashThreshold, setIsCustomCrashThreshold] = useState<boolean>(false);
+  const [crashRoomCodeInput, setCrashRoomCodeInput] = useState<string>('');
 
   // Duel mode state
   const [duelRole, setDuelRole] = useState<'host' | 'join'>('host');
@@ -105,11 +184,14 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   const [casinoRoomCodeInput, setCasinoRoomCodeInput] = useState<string>('');
 
   // Pineapple Poker state
-  const [pineappleRole, setPineappleRole] = useState<'host' | 'join'>('host');
+  const [pineappleRole, setPineappleRole] = useState<'bot' | 'host' | 'join'>('bot');
+  const [pineappleBotDifficulty, setPineappleBotDifficulty] = useState<PineappleBotDifficulty>('medium');
   const [pineappleSipsPerPoint, setPineappleSipsPerPoint] = useState<number>(0.5);
   const [customSipsPerPointInput, setCustomSipsPerPointInput] = useState<string>('0.5');
   const [isCustomSipsPerPoint, setIsCustomSipsPerPoint] = useState<boolean>(false);
-  const [pineappleSipsThreshold, setPineappleSipsThreshold] = useState<number>(30);
+  const [pineappleSipsThreshold, setPineappleSipsThreshold] = useState<number>(25);
+  const [customSipsThresholdInput, setCustomSipsThresholdInput] = useState<string>('25');
+  const [isCustomSipsThreshold, setIsCustomSipsThreshold] = useState<boolean>(false);
   const [pineappleRoomCodeInput, setPineappleRoomCodeInput] = useState<string>('');
 
   // Player names & avatars
@@ -185,6 +267,43 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   };
 
   const handleStart = () => {
+    if (mode === 'crash') {
+      const myName = playerNames[0].trim() || (crashRole === 'join' ? 'Jucător Dragon' : 'Vânătorul de Dragoni');
+      let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
+      const myAvatar = playerAvatars[0] || matchedProfile?.avatarIcon || 'monk_drunk';
+
+      if (!matchedProfile && autoSaveNewProfiles && myName.trim()) {
+        matchedProfile = addProfile(myName.trim(), myAvatar);
+      }
+
+      const localPlayer = {
+        id: generateUniqueId('crash_player'),
+        name: myName,
+        avatarIcon: myAvatar,
+        color: crashRole === 'join' ? '#ff7a6b' : '#e8c84a',
+      };
+
+      const finalThreshold = isCustomCrashThreshold
+        ? parseInt(customCrashThresholdInput, 10) || 55
+        : crashSipsThreshold;
+
+      if (onStartCrash) {
+        onStartCrash(
+          crashRole === 'join' ? 'join' : 'host',
+          localPlayer,
+          {
+            sipsThreshold: Math.max(5, finalThreshold),
+            stakeMode: crashStakeMode,
+            groapaThreshold: crashGroapaThreshold,
+          },
+          crashRole === 'join' ? crashRoomCodeInput.trim().toUpperCase() : undefined,
+          crashRole === 'bot',
+          crashBotStyle
+        );
+      }
+      return;
+    }
+
     if (mode === 'pineapple') {
       const myName = playerNames[0].trim() || (pineappleRole === 'join' ? 'Jucător Pineapple' : 'Fratele Vasile');
       let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
@@ -213,7 +332,9 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
             sipsPerPoint: Math.max(0.1, finalSipsPerPoint),
             sipsToEndGame: Math.max(5, pineappleSipsThreshold),
           },
-          pineappleRoomCodeInput.trim().toUpperCase()
+          pineappleRole === 'join' ? pineappleRoomCodeInput.trim().toUpperCase() : undefined,
+          pineappleRole === 'bot',
+          pineappleBotDifficulty
         );
       }
       return;
@@ -352,6 +473,20 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
             <span>🏆</span>
             <span className="hidden xs:inline">{language === 'ro' ? 'Top Mondial' : 'Top'}</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setMainTab('friends')}
+            className={`py-1 px-2 sm:px-2.5 rounded-lg text-xs font-cinzel font-bold transition-all flex items-center gap-1 ${
+              mainTab === 'friends'
+                ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+            title={language === 'ro' ? 'Prieteni & Invitații 1v1' : 'Friends & 1v1 Invites'}
+          >
+            <span>👥</span>
+            <span className="hidden xs:inline">{language === 'ro' ? 'Prieteni' : 'Friends'}</span>
+          </button>
         </div>
       </div>
 
@@ -367,11 +502,21 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                   {t('selectMode')}
                 </label>
                 <span className="text-[10px] text-gray-400 font-barlow">
-                  {mode === 'normal' ? '🍺 Clasic' : mode === 'boardgame' ? '🎲 Tablă' : mode === 'duel' ? '⚔️ WiFi 1v1' : mode === 'casino' ? '🎰 Craps Duel' : '🍍 Pineapple'}
+                  {mode === 'normal'
+                    ? '🍺 Clasic'
+                    : mode === 'boardgame'
+                    ? '🎲 Tablă'
+                    : mode === 'duel'
+                    ? '⚔️ WiFi 1v1'
+                    : mode === 'casino'
+                    ? '🎰 Craps Duel'
+                    : mode === 'pineapple'
+                    ? '🍍 Pineapple'
+                    : '🐉 Crash 1v1'}
                 </span>
               </div>
 
-              <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
+              <div className="grid grid-cols-6 gap-1 sm:gap-1.5">
                 <button
                   type="button"
                   onClick={() => setMode('normal')}
@@ -382,7 +527,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                   }`}
                 >
                   <span className="text-base sm:text-lg">🍺</span>
-                  <span className="font-cinzel text-[9px] sm:text-[10px] leading-none">{t('normalMode')}</span>
+                  <span className="font-cinzel text-[8px] sm:text-[9px] leading-none">{t('normalMode')}</span>
                 </button>
 
                 <button
@@ -395,7 +540,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                   }`}
                 >
                   <span className="text-base sm:text-lg">🎲</span>
-                  <span className="font-cinzel text-[9px] sm:text-[10px] leading-none">{t('boardgameMode')}</span>
+                  <span className="font-cinzel text-[8px] sm:text-[9px] leading-none">{t('boardgameMode')}</span>
                 </button>
 
                 <button
@@ -408,7 +553,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                   }`}
                 >
                   <span className="text-base sm:text-lg">⚔️</span>
-                  <span className="font-cinzel text-[9px] sm:text-[10px] leading-none">Duel</span>
+                  <span className="font-cinzel text-[8px] sm:text-[9px] leading-none">Duel</span>
                 </button>
 
                 <button
@@ -421,7 +566,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                   }`}
                 >
                   <span className="text-base sm:text-lg">🎰</span>
-                  <span className="font-cinzel text-[9px] sm:text-[10px] leading-none">{t('casinoMode')}</span>
+                  <span className="font-cinzel text-[8px] sm:text-[9px] leading-none">{t('casinoMode')}</span>
                 </button>
 
                 <button
@@ -434,43 +579,384 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                   }`}
                 >
                   <span className="text-base sm:text-lg">🍍</span>
-                  <span className="font-cinzel text-[9px] sm:text-[10px] leading-none">Pineapple</span>
+                  <span className="font-cinzel text-[8px] sm:text-[9px] leading-none">Pineapple</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMode('crash')}
+                  className={`p-1 sm:p-1.5 rounded-xl border flex flex-col items-center gap-0.5 transition-all ${
+                    mode === 'crash'
+                      ? 'border-red-500 bg-red-950/60 text-red-400 font-bold shadow-md ring-1 ring-red-500'
+                      : 'border-[#261d14] bg-[#110d09] text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  <span className="text-base sm:text-lg">🐉</span>
+                  <span className="font-cinzel text-[8px] sm:text-[9px] leading-none">Crash</span>
                 </button>
               </div>
             </div>
 
-            {/* PINEAPPLE MODE COMPACT CONFIG */}
-            {mode === 'pineapple' && (
+            {/* CRASH MODE COMPACT CONFIG */}
+            {mode === 'crash' && (
               <div className="space-y-2 border-t border-[#2d2014] pt-2 animate-fade-in">
-                <div className="grid grid-cols-2 gap-1.5 bg-[#0f0a06] p-1 rounded-xl border border-[#2d1e12]">
+                {/* 3-way Submode Selector */}
+                <div className="grid grid-cols-3 gap-1 bg-[#0f0a06] p-1 rounded-xl border border-[#2d1e12]">
                   <button
                     type="button"
-                    onClick={() => setPineappleRole('host')}
-                    className={`py-1.5 px-2 rounded-lg font-cinzel text-xs font-bold transition-all flex items-center justify-center gap-1 ${
-                      pineappleRole === 'host'
-                        ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md'
+                    onClick={() => setCrashRole('bot')}
+                    className={`py-1.5 px-1 rounded-lg font-cinzel text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+                      crashRole === 'bot'
+                        ? 'bg-gradient-to-r from-red-600 to-amber-600 text-white shadow-md font-black'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>🤖</span>
+                    <span className="truncate">{language === 'ro' ? 'Vs Bot AI' : 'Vs AI Bot'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCrashRole('host')}
+                    className={`py-1.5 px-1 rounded-lg font-cinzel text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+                      crashRole === 'host'
+                        ? 'bg-gradient-to-r from-red-600 to-amber-600 text-white shadow-md font-black'
                         : 'text-gray-400 hover:text-gray-200'
                     }`}
                   >
                     <span>👑</span>
-                    <span>{language === 'ro' ? 'Creează Chilie (1v1)' : 'Create Room (1v1)'}</span>
+                    <span className="truncate">{language === 'ro' ? 'Chilie 1v1' : '1v1 Room'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCrashRole('join')}
+                    className={`py-1.5 px-1 rounded-lg font-cinzel text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+                      crashRole === 'join'
+                        ? 'bg-gradient-to-r from-red-600 to-amber-600 text-white shadow-md font-black'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>🚪</span>
+                    <span className="truncate">{language === 'ro' ? 'Cod' : 'Join'}</span>
+                  </button>
+                </div>
+
+                {/* BOT DIFFICULTY/STYLE SELECTOR */}
+                {crashRole === 'bot' && (
+                  <div className="space-y-1.5 bg-[#100c07] p-2 rounded-xl border border-[#2b2014]">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <label className="font-cinzel text-gray-300 font-bold flex items-center gap-1">
+                        <span>🤖</span>
+                        <span>{language === 'ro' ? 'Stil Bot Dragon:' : 'Bot Style:'}</span>
+                      </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setCrashBotStyle('prudent')}
+                        className={`p-2 rounded-xl border flex flex-col items-center gap-0.5 transition-all text-center ${
+                          crashBotStyle === 'prudent'
+                            ? 'bg-gradient-to-b from-teal-950 to-stone-900 border-teal-400 text-teal-300 shadow-md ring-1 ring-teal-400/50'
+                            : 'bg-[#140e08] border-stone-800 text-stone-400 hover:text-stone-200 hover:border-stone-700'
+                        }`}
+                      >
+                        <span className="text-base">🛡️</span>
+                        <span className="font-cinzel text-xs font-bold leading-tight">
+                          {language === 'ro' ? 'Fratele Prudent' : 'Prudent Monk'}
+                        </span>
+                        <span className="text-[9px] text-teal-400 font-mono leading-none">
+                          Cashout: x1.20 - x2.00
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCrashBotStyle('risky')}
+                        className={`p-2 rounded-xl border flex flex-col items-center gap-0.5 transition-all text-center ${
+                          crashBotStyle === 'risky'
+                            ? 'bg-gradient-to-b from-red-950 to-stone-900 border-red-500 text-red-400 shadow-md ring-1 ring-red-500/50'
+                            : 'bg-[#140e08] border-stone-800 text-stone-400 hover:text-stone-200 hover:border-stone-700'
+                        }`}
+                      >
+                        <span className="text-base">🔥</span>
+                        <span className="font-cinzel text-xs font-bold leading-tight">
+                          {language === 'ro' ? 'Dragonul Înflăcărat' : 'Fiery Dragon'}
+                        </span>
+                        <span className="text-[9px] text-red-400 font-mono leading-none">
+                          Cashout: x2.00 - x5.50
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* STAKE MODE & GROAPĂ CONFIG (FOR HOST OR BOT) */}
+                {(crashRole === 'host' || crashRole === 'bot') && (
+                  <div className="space-y-2 bg-[#100c07] p-2.5 rounded-xl border border-[#2b2014]">
+                    {/* Stake Mode Choice */}
+                    <div>
+                      <label className="text-[11px] font-cinzel text-amber-400 font-bold flex items-center justify-between mb-1">
+                        <span>⚖️ {language === 'ro' ? 'Tip Mize / Mod Joc:' : 'Stake Mode:'}</span>
+                      </label>
+                      <div className="grid grid-cols-3 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setCrashStakeMode('dynamic')}
+                          className={`py-1 px-1 rounded-lg border text-center text-[10px] font-bold transition-all ${
+                            crashStakeMode === 'dynamic'
+                              ? 'bg-amber-950/80 border-amber-400 text-amber-300 ring-1 ring-amber-400/50'
+                              : 'bg-[#150f09] border-stone-800 text-stone-400 hover:text-stone-200'
+                          }`}
+                        >
+                          <span className="block text-xs">⚡</span>
+                          <span className="leading-tight block font-cinzel">Balansat</span>
+                          <span className="text-[8px] text-amber-400/80 font-mono block">Guri + Groapă</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setCrashStakeMode('guri')}
+                          className={`py-1 px-1 rounded-lg border text-center text-[10px] font-bold transition-all ${
+                            crashStakeMode === 'guri'
+                              ? 'bg-amber-950/80 border-amber-400 text-amber-300 ring-1 ring-amber-400/50'
+                              : 'bg-[#150f09] border-stone-800 text-stone-400 hover:text-stone-200'
+                          }`}
+                        >
+                          <span className="block text-xs">🍺</span>
+                          <span className="leading-tight block font-cinzel">Doar Guri</span>
+                          <span className="text-[8px] text-stone-400 font-mono block">1 - 5 guri/rundă</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setCrashStakeMode('groapa')}
+                          className={`py-1 px-1 rounded-lg border text-center text-[10px] font-bold transition-all ${
+                            crashStakeMode === 'groapa'
+                              ? 'bg-red-950/80 border-red-500 text-red-300 ring-1 ring-red-500/50'
+                              : 'bg-[#150f09] border-stone-800 text-stone-400 hover:text-stone-200'
+                          }`}
+                        >
+                          <span className="block text-xs">🕳️</span>
+                          <span className="leading-tight block font-cinzel">Doar Groapă</span>
+                          <span className="text-[8px] text-red-400 font-mono block">1v1 Chug Death</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Groapă Threshold if only Groapa */}
+                    {crashStakeMode === 'groapa' ? (
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-800">
+                        <span className="text-xs font-cinzel text-red-400 font-bold">🕳️ Prag Înfrângere (Gropi):</span>
+                        <div className="flex items-center gap-1">
+                          {[2, 3, 5].map((g) => (
+                            <button
+                              key={g}
+                              type="button"
+                              onClick={() => setCrashGroapaThreshold(g)}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
+                                crashGroapaThreshold === g
+                                  ? 'bg-red-900 border border-red-400 text-white font-black shadow-md'
+                                  : 'bg-[#1c150e] text-gray-300 hover:bg-[#2a2014]'
+                              }`}
+                            >
+                              {g} {language === 'ro' ? 'gropi' : 'pits'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      /* SIPS THRESHOLD SETTING */
+                      <div className="space-y-1 pt-1 border-t border-stone-800">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-cinzel text-red-400 font-bold">🏁 Prag Final (Guri):</span>
+                          <div className="flex items-center gap-1">
+                            {[30, 50, 60, 100].map((threshold) => (
+                              <button
+                                key={threshold}
+                                type="button"
+                                onClick={() => {
+                                  setIsCustomCrashThreshold(false);
+                                  setCrashSipsThreshold(threshold);
+                                  setCustomCrashThresholdInput(threshold.toString());
+                                }}
+                                className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
+                                  !isCustomCrashThreshold && crashSipsThreshold === threshold
+                                    ? 'bg-red-900 border border-red-400 text-white font-black shadow-md'
+                                    : 'bg-[#1c150e] text-gray-300 hover:bg-[#2a2014]'
+                                }`}
+                              >
+                                {threshold}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsCustomCrashThreshold(true);
+                                setCustomCrashThresholdInput(crashSipsThreshold.toString());
+                              }}
+                              className={`px-2 py-1 rounded-lg text-xs font-cinzel font-bold transition-all ${
+                                isCustomCrashThreshold
+                                  ? 'bg-red-900 border border-red-400 text-white font-black shadow-md'
+                                  : 'bg-[#1c150e] text-gray-300 hover:bg-[#2a2014]'
+                              }`}
+                            >
+                              Manual
+                            </button>
+                          </div>
+                        </div>
+
+                        {crashSipsThreshold > 50 && crashStakeMode === 'dynamic' && (
+                          <p className="text-[10px] text-amber-400/90 font-medium bg-amber-950/40 p-1 rounded border border-amber-500/30">
+                            ✨ Jocul are &gt;50 de guri: rundele de <strong>GROAPĂ 🕳️</strong> sunt activate și balansate!
+                          </p>
+                        )}
+
+                        {isCustomCrashThreshold && (
+                          <div className="pt-1 animate-fade-in">
+                            <input
+                              type="number"
+                              min="5"
+                              max="999"
+                              step="1"
+                              value={customCrashThresholdInput}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCustomCrashThresholdInput(val);
+                                const parsed = parseInt(val, 10);
+                                if (!isNaN(parsed) && parsed > 0) {
+                                  setCrashSipsThreshold(parsed);
+                                }
+                              }}
+                              placeholder="ex: 55"
+                              className="w-full bg-[#181109] border border-red-400/80 rounded-lg px-2.5 py-1 text-center text-xs font-mono text-red-300 focus:outline-none focus:border-red-400 font-bold"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {crashRole === 'join' && (
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      maxLength={4}
+                      value={crashRoomCodeInput}
+                      onChange={(e) => setCrashRoomCodeInput(e.target.value.toUpperCase())}
+                      placeholder={language === 'ro' ? 'CODUL CHILIEI CRASH (EX: 4X9K)' : 'CRASH ROOM CODE (EX: 4X9K)'}
+                      className="w-full bg-[#100b07] border-2 border-red-500 rounded-xl px-3 py-2 text-center text-lg font-cinzel font-black tracking-widest text-red-400 placeholder-gray-600 focus:outline-none uppercase"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* PINEAPPLE MODE COMPACT CONFIG */}
+            {mode === 'pineapple' && (
+              <div className="space-y-2 border-t border-[#2d2014] pt-2 animate-fade-in">
+                {/* 3-way Submode Selector */}
+                <div className="grid grid-cols-3 gap-1 bg-[#0f0a06] p-1 rounded-xl border border-[#2d1e12]">
+                  <button
+                    type="button"
+                    onClick={() => setPineappleRole('bot')}
+                    className={`py-1.5 px-1 rounded-lg font-cinzel text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+                      pineappleRole === 'bot'
+                        ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md font-black'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>🤖</span>
+                    <span className="truncate">{language === 'ro' ? 'Vs Bot AI' : 'Vs AI Bot'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPineappleRole('host')}
+                    className={`py-1.5 px-1 rounded-lg font-cinzel text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
+                      pineappleRole === 'host'
+                        ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md font-black'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <span>👑</span>
+                    <span className="truncate">{language === 'ro' ? 'Chilie 1v1' : '1v1 Room'}</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setPineappleRole('join')}
-                    className={`py-1.5 px-2 rounded-lg font-cinzel text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                    className={`py-1.5 px-1 rounded-lg font-cinzel text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
                       pineappleRole === 'join'
-                        ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md'
+                        ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black shadow-md font-black'
                         : 'text-gray-400 hover:text-gray-200'
                     }`}
                   >
                     <span>🚪</span>
-                    <span>{language === 'ro' ? 'Intră cu Cod' : 'Join Room'}</span>
+                    <span className="truncate">{language === 'ro' ? 'Cod' : 'Join'}</span>
                   </button>
                 </div>
 
-                {pineappleRole === 'host' && (
+                {/* BOT DIFFICULTY SELECTOR */}
+                {pineappleRole === 'bot' && (
+                  <div className="space-y-1.5 bg-[#100c07] p-2.5 rounded-xl border border-amber-500/40 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-cinzel font-bold text-[#ffd700] uppercase tracking-wider flex items-center gap-1">
+                        <span>🤖</span>
+                        <span>{language === 'ro' ? 'Nivel Dificultate Bot:' : 'Bot Difficulty:'}</span>
+                      </label>
+                      <span className="text-[10px] text-amber-300 font-cinzel font-bold">
+                        {BOT_PROFILES[pineappleBotDifficulty]?.name}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['easy', 'medium', 'hard'] as PineappleBotDifficulty[]).map((diff) => {
+                        const profile = BOT_PROFILES[diff];
+                        const isSelected = pineappleBotDifficulty === diff;
+                        return (
+                          <button
+                            key={diff}
+                            type="button"
+                            onClick={() => setPineappleBotDifficulty(diff)}
+                            className={`p-2 rounded-xl border flex flex-col items-center gap-0.5 transition-all text-center ${
+                              isSelected
+                                ? 'bg-gradient-to-b from-[#2b1b0e] to-[#1a1008] border-[#ffd700] text-[#ffd700] shadow-md ring-1 ring-[#ffd700]/50'
+                                : 'bg-[#140e08] border-stone-800 text-stone-400 hover:text-stone-200 hover:border-stone-700'
+                            }`}
+                          >
+                            <span className="text-base">{profile.avatarIcon}</span>
+                            <span className="font-cinzel text-xs font-bold leading-tight">
+                              {diff === 'easy' ? '🟢 Ușor' : diff === 'medium' ? '🟡 Mediu' : '🔴 Greu'}
+                            </span>
+                            <span className="text-[9px] text-stone-400 font-barlow leading-none truncate max-w-full">
+                              {profile.name}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Bot Strategy Description Banner */}
+                    <div className="p-2 rounded-lg bg-[#0b0805] border border-stone-800/80 text-[10px] text-stone-300 font-barlow flex items-start gap-1.5">
+                      <span className="text-amber-400 font-bold flex-shrink-0">ℹ️</span>
+                      <div>
+                        <span className="font-semibold text-amber-200">
+                          {BOT_PROFILES[pineappleBotDifficulty]?.titleRo}:
+                        </span>{' '}
+                        {BOT_PROFILES[pineappleBotDifficulty]?.descriptionRo}
+                        <div className="text-[9px] text-stone-500 mt-0.5 italic">
+                          ⚖️ Același pachet amestecat aleator — fără avantaje de cărți!
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* SETTINGS (SIPS PER POINT & SIPS THRESHOLD) FOR HOST OR BOT */}
+                {(pineappleRole === 'host' || pineappleRole === 'bot') && (
                   <div className="space-y-2">
                     {/* Guri per punct */}
                     <div className="bg-[#100c07] p-2 rounded-xl border border-[#2b2014] space-y-1">
@@ -529,24 +1015,66 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                     </div>
 
                     {/* Prag de guri pentru final de joc */}
-                    <div className="flex items-center justify-between gap-2 bg-[#100c07] p-2 rounded-xl border border-[#2b2014]">
-                      <span className="text-xs font-cinzel text-red-400 font-bold">🏁 Prag Final (Guri):</span>
-                      <div className="flex items-center gap-1">
-                        {[15, 25, 30, 50].map((threshold) => (
+                    <div className="space-y-1.5 bg-[#100c07] p-2.5 rounded-xl border border-[#2b2014]">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-cinzel text-red-400 font-bold">🏁 Prag Final (Guri):</span>
+                        <div className="flex items-center gap-1">
+                          {[15, 25, 50, 100].map((threshold) => (
+                            <button
+                              key={threshold}
+                              type="button"
+                              onClick={() => {
+                                setIsCustomSipsThreshold(false);
+                                setPineappleSipsThreshold(threshold);
+                                setCustomSipsThresholdInput(threshold.toString());
+                              }}
+                              className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
+                                !isCustomSipsThreshold && pineappleSipsThreshold === threshold
+                                  ? 'bg-red-900 border border-red-400 text-white font-black shadow-md'
+                                  : 'bg-[#1c150e] text-gray-300 hover:bg-[#2a2014]'
+                              }`}
+                            >
+                              {threshold}
+                            </button>
+                          ))}
                           <button
-                            key={threshold}
                             type="button"
-                            onClick={() => setPineappleSipsThreshold(threshold)}
-                            className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
-                              pineappleSipsThreshold === threshold
-                                ? 'bg-red-900 border border-red-400 text-white font-black'
+                            onClick={() => {
+                              setIsCustomSipsThreshold(true);
+                              setCustomSipsThresholdInput(pineappleSipsThreshold.toString());
+                            }}
+                            className={`px-2 py-1 rounded-lg text-xs font-cinzel font-bold transition-all ${
+                              isCustomSipsThreshold
+                                ? 'bg-red-900 border border-red-400 text-white font-black shadow-md'
                                 : 'bg-[#1c150e] text-gray-300 hover:bg-[#2a2014]'
                             }`}
                           >
-                            {threshold}
+                            Manual
                           </button>
-                        ))}
+                        </div>
                       </div>
+
+                      {isCustomSipsThreshold && (
+                        <div className="pt-1 animate-fade-in">
+                          <input
+                            type="number"
+                            min="1"
+                            max="999"
+                            step="1"
+                            value={customSipsThresholdInput}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCustomSipsThresholdInput(val);
+                              const parsed = parseInt(val, 10);
+                              if (!isNaN(parsed) && parsed > 0) {
+                                setPineappleSipsThreshold(parsed);
+                              }
+                            }}
+                            placeholder="ex: 35"
+                            className="w-full bg-[#181109] border border-red-400/80 rounded-lg px-2.5 py-1 text-center text-xs font-mono text-red-300 focus:outline-none focus:border-red-400 font-bold"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -733,7 +1261,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
             )}
 
             {/* NORMAL & BOARDGAME SETTINGS (PLAYER COUNT & DIFFICULTY/DICE) */}
-            {mode !== 'duel' && mode !== 'casino' && (
+            {mode !== 'duel' && mode !== 'casino' && mode !== 'pineapple' && mode !== 'crash' && (
               <div className="space-y-2 border-t border-[#2d2014] pt-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[11px] font-cinzel font-bold text-[#e8c84a] uppercase">
@@ -815,7 +1343,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
             <div className="space-y-2 border-t border-[#2d2014] pt-2">
               <div className="flex items-center justify-between">
                 <label className="text-[11px] font-cinzel font-bold text-[#e8c84a] uppercase tracking-wider block">
-                  {mode === 'duel' || mode === 'casino' || mode === 'pineapple'
+                  {mode === 'duel' || mode === 'casino' || mode === 'pineapple' || mode === 'crash'
                     ? language === 'ro'
                       ? 'Nume & Avatar Jucător'
                       : 'Player Name & Avatar'
@@ -827,7 +1355,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                {Array.from({ length: mode === 'duel' || mode === 'casino' || mode === 'pineapple' ? 1 : playerCount }).map((_, idx) => {
+                {Array.from({ length: mode === 'duel' || mode === 'casino' || mode === 'pineapple' || mode === 'crash' ? 1 : playerCount }).map((_, idx) => {
                   const currentAvatarId = playerAvatars[idx] || DEFAULT_AVATARS[idx % DEFAULT_AVATARS.length];
 
                   return (
@@ -871,7 +1399,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
               </div>
 
               {/* 1v1 Head-to-Head Tracker if 2 players are configured */}
-              {playerCount === 2 && (
+              {playerCount === 2 && mode !== 'crash' && mode !== 'pineapple' && (
                 <div className="pt-2">
                   <HeadToHeadTracker
                     player1={{
@@ -896,21 +1424,33 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                 type="button"
                 onClick={handleStart}
                 disabled={
+                  (mode === 'crash' && crashRole === 'join' && crashRoomCodeInput.trim().length !== 4) ||
                   (mode === 'duel' && duelRole === 'join' && duelRoomCodeInput.trim().length !== 4) ||
                   (mode === 'casino' && casinoRole === 'join' && casinoRoomCodeInput.trim().length !== 4) ||
                   (mode === 'pineapple' && pineappleRole === 'join' && pineappleRoomCodeInput.trim().length !== 4)
                 }
                 className={`w-full py-3.5 rounded-xl font-cinzel font-black text-sm sm:text-base transition-all active:scale-98 shadow-lg uppercase tracking-wide flex items-center justify-center gap-2 ${
+                  (mode === 'crash' && crashRole === 'join' && crashRoomCodeInput.trim().length !== 4) ||
                   (mode === 'duel' && duelRole === 'join' && duelRoomCodeInput.trim().length !== 4) ||
                   (mode === 'casino' && casinoRole === 'join' && casinoRoomCodeInput.trim().length !== 4) ||
                   (mode === 'pineapple' && pineappleRole === 'join' && pineappleRoomCodeInput.trim().length !== 4)
                     ? 'bg-[#20170f] text-gray-500 border border-gray-700 cursor-not-allowed'
+                    : mode === 'crash'
+                    ? 'bg-gradient-to-r from-red-600 via-amber-600 to-red-600 text-white hover:brightness-110 shadow-red-900/50'
                     : 'bg-gradient-to-r from-[#ffd700] via-[#f7c844] to-[#ffd700] text-black hover:brightness-110 gold-glow'
                 }`}
               >
                 <span>
-                  {mode === 'pineapple'
-                    ? pineappleRole === 'host'
+                  {mode === 'crash'
+                    ? crashRole === 'bot'
+                      ? '🤖'
+                      : crashRole === 'host'
+                      ? '👑'
+                      : '🚪'
+                    : mode === 'pineapple'
+                    ? pineappleRole === 'bot'
+                      ? '🤖'
+                      : pineappleRole === 'host'
                       ? '👑'
                       : '🚪'
                     : mode === 'casino'
@@ -922,8 +1462,24 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                     : '🚀'}
                 </span>
                 <span>
-                  {mode === 'pineapple'
-                    ? pineappleRole === 'host'
+                  {mode === 'crash'
+                    ? crashRole === 'bot'
+                      ? language === 'ro'
+                        ? `Zboară vs Bot (${crashBotStyle === 'prudent' ? 'Prudent' : 'Înflăcărat'}) ➔`
+                        : `Fly vs Bot (${crashBotStyle.toUpperCase()}) ➔`
+                      : crashRole === 'host'
+                      ? language === 'ro'
+                        ? 'Creează Chilie Crash ➔'
+                        : 'Create Crash Room ➔'
+                      : language === 'ro'
+                        ? 'Intră în Chilie Crash ➔'
+                        : 'Join Crash Room ➔'
+                    : mode === 'pineapple'
+                    ? pineappleRole === 'bot'
+                      ? language === 'ro'
+                        ? `Joacă vs Bot (${pineappleBotDifficulty === 'easy' ? 'Ușor' : pineappleBotDifficulty === 'medium' ? 'Mediu' : 'Greu'}) ➔`
+                        : `Play vs Bot (${pineappleBotDifficulty.toUpperCase()}) ➔`
+                      : pineappleRole === 'host'
                       ? language === 'ro'
                         ? 'Creează Chilie Pineapple ➔'
                         : 'Create Pineapple Room ➔'
@@ -950,6 +1506,16 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
               >
                 {language === 'ro' ? 'Profilurile Tale' : 'Your Profiles'}
               </button>
+
+              {/* TAVERN FRIENDS & DIRECT 1v1 INVITES BUTTON */}
+              <button
+                type="button"
+                onClick={() => setMainTab('friends')}
+                className="w-full py-2.5 sm:py-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition-all active:scale-98 shadow-md uppercase tracking-wider flex items-center justify-center gap-2 bg-gradient-to-r from-[#1c1208] via-[#2a1b0d] to-[#1c1208] border border-[#e8c84a]/60 text-[#ffd700] hover:border-[#ffd700] hover:bg-[#382312] hover:brightness-110"
+              >
+                <span>👥</span>
+                <span>{language === 'ro' ? 'Prieteni & Invitații 1v1' : 'Friends & 1v1 Invites'}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -962,6 +1528,24 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
           <GlobalLeaderboardSection onOpenCloudModal={onOpenCloudModal} isFullView={true} />
 
           {/* Return to Play Button */}
+          <button
+            type="button"
+            onClick={() => setMainTab('play')}
+            className="w-full py-2.5 rounded-xl bg-[#1c140d] border border-[#ffd700]/50 hover:border-[#ffd700] text-[#ffd700] font-cinzel font-bold text-xs uppercase shadow transition-all flex items-center justify-center gap-2"
+          >
+            <span>🎮</span>
+            <span>{language === 'ro' ? '← Înapoi la Panoul de Joc' : '← Back to Play Setup'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* VIEW 3: DEDICATED FRIENDS & 1v1 INVITES VIEW */}
+      {mainTab === 'friends' && (
+        <div className="w-full space-y-3 animate-fade-in">
+          <FriendsTab
+            onClose={() => setMainTab('play')}
+            onLaunchGameFromInvite={handleLaunchGameFromInvite}
+          />
           <button
             type="button"
             onClick={() => setMainTab('play')}

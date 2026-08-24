@@ -79,6 +79,8 @@ export function calculatePineappleHandScore(
       royaltiesBottomB: 0,
       totalRoyaltiesA: 0,
       totalRoyaltiesB: 0,
+      grossPointsA: 0,
+      grossPointsB: 0,
       netScoreA: 0,
       netScoreB: 0,
       sipsAddedA: 0,
@@ -148,6 +150,8 @@ export function calculatePineappleHandScore(
       royaltiesBottomB,
       totalRoyaltiesA: 0,
       totalRoyaltiesB,
+      grossPointsA: 0,
+      grossPointsB: 6 + totalRoyaltiesB,
       netScoreA,
       netScoreB,
       sipsAddedA,
@@ -217,6 +221,8 @@ export function calculatePineappleHandScore(
       royaltiesBottomB: 0,
       totalRoyaltiesA,
       totalRoyaltiesB: 0,
+      grossPointsA: 6 + totalRoyaltiesA,
+      grossPointsB: 0,
       netScoreA,
       netScoreB,
       sipsAddedA,
@@ -289,6 +295,20 @@ export function calculatePineappleHandScore(
   const totalRoyaltiesA = royaltiesTopA + royaltiesMiddleA + royaltiesBottomA;
   const totalRoyaltiesB = royaltiesTopB + royaltiesMiddleB + royaltiesBottomB;
 
+  const grossPointsA =
+    (topWinner === 'A' ? 1 : 0) +
+    (middleWinner === 'A' ? 1 : 0) +
+    (bottomWinner === 'A' ? 1 : 0) +
+    (scoopWinner === 'A' ? 3 : 0) +
+    totalRoyaltiesA;
+
+  const grossPointsB =
+    (topWinner === 'B' ? 1 : 0) +
+    (middleWinner === 'B' ? 1 : 0) +
+    (bottomWinner === 'B' ? 1 : 0) +
+    (scoopWinner === 'B' ? 3 : 0) +
+    totalRoyaltiesB;
+
   const netScoreA = rowPointsA + totalRoyaltiesA - totalRoyaltiesB;
   const netScoreB = -netScoreA;
 
@@ -319,6 +339,8 @@ export function calculatePineappleHandScore(
     royaltiesBottomB,
     totalRoyaltiesA,
     totalRoyaltiesB,
+    grossPointsA,
+    grossPointsB,
     netScoreA,
     netScoreB,
     sipsAddedA,

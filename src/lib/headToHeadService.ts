@@ -1,12 +1,14 @@
 /**
  * Head-to-Head (1v1) Score Tracker Service
- * Tracks persistent rivalry records, win/loss stats, and mode breakdowns
- * between any 2 player profiles when they meet in a 1v1 match (Duel, Casino, Boardgame, Normal).
+ * Tracks persistent rivalry records, win/loss stats, total points, and mode breakdowns
+ * between any 2 player profiles when they meet in a 1v1 match (Pineapple, Duel, Casino, Boardgame, Normal).
  */
 
 export interface ModeHeadToHead {
   p1Wins: number;
   p2Wins: number;
+  p1Points?: number;
+  p2Points?: number;
 }
 
 export interface StoredH2HRecord {
@@ -14,8 +16,11 @@ export interface StoredH2HRecord {
   player2Name: string; // Lexicographical second name
   player1Wins: number;
   player2Wins: number;
+  player1TotalPoints?: number; // Total all-time points scored in 1v1 encounters
+  player2TotalPoints?: number;
   ties: number;
   totalMatches: number;
+  pineapple?: ModeHeadToHead;
   duel: ModeHeadToHead;
   casino: ModeHeadToHead;
   boardgame: ModeHeadToHead;
@@ -29,9 +34,12 @@ export interface PlayerHeadToHeadStats {
   player2Name: string; // Perspective player 2 (e.g. Opponent)
   player1Wins: number;
   player2Wins: number;
+  player1Points: number; // Perspective player 1 total all-time 1v1 points
+  player2Points: number; // Perspective player 2 total all-time 1v1 points
   ties: number;
   totalMatches: number;
   modeBreakdown: {
+    pineapple: { p1: number; p2: number; p1Points: number; p2Points: number };
     duel: { p1: number; p2: number };
     casino: { p1: number; p2: number };
     boardgame: { p1: number; p2: number };
@@ -95,9 +103,12 @@ export function getHeadToHeadStats(nameA: string, nameB: string): PlayerHeadToHe
       player2Name: normB || 'Jucător 2',
       player1Wins: 0,
       player2Wins: 0,
+      player1Points: 0,
+      player2Points: 0,
       ties: 0,
       totalMatches: 0,
       modeBreakdown: {
+        pineapple: { p1: 0, p2: 0, p1Points: 0, p2Points: 0 },
         duel: { p1: 0, p2: 0 },
         casino: { p1: 0, p2: 0 },
         boardgame: { p1: 0, p2: 0 },
@@ -116,9 +127,12 @@ export function getHeadToHeadStats(nameA: string, nameB: string): PlayerHeadToHe
       player2Name: normB,
       player1Wins: 0,
       player2Wins: 0,
+      player1Points: 0,
+      player2Points: 0,
       ties: 0,
       totalMatches: 0,
       modeBreakdown: {
+        pineapple: { p1: 0, p2: 0, p1Points: 0, p2Points: 0 },
         duel: { p1: 0, p2: 0 },
         casino: { p1: 0, p2: 0 },
         boardgame: { p1: 0, p2: 0 },
@@ -131,14 +145,25 @@ export function getHeadToHeadStats(nameA: string, nameB: string): PlayerHeadToHe
   const p1Wins = isSwapped ? stored.player2Wins : stored.player1Wins;
   const p2Wins = isSwapped ? stored.player1Wins : stored.player2Wins;
 
+  const p1Points = isSwapped ? stored.player2TotalPoints || 0 : stored.player1TotalPoints || 0;
+  const p2Points = isSwapped ? stored.player1TotalPoints || 0 : stored.player2TotalPoints || 0;
+
   return {
     player1Name: normA,
     player2Name: normB,
     player1Wins: p1Wins || 0,
     player2Wins: p2Wins || 0,
+    player1Points: p1Points || 0,
+    player2Points: p2Points || 0,
     ties: stored.ties || 0,
     totalMatches: stored.totalMatches || 0,
     modeBreakdown: {
+      pineapple: {
+        p1: isSwapped ? stored.pineapple?.p2Wins || 0 : stored.pineapple?.p1Wins || 0,
+        p2: isSwapped ? stored.pineapple?.p1Wins || 0 : stored.pineapple?.p2Wins || 0,
+        p1Points: isSwapped ? stored.pineapple?.p2Points || 0 : stored.pineapple?.p1Points || 0,
+        p2Points: isSwapped ? stored.pineapple?.p1Points || 0 : stored.pineapple?.p2Points || 0,
+      },
       duel: {
         p1: isSwapped ? stored.duel?.p2Wins || 0 : stored.duel?.p1Wins || 0,
         p2: isSwapped ? stored.duel?.p1Wins || 0 : stored.duel?.p2Wins || 0,
@@ -162,14 +187,14 @@ export function getHeadToHeadStats(nameA: string, nameB: string): PlayerHeadToHe
 }
 
 /**
- * Records a 1v1 match outcome between two players
+ * Adds points to the cumulative head-to-head points record between two players
  */
-export function recordHeadToHeadMatch(
+export function addHeadToHeadPoints(
   playerAName: string,
   playerBName: string,
-  winnerName: string | null,
-  mode: 'duel' | 'casino' | 'boardgame' | 'normal' = 'duel',
-  isTie = false
+  pointsA: number,
+  pointsB: number,
+  mode: 'pineapple' | 'duel' | 'casino' | 'boardgame' | 'normal' = 'pineapple'
 ): PlayerHeadToHeadStats {
   const normA = (playerAName || '').trim();
   const normB = (playerBName || '').trim();
@@ -186,8 +211,71 @@ export function recordHeadToHeadMatch(
     player2Name: isSwapped ? normA : normB,
     player1Wins: 0,
     player2Wins: 0,
+    player1TotalPoints: 0,
+    player2TotalPoints: 0,
     ties: 0,
     totalMatches: 0,
+    pineapple: { p1Wins: 0, p2Wins: 0, p1Points: 0, p2Points: 0 },
+    duel: { p1Wins: 0, p2Wins: 0 },
+    casino: { p1Wins: 0, p2Wins: 0 },
+    boardgame: { p1Wins: 0, p2Wins: 0 },
+    normal: { p1Wins: 0, p2Wins: 0 },
+    lastMatchAt: Date.now(),
+  };
+
+  const p1Add = isSwapped ? pointsB : pointsA;
+  const p2Add = isSwapped ? pointsA : pointsB;
+
+  existing.player1TotalPoints = (existing.player1TotalPoints || 0) + Math.max(0, p1Add);
+  existing.player2TotalPoints = (existing.player2TotalPoints || 0) + Math.max(0, p2Add);
+
+  if (mode === 'pineapple') {
+    if (!existing.pineapple) {
+      existing.pineapple = { p1Wins: 0, p2Wins: 0, p1Points: 0, p2Points: 0 };
+    }
+    existing.pineapple.p1Points = (existing.pineapple.p1Points || 0) + Math.max(0, p1Add);
+    existing.pineapple.p2Points = (existing.pineapple.p2Points || 0) + Math.max(0, p2Add);
+  }
+
+  existing.lastMatchAt = Date.now();
+  records[key] = existing;
+  saveAllRecords(records);
+
+  return getHeadToHeadStats(normA, normB);
+}
+
+/**
+ * Records a 1v1 match outcome between two players
+ */
+export function recordHeadToHeadMatch(
+  playerAName: string,
+  playerBName: string,
+  winnerName: string | null,
+  mode: 'duel' | 'casino' | 'boardgame' | 'normal' | 'pineapple' = 'duel',
+  isTie = false,
+  pointsA = 0,
+  pointsB = 0
+): PlayerHeadToHeadStats {
+  const normA = (playerAName || '').trim();
+  const normB = (playerBName || '').trim();
+
+  if (!normA || !normB || normA.toLowerCase() === normB.toLowerCase()) {
+    return getHeadToHeadStats(normA, normB);
+  }
+
+  const { key, isSwapped } = getH2HKey(normA, normB);
+  const records = loadAllRecords();
+
+  const existing: StoredH2HRecord = records[key] || {
+    player1Name: isSwapped ? normB : normA,
+    player2Name: isSwapped ? normA : normB,
+    player1Wins: 0,
+    player2Wins: 0,
+    player1TotalPoints: 0,
+    player2TotalPoints: 0,
+    ties: 0,
+    totalMatches: 0,
+    pineapple: { p1Wins: 0, p2Wins: 0, p1Points: 0, p2Points: 0 },
     duel: { p1Wins: 0, p2Wins: 0 },
     casino: { p1Wins: 0, p2Wins: 0 },
     boardgame: { p1Wins: 0, p2Wins: 0 },
@@ -198,8 +286,22 @@ export function recordHeadToHeadMatch(
   existing.totalMatches = (existing.totalMatches || 0) + 1;
   existing.lastMatchAt = Date.now();
 
+  // Accumulate points
+  const p1Add = isSwapped ? pointsB : pointsA;
+  const p2Add = isSwapped ? pointsA : pointsB;
+
+  if (p1Add > 0 || p2Add > 0) {
+    existing.player1TotalPoints = (existing.player1TotalPoints || 0) + Math.max(0, p1Add);
+    existing.player2TotalPoints = (existing.player2TotalPoints || 0) + Math.max(0, p2Add);
+  }
+
   if (!existing[mode]) {
-    existing[mode] = { p1Wins: 0, p2Wins: 0 };
+    existing[mode] = { p1Wins: 0, p2Wins: 0, p1Points: 0, p2Points: 0 };
+  }
+
+  if (mode === 'pineapple' && (p1Add > 0 || p2Add > 0)) {
+    existing.pineapple!.p1Points = (existing.pineapple!.p1Points || 0) + Math.max(0, p1Add);
+    existing.pineapple!.p2Points = (existing.pineapple!.p2Points || 0) + Math.max(0, p2Add);
   }
 
   if (isTie || !winnerName) {
@@ -237,3 +339,4 @@ export function resetAllHeadToHead(): void {
     console.error('Failed to reset H2H records', e);
   }
 }
+

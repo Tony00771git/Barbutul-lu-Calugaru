@@ -6,7 +6,7 @@ interface HeadToHeadTrackerProps {
   player1: { name: string; avatarIcon?: string; color?: string };
   player2: { name: string; avatarIcon?: string; color?: string };
   variant?: 'banner' | 'compact' | 'hud';
-  currentMode?: 'duel' | 'casino' | 'boardgame' | 'normal';
+  currentMode?: 'pineapple' | 'duel' | 'casino' | 'boardgame' | 'normal';
   className?: string;
 }
 
@@ -14,7 +14,7 @@ export const HeadToHeadTracker: React.FC<HeadToHeadTrackerProps> = ({
   player1,
   player2,
   variant = 'banner',
-  currentMode = 'duel',
+  currentMode = 'pineapple',
   className = '',
 }) => {
   const stats: PlayerHeadToHeadStats = useMemo(() => {
@@ -23,19 +23,20 @@ export const HeadToHeadTracker: React.FC<HeadToHeadTrackerProps> = ({
 
   const p1Wins = stats.player1Wins;
   const p2Wins = stats.player2Wins;
+  const p1Pts = stats.player1Points || 0;
+  const p2Pts = stats.player2Points || 0;
   const total = stats.totalMatches;
 
   const isLeaderP1 = p1Wins > p2Wins;
   const isLeaderP2 = p2Wins > p1Wins;
   const isTied = p1Wins === p2Wins;
 
-  const modeStats = stats.modeBreakdown[currentMode];
-  const hasHistory = total > 0;
+  const hasHistory = total > 0 || p1Pts > 0 || p2Pts > 0;
 
   if (variant === 'compact') {
     return (
       <div
-        className={`inline-flex items-center gap-2 bg-[#120d08]/90 border border-[#e8c84a]/40 px-3 py-1 rounded-xl text-xs font-cinzel shadow-sm ${className}`}
+        className={`inline-flex flex-wrap items-center gap-2 bg-[#120d08]/90 border border-[#e8c84a]/40 px-3 py-1 rounded-xl text-xs font-cinzel shadow-sm ${className}`}
       >
         <span className="text-amber-400 font-bold">⚔️ 1v1 H2H:</span>
         <span className="text-[#f0ebe0] font-bold truncate max-w-[80px]">{player1.name}</span>
@@ -43,7 +44,11 @@ export const HeadToHeadTracker: React.FC<HeadToHeadTrackerProps> = ({
           {p1Wins} - {p2Wins}
         </span>
         <span className="text-[#f0ebe0] font-bold truncate max-w-[80px]">{player2.name}</span>
-        {total > 0 && <span className="text-[10px] text-gray-400 font-barlow">({total} meciuri)</span>}
+        {(p1Pts > 0 || p2Pts > 0) && (
+          <span className="bg-amber-950/60 px-1.5 py-0.5 rounded text-[10px] text-amber-300 font-barlow font-bold">
+            Puncte: {p1Pts} - {p2Pts}
+          </span>
+        )}
       </div>
     );
   }
@@ -51,7 +56,7 @@ export const HeadToHeadTracker: React.FC<HeadToHeadTrackerProps> = ({
   if (variant === 'hud') {
     return (
       <div
-        className={`flex items-center justify-between bg-gradient-to-r from-[#1a1109]/90 via-[#26180c]/90 to-[#1a1109]/90 border border-[#e8c84a]/50 px-3 py-1.5 rounded-xl text-xs font-cinzel shadow-md ${className}`}
+        className={`flex items-center justify-between gap-2 bg-gradient-to-r from-[#1a1109]/90 via-[#26180c]/90 to-[#1a1109]/90 border border-[#e8c84a]/50 px-3 py-1.5 rounded-xl text-xs font-cinzel shadow-md ${className}`}
       >
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-amber-400 text-sm">⚔️</span>
@@ -70,9 +75,11 @@ export const HeadToHeadTracker: React.FC<HeadToHeadTrackerProps> = ({
           </span>
         </div>
 
-        <div className="text-[10px] text-gray-400 font-barlow hidden sm:block">
-          {total === 0 ? 'Debut Rivalitate' : `${total} confruntări`}
-        </div>
+        {(p1Pts > 0 || p2Pts > 0) && (
+          <div className="text-[10px] text-[#ffd700] font-barlow font-bold bg-[#140d07] px-2 py-0.5 rounded border border-amber-500/30 hidden sm:block">
+            Puncte: {p1Pts} - {p2Pts}
+          </div>
+        )}
       </div>
     );
   }
@@ -118,6 +125,7 @@ export const HeadToHeadTracker: React.FC<HeadToHeadTrackerProps> = ({
             </div>
             <div className="text-[10px] font-barlow text-gray-400">
               Victorii: <b className="text-[#ffd700]">{p1Wins}</b>
+              {p1Pts > 0 && <span className="ml-1 text-amber-300">({p1Pts} pct)</span>}
             </div>
           </div>
         </div>
@@ -145,6 +153,7 @@ export const HeadToHeadTracker: React.FC<HeadToHeadTrackerProps> = ({
               {player2.name}
             </div>
             <div className="text-[10px] font-barlow text-gray-400">
+              {p2Pts > 0 && <span className="mr-1 text-amber-300">({p2Pts} pct)</span>}
               Victorii: <b className="text-[#ffd700]">{p2Wins}</b>
             </div>
           </div>
@@ -159,10 +168,32 @@ export const HeadToHeadTracker: React.FC<HeadToHeadTrackerProps> = ({
         </div>
       </div>
 
+      {/* All-time Points Bar if points recorded */}
+      {(p1Pts > 0 || p2Pts > 0) && (
+        <div className="mt-2.5 bg-[#0a0704] border border-[#ffd700]/30 rounded-xl p-2 flex items-center justify-between text-xs font-cinzel">
+          <span className="text-gray-400 text-[10px] uppercase font-bold tracking-wider">
+            🏆 Puncte All-Time 1v1:
+          </span>
+          <div className="flex items-center gap-2 font-bold font-bebas text-base">
+            <span className="text-[#ffd700]">{player1.name}: {p1Pts} pct</span>
+            <span className="text-gray-500 font-cinzel text-xs">vs</span>
+            <span className="text-[#e05c3a]">{player2.name}: {p2Pts} pct</span>
+          </div>
+        </div>
+      )}
+
       {/* Mode Specific Breakdown Chips */}
-      <div className="mt-3 pt-2 border-t border-white/5 flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-cinzel">
+      <div className="mt-2.5 pt-2 border-t border-white/5 flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-cinzel">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-gray-400">Palmares pe Moduri:</span>
+          <span className="px-2 py-0.5 rounded-md bg-[#24170d] border border-amber-500/30 text-amber-300">
+            🍍 Pineapple: <b>{stats.modeBreakdown.pineapple.p1} - {stats.modeBreakdown.pineapple.p2}</b>
+            {(stats.modeBreakdown.pineapple.p1Points > 0 || stats.modeBreakdown.pineapple.p2Points > 0) && (
+              <span className="text-[9px] text-gray-400 ml-1">
+                ({stats.modeBreakdown.pineapple.p1Points}p - {stats.modeBreakdown.pineapple.p2Points}p)
+              </span>
+            )}
+          </span>
           <span className="px-2 py-0.5 rounded-md bg-[#24170d] border border-amber-500/30 text-amber-300">
             ⚔️ Duel: <b>{stats.modeBreakdown.duel.p1} - {stats.modeBreakdown.duel.p2}</b>
           </span>

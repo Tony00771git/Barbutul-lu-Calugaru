@@ -81,6 +81,14 @@ export const ACHIEVEMENT_DIFFICULTY_MAP: Record<string, AchievementDifficulty> =
   fate_card: 'bronze',
   first_duel: 'bronze',
   first_casino: 'bronze',
+  first_pineapple: 'bronze',
+  pineapple_bot_easy: 'bronze',
+  pineapple_flawless_hand: 'bronze',
+  pineapple_fantasyland: 'bronze',
+  pineapple_royalties: 'bronze',
+  first_crash: 'bronze',
+  crash_safe_landing: 'bronze',
+  crash_chicken_egg: 'bronze',
   pass_dice_turn: 'bronze',
   quick_reflex: 'bronze',
   sip_apprentice_10: 'bronze',
@@ -100,6 +108,13 @@ export const ACHIEVEMENT_DIFFICULTY_MAP: Record<string, AchievementDifficulty> =
   podium_winner: 'silver',
   duel_victory: 'silver',
   casino_highroller: 'silver',
+  pineapple_victory: 'silver',
+  pineapple_bot_medium: 'silver',
+  pineapple_scoop: 'silver',
+  pineapple_dragon: 'silver',
+  pineapple_fantasyland_streak: 'silver',
+  crash_high_multiplier: 'silver',
+  crash_bot_victor: 'silver',
   sips_century_100: 'silver',
   chug_veteran_10: 'silver',
   monopoly_land_baron: 'silver',
@@ -117,13 +132,19 @@ export const ACHIEVEMENT_DIFFICULTY_MAP: Record<string, AchievementDifficulty> =
   legend_boardgame_emperor: 'gold',
   legend_craps_king: 'gold',
   legend_duel_grandmaster: 'gold',
+  legend_pineapple_master: 'gold',
+  legend_crash_master: 'gold',
   legend_survivor_100_turns: 'gold',
   legend_speed_titan: 'gold',
 
   // PLATINUM (200 XP) - Epic, rare combos of high skill & luck
+  pineapple_bot_hard: 'platinum',
+  legend_pineapple_royal_flush: 'platinum',
+  crash_legendary_x20: 'platinum',
   legend_tycoon: 'platinum',
   legend_ascended: 'platinum',
   legend_tri_champion: 'platinum',
+  legend_quad_champion: 'platinum',
   legend_flawless_duel: 'platinum',
   legend_50_games: 'platinum',
   legend_craps_fortune: 'platinum',
@@ -297,7 +318,7 @@ export const getAchievementCoinReward = (difficulty: AchievementDifficulty): num
  * XP & Drunken Coins Breakdown calculation for end of match
  */
 export interface MatchXpBreakdown {
-  mode: 'normal' | 'boardgame' | 'duel' | 'casino';
+  mode: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple';
   turnsPlayed: number;
   participationXP: number;
   turnsXP: number;
@@ -337,22 +358,29 @@ export interface MatchXpBreakdown {
 
 export const calculateMatchXpGain = (
   currentProfile: Profile,
-  mode: 'normal' | 'boardgame' | 'duel' | 'casino',
+  mode: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple',
   isWinner: boolean,
   turnsPlayed: number = 5,
   newAchievementsUnlocked: string[] = [],
-  extraStats?: { sips?: number; chugs?: number; gold?: number; chips?: number; flawless?: boolean }
-): MatchXpBreakdown => {
+  extraStats?: { sips?: number; chugs?: number; gold?: number; chips?: number; flawless?: boolean },
+  globalCoinsPool?: number
+): MatchXpBreakdown | null => {
+  // CRITICAL ANTI-FARMING RULE: If game ended under 2 turns/hands/rounds, NO XP or Coins are awarded!
+  if (turnsPlayed < 2) {
+    return null;
+  }
+
   const oldXP = currentProfile.totalXP || 0;
-  const oldCoins = currentProfile.drunkenCoins || 0;
+  const oldCoins = globalCoinsPool !== undefined ? globalCoinsPool : (currentProfile.drunkenCoins || 0);
   const oldProg = calculateProgression(oldXP);
-  const safeTurns = Math.max(1, turnsPlayed || 1);
+  const safeTurns = Math.max(2, turnsPlayed || 2);
 
   // 1. Base Participation XP
   let participationXP = 15;
   if (mode === 'boardgame') participationXP = 30;
   else if (mode === 'duel') participationXP = 20;
   else if (mode === 'casino') participationXP = 25;
+  else if (mode === 'pineapple') participationXP = 25;
 
   // 2. Turns Played Formula
   let turnsXP = 0;
@@ -379,6 +407,11 @@ export const calculateMatchXpGain = (
     turnsXP = Math.min(130, rawTurnsXp);
     turnsFormulaTextRo = `${safeTurns} runde pariate × 6 XP`;
     turnsFormulaTextEn = `${safeTurns} betting rounds × 6 XP`;
+  } else if (mode === 'pineapple') {
+    const rawTurnsXp = Math.round(safeTurns * 7.0);
+    turnsXP = Math.min(140, rawTurnsXp);
+    turnsFormulaTextRo = `${safeTurns} mâini jucate × 7 XP`;
+    turnsFormulaTextEn = `${safeTurns} hands played × 7 XP`;
   }
 
   // 3. Performance / Winner XP
@@ -396,6 +429,10 @@ export const calculateMatchXpGain = (
       performanceXP = 65;
       performanceReasonRo = 'Rege al Mesei de Craps (Supraviețuitor)';
       performanceReasonEn = 'Craps Casino King (Last Standing)';
+    } else if (mode === 'pineapple') {
+      performanceXP = 55;
+      performanceReasonRo = 'Maestru Pineapple OFC (Câștigător)';
+      performanceReasonEn = 'Pineapple OFC Master (Winner)';
     } else if (mode === 'boardgame') {
       performanceXP = 60;
       performanceReasonRo = 'Câștigător Moșia Mănăstirii (Locul 1)';
@@ -438,6 +475,7 @@ export const calculateMatchXpGain = (
   if (mode === 'boardgame') baseCoins = 15;
   else if (mode === 'duel') baseCoins = 10;
   else if (mode === 'casino') baseCoins = 12;
+  else if (mode === 'pineapple') baseCoins = 14;
 
   coinsBreakdown.push({
     icon: '🍺',
@@ -452,6 +490,7 @@ export const calculateMatchXpGain = (
   else if (mode === 'boardgame') turnsCoins = Math.floor(safeTurns / 3);
   else if (mode === 'duel') turnsCoins = Math.floor(safeTurns * 1.5);
   else if (mode === 'casino') turnsCoins = Math.floor(safeTurns * 1.5);
+  else if (mode === 'pineapple') turnsCoins = Math.floor(safeTurns * 1.5);
 
   if (turnsCoins > 0) {
     coinsBreakdown.push({
@@ -468,6 +507,7 @@ export const calculateMatchXpGain = (
     if (mode === 'boardgame') winCoins = 30;
     else if (mode === 'casino') winCoins = 35;
     else if (mode === 'duel') winCoins = 25;
+    else if (mode === 'pineapple') winCoins = 28;
 
     coinsBreakdown.push({
       icon: '👑',

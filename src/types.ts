@@ -1,10 +1,74 @@
-export type GameMode = 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple';
+export type GameMode = 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'crash';
 export type Language = 'ro' | 'en';
 export type ThemeId = 'tavern' | 'cellar' | 'great_hall' | 'dungeon';
 export type DiceSkin = 'gold' | 'bone' | 'wood';
 export type Difficulty = 'weak' | 'medium' | 'extreme' | 'nightmare';
 export type DuelSubmode = 'general' | 'football';
 export type DuelDifficulty = 'easy' | 'medium' | 'hard';
+
+// Crash (1v1 Dragon Multiplier) Types
+export type CrashBotStyle = 'prudent' | 'risky';
+export type CrashStakeMode = 'guri' | 'groapa' | 'dynamic';
+export type CrashRoundStakeType = 'guri' | 'groapa';
+
+export interface CrashPlayerState {
+  id: string;
+  name: string;
+  avatarIcon: string;
+  color: string;
+  isHost: boolean;
+  isBot?: boolean;
+  botStyle?: CrashBotStyle;
+  connected: boolean;
+  autoCashoutEnabled: boolean;
+  autoCashoutTarget?: number;
+  cashedOutAt?: number | null;         // Multiplier at cashout, null if not cashed out / crashed
+  score: number;                // betValue * cashedOutAt, or 0
+  roundSipsToDrink: number;     // sips to drink this round (score difference)
+  totalGuriAcumulate: number;   // cumulative sips drunk, compared with threshold
+  roundGroapaToDrink?: number;  // 1 if player has to drink a groapa this round
+  totalGroapaAcumulate?: number;// total gropi drunk
+  chickenStreak: number;        // 0-3, for easter egg (< 1.50)
+  isReadyNextRound: boolean;
+}
+
+export interface CrashRound {
+  roundNumber: number;
+  phase: 'prep' | 'flying' | 'crashed' | 'resolved';
+  stakeType: CrashRoundStakeType; // 'guri' or 'groapa'
+  betValue: number;             // 1-10 sips if guri, or 1 groapa
+  crashPoint: number;           // Multiplier where dragon crashes (e.g. 2.45)
+  roundStartTimestamp: number;  // server timestamp ms when flying phase starts
+  crashedAtTimestamp?: number;  // timestamp ms when crash occurred
+  bothCrashed?: boolean;        // true if all active players crashed
+  isGroapaRound?: boolean;      // helper flag
+}
+
+export interface CrashMatchSettings {
+  sipsThreshold: number;        // e.g. 30 sips to end game (first to reach loses)
+  stakeMode: CrashStakeMode;    // 'guri' | 'groapa' | 'dynamic'
+  groapaThreshold?: number;     // e.g. 3 gropi to end game in groapa mode
+}
+
+export interface CrashHistoryItem {
+  roundNumber: number;
+  multiplier: number;
+  stakeType?: CrashRoundStakeType;
+  betValue?: number;
+}
+
+export interface CrashRoomState {
+  code: string;
+  hostPlayerId: string;
+  players: CrashPlayerState[];
+  settings: CrashMatchSettings;
+  status: 'lobby' | 'in_game' | 'finished';
+  currentRound: CrashRound;
+  winnerId: string | null;
+  loserId: string | null;
+  history?: CrashHistoryItem[];
+  updatedAt?: any;
+}
 
 // Pineapple Poker (Open Face Chinese Poker 1v1) Types
 export type PlayingCardSuit = 's' | 'h' | 'd' | 'c';
@@ -15,6 +79,8 @@ export interface PlayingCard {
   rank: PlayingCardRank;
   suit: PlayingCardSuit;
 }
+
+export type PineappleBotDifficulty = 'easy' | 'medium' | 'hard';
 
 export interface PineappleBoard {
   top: PlayingCard[];    // max 3
@@ -29,6 +95,7 @@ export interface PineapplePlayerState {
   color: string;
   isHost: boolean;
   isBot?: boolean;
+  botDifficulty?: PineappleBotDifficulty;
   connected: boolean;
   board: PineappleBoard;
   currentHandCards: PlayingCard[]; // Cards in hand waiting to be placed/discarded
@@ -36,6 +103,7 @@ export interface PineapplePlayerState {
   inFantasyLand: boolean;          // Playing in Fantasy Land this hand
   qualifiesNextFantasyLand: boolean; // True if requirement met this hand
   sipsAccumulated: number;         // Float, exact decimal value
+  pointsAccumulated?: number;      // Total positive OFC points accumulated in current match
   handLocked: boolean;             // Finished current round placement
   isReadyNextHand: boolean;
 }
@@ -64,6 +132,8 @@ export interface PineappleHandResult {
   royaltiesBottomB: number;
   totalRoyaltiesA: number;
   totalRoyaltiesB: number;
+  grossPointsA?: number;           // Total gross hand points scored by Player A
+  grossPointsB?: number;           // Total gross hand points scored by Player B
   netScoreA: number;
   netScoreB: number;
   sipsAddedA: number;
@@ -244,6 +314,10 @@ export interface Profile {
   winsDuel?: number;
   winsCasino?: number;
   winsPineapple?: number;
+  winsCrash?: number;
+  gamesPlayedCrash?: number;
+  sipsDrunkCrash?: number;
+  totalPineapplePoints?: number;
   unlockedAchievements?: string[];
   createdAt: number;
 }
@@ -332,3 +406,51 @@ export interface TriviaQuestion {
 }
 
 export type MonkState = 'sober' | 'tipsy' | 'wobbly' | 'drunk' | 'blackout' | 'dead' | 'resurrected';
+
+// Social & Friends 1v1 Invite Types
+export interface UserFriendProfile {
+  uid: string;
+  shortId: string;
+  displayName: string;
+  avatarIcon?: string;
+  email?: string;
+  currentLevel?: number;
+  currentTitle_ro?: string;
+  currentTitle_en?: string;
+  updatedAt?: any;
+}
+
+export interface FriendEntry {
+  friendUid: string;
+  displayName: string;
+  avatarIcon?: string;
+  shortId?: string;
+  currentLevel?: number;
+  currentTitle_ro?: string;
+  addedAt?: any;
+}
+
+export interface FriendRequest {
+  id?: string;
+  fromUid: string;
+  fromName: string;
+  fromAvatar?: string;
+  fromShortId?: string;
+  toUid: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAt?: any;
+  updatedAt?: any;
+}
+
+export interface GameInvite {
+  id?: string;
+  fromUid: string;
+  fromName: string;
+  fromAvatar?: string;
+  toUid: string;
+  mode: 'duel' | 'pineapple' | 'crash';
+  roomCode: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  createdAt?: any;
+  updatedAt?: any;
+}

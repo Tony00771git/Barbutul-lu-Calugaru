@@ -1,6 +1,6 @@
 {
   "name": "Barbutul lu' Călugăru",
-  "description": "Joc de băut cu temă medievală mănăstirească - Modurile Normal, Boardgame, Duel 1v1 Trivia, Casino Craps și Pineapple Poker OFC (1v1)",
+  "description": "Joc de băut cu temă medievală mănăstirească - Modurile Normal, Boardgame, Duel 1v1 Trivia, Casino Craps, Pineapple Poker OFC și Dragon Crash (Vs Bot & Multiplayer)",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

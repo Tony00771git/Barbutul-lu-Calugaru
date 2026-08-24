@@ -224,7 +224,7 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
           ) : (
             filteredProfiles.map((p) => {
               const totalScore = p.totalSips + 25 * p.totalChugs;
-              const totalWins = (p.winsBoardgame || 0) + (p.winsDuel || 0) + (p.winsCasino || 0);
+              const totalWins = (p.winsBoardgame || 0) + (p.winsDuel || 0) + (p.winsCasino || 0) + (p.winsPineapple || 0);
 
               return (
                 <div

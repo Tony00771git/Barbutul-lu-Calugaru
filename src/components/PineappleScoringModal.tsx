@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   PineappleHandResult,
   PineappleMatchSettings,
   PineapplePlayerState,
 } from '../types';
 import { PineappleBoardView } from './PineappleBoardView';
+import { getHeadToHeadStats } from '../lib/headToHeadService';
 
 interface PineappleScoringModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ interface PineappleScoringModalProps {
   isHost: boolean;
   language?: 'ro' | 'en';
   onNextHand: () => void;
+  onEndGame?: () => void;
 }
 
 export const PineappleScoringModal: React.FC<PineappleScoringModalProps> = ({
@@ -26,8 +28,13 @@ export const PineappleScoringModal: React.FC<PineappleScoringModalProps> = ({
   isHost,
   language = 'ro',
   onNextHand,
+  onEndGame,
 }) => {
   const [activeTab, setActiveTab] = React.useState<'overview' | 'boards'>('overview');
+
+  const h2h = useMemo(() => {
+    return getHeadToHeadStats(playerA?.name || '', playerB?.name || '');
+  }, [playerA?.name, playerB?.name]);
 
   if (!isOpen || !result) return null;
 
@@ -300,12 +307,39 @@ export const PineappleScoringModal: React.FC<PineappleScoringModalProps> = ({
           </div>
         )}
 
-        {/* Action Button: Next Hand */}
-        <div className="pt-1">
+        {/* Persistent 1v1 All-Time Points Bar */}
+        <div className="bg-[#0c0804] border border-[#ffd700]/30 rounded-2xl p-2 sm:p-2.5 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-xs font-cinzel shadow-inner">
+          <div className="flex items-center gap-1.5 text-gray-300 text-[11px] font-bold">
+            <span className="text-amber-400">⚔️</span>
+            <span>{language === 'ro' ? 'Puncte All-Time 1v1:' : '1v1 All-Time Points:'}</span>
+          </div>
+          <div className="flex items-center gap-2 font-bebas text-sm sm:text-base font-black">
+            <span className="text-[#ffd700]">{playerA.name}: {(h2h.player1Points || 0) + (result.grossPointsA || 0)} pct</span>
+            <span className="text-gray-500 font-cinzel text-xs">⚔️</span>
+            <span className="text-[#e05c3a]">{playerB.name}: {(h2h.player2Points || 0) + (result.grossPointsB || 0)} pct</span>
+          </div>
+          <div className="text-[10px] text-gray-400 font-barlow">
+            Palmares: {h2h.player1Wins}V - {h2h.player2Wins}V
+          </div>
+        </div>
+
+        {/* Action Buttons: Next Hand & End Game */}
+        <div className="pt-1 flex flex-col sm:flex-row gap-2">
+          {onEndGame && (
+            <button
+              type="button"
+              onClick={onEndGame}
+              className="py-2.5 sm:py-3 px-4 rounded-2xl bg-red-950/70 hover:bg-red-900 border border-red-500/60 text-red-200 font-cinzel font-bold text-xs sm:text-sm active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
+            >
+              <span>🏁</span>
+              <span>{language === 'ro' ? 'Încheie Meciul' : 'End Match'}</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onNextHand}
-            className="w-full py-2.5 sm:py-3 px-4 rounded-2xl bg-gradient-to-r from-[#d4a017] via-[#ffd700] to-[#b8860b] hover:from-[#e5b128] hover:via-[#ffe033] hover:to-[#c9971c] text-black font-cinzel font-black text-sm sm:text-base shadow-[0_0_20px_rgba(255,215,0,0.5)] active:scale-95 transition-all cursor-pointer"
+            className="flex-1 py-2.5 sm:py-3 px-4 rounded-2xl bg-gradient-to-r from-[#d4a017] via-[#ffd700] to-[#b8860b] hover:from-[#e5b128] hover:via-[#ffe033] hover:to-[#c9971c] text-black font-cinzel font-black text-sm sm:text-base shadow-[0_0_20px_rgba(255,215,0,0.5)] active:scale-95 transition-all cursor-pointer"
           >
             {language === 'ro' ? 'Începe Mâna Următoare ➔' : 'Start Next Hand ➔'}
           </button>

@@ -128,6 +128,7 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
         winsBoardgame: Math.max(0, p.winsBoardgame || 0),
         winsDuel: Math.max(0, p.winsDuel || 0),
         winsCasino: Math.max(0, p.winsCasino || 0),
+        winsPineapple: Math.max(0, p.winsPineapple || 0),
         unlockedAchievements: (p.unlockedAchievements || []).slice(0, 50),
         createdAt: p.createdAt || Date.now(),
       };
@@ -140,6 +141,7 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
     const totalBoardWins = sanitizedProfiles.reduce((s, p) => s + (p.winsBoardgame || 0), 0);
     const totalDuelWins = sanitizedProfiles.reduce((s, p) => s + (p.winsDuel || 0), 0);
     const totalCasinoWins = sanitizedProfiles.reduce((s, p) => s + (p.winsCasino || 0), 0);
+    const totalPineappleWins = sanitizedProfiles.reduce((s, p) => s + (p.winsPineapple || 0), 0);
 
     const mergedAchievements = Array.from(
       new Set(sanitizedProfiles.flatMap(p => p.unlockedAchievements || []))
@@ -165,8 +167,9 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
       winsBoardgame: totalBoardWins,
       winsDuel: totalDuelWins,
       winsCasino: totalCasinoWins,
+      winsPineapple: totalPineappleWins,
       unlockedAchievements: mergedAchievements,
-      createdAt: existing.exists() ? existing.data()?.createdAt || now : now,
+      createdAt: (existing.exists() && existing.data()?.createdAt?.nanoseconds !== undefined) ? existing.data()?.createdAt : now,
       updatedAt: now,
     };
 
@@ -195,6 +198,7 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
         winsBoardgame: p.winsBoardgame || 0,
         winsDuel: p.winsDuel || 0,
         winsCasino: p.winsCasino || 0,
+        winsPineapple: p.winsPineapple || 0,
         gamesPlayed: p.gamesPlayed || 0,
         updatedAt: now,
       };
@@ -233,8 +237,9 @@ export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promi
       winsBoardgame: Math.max(0, profile.winsBoardgame || 0),
       winsDuel: Math.max(0, profile.winsDuel || 0),
       winsCasino: Math.max(0, profile.winsCasino || 0),
+      winsPineapple: Math.max(0, profile.winsPineapple || 0),
       unlockedAchievements: (profile.unlockedAchievements || []).slice(0, 50),
-      createdAt: existing.exists() ? existing.data()?.createdAt || now : now,
+      createdAt: (existing.exists() && existing.data()?.createdAt?.nanoseconds !== undefined) ? existing.data()?.createdAt : now,
       updatedAt: now,
     };
 
@@ -396,8 +401,9 @@ export async function resetAccountCloudDataAndLeaderboard(userId: string, cleanP
       winsBoardgame: 0,
       winsDuel: 0,
       winsCasino: 0,
+      winsPineapple: 0,
       unlockedAchievements: [],
-      createdAt: existing.exists() ? existing.data()?.createdAt || now : now,
+      createdAt: (existing.exists() && existing.data()?.createdAt?.nanoseconds !== undefined) ? existing.data()?.createdAt : now,
       updatedAt: now,
     };
 
