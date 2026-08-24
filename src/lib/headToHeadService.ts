@@ -245,6 +245,35 @@ export function addHeadToHeadPoints(
 }
 
 /**
+ * Checks if a player name belongs to a bot or AI player.
+ */
+export function isBotPlayerName(name: string): boolean {
+  if (!name) return false;
+  const lower = name.toLowerCase().trim();
+  return (
+    lower.includes('(ai)') ||
+    lower.includes('(bot)') ||
+    lower.includes('bot') ||
+    lower.startsWith('bot_') ||
+    lower.startsWith('bot ') ||
+    lower.includes('onufrie') ||
+    lower.includes('varlaam') ||
+    lower.includes('pahom') ||
+    lower.includes('pakhom') ||
+    lower.includes('grigorie') ||
+    lower.includes('gregory') ||
+    lower.includes('serafim') ||
+    lower.includes('seraphim') ||
+    lower.includes('arsenie') ||
+    lower.includes('înflăcărat') ||
+    lower.includes('inflacarat') ||
+    lower.includes('prudent') ||
+    lower.includes('dragonul înflăcărat') ||
+    lower.includes('fratele prudent')
+  );
+}
+
+/**
  * Records a 1v1 match outcome between two players
  */
 export function recordHeadToHeadMatch(
@@ -259,7 +288,7 @@ export function recordHeadToHeadMatch(
   const normA = (playerAName || '').trim();
   const normB = (playerBName || '').trim();
 
-  if (!normA || !normB || normA.toLowerCase() === normB.toLowerCase()) {
+  if (!normA || !normB || normA.toLowerCase() === normB.toLowerCase() || isBotPlayerName(normA) || isBotPlayerName(normB)) {
     return getHeadToHeadStats(normA, normB);
   }
 

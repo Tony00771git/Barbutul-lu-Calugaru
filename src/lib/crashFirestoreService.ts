@@ -302,8 +302,17 @@ export async function joinCrashRoom(
   }
 }
 
+const BOT_PRESETS = [
+  { name: 'Fratele Prudent (Bot)', avatar: 'monk_drunk', color: '#50e3c2', style: 'prudent' as CrashBotStyle },
+  { name: 'Dragonul Înflăcărat (Bot)', avatar: 'wizard', color: '#e05c3a', style: 'risky' as CrashBotStyle },
+  { name: 'Diaconul Calculat (Bot)', avatar: 'monk_old', color: '#4a90e2', style: 'prudent' as CrashBotStyle },
+  { name: 'Starețul Îndrăzneț (Bot)', avatar: 'king', color: '#f5a623', style: 'risky' as CrashBotStyle },
+  { name: 'Pelerinul Neînfricat (Bot)', avatar: 'knight', color: '#bd10e0', style: 'risky' as CrashBotStyle },
+  { name: 'Ieromonahul Înțelept (Bot)', avatar: 'monk_hood', color: '#7ed321', style: 'prudent' as CrashBotStyle },
+];
+
 /**
- * Adds an AI Bot player to the Crash room
+ * Adds an AI Bot player to the Crash room (supports up to 6 players total)
  */
 export async function addCrashBot(
   code: string,
@@ -312,14 +321,20 @@ export async function addCrashBot(
   const cleanCode = code.trim().toUpperCase();
   const roomRef = doc(db, 'crash_rooms', cleanCode);
 
-  const botName = botStyle === 'risky' ? 'Dragonul Înflăcărat (Bot)' : 'Fratele Prudent (Bot)';
-  const botAvatar = botStyle === 'risky' ? 'wizard' : 'monk_drunk';
+  const snap = await getDoc(roomRef);
+  if (!snap.exists()) return;
+  const currentPlayers = (snap.data() as CrashRoomState).players || [];
+  if (currentPlayers.length >= 6) return;
+
+  const existingBotCount = currentPlayers.filter(p => p.isBot).length;
+  const matchedPresets = BOT_PRESETS.filter(p => p.style === botStyle);
+  const preset = matchedPresets[existingBotCount % matchedPresets.length] || BOT_PRESETS[existingBotCount % BOT_PRESETS.length];
 
   const botPlayer: CrashPlayerState = {
     id: `bot_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-    name: botName,
-    avatarIcon: botAvatar,
-    color: botStyle === 'risky' ? '#e05c3a' : '#50e3c2',
+    name: preset.name,
+    avatarIcon: preset.avatar,
+    color: preset.color,
     isHost: false,
     isBot: true,
     botStyle,
@@ -334,12 +349,26 @@ export async function addCrashBot(
     isReadyNextRound: true,
   };
 
+  await updateDoc(roomRef, {
+    players: [...currentPlayers, botPlayer],
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Removes a player or bot from the room in lobby (Host action)
+ */
+export async function removeCrashPlayer(code: string, playerId: string): Promise<void> {
+  const cleanCode = code.trim().toUpperCase();
+  const roomRef = doc(db, 'crash_rooms', cleanCode);
+
   const snap = await getDoc(roomRef);
   if (!snap.exists()) return;
   const currentPlayers = (snap.data() as CrashRoomState).players || [];
 
+  const updatedPlayers = currentPlayers.filter(p => p.id !== playerId);
   await updateDoc(roomRef, {
-    players: [...currentPlayers, botPlayer],
+    players: updatedPlayers,
     updatedAt: serverTimestamp(),
   });
 }

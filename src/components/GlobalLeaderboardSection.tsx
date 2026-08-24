@@ -9,7 +9,7 @@ import {
   resetGlobalLeaderboard,
 } from '../lib/firestoreService';
 
-type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'pineapple' | 'totalScore';
+type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'pineapple' | 'crash' | 'totalScore';
 
 interface GlobalLeaderboardSectionProps {
   className?: string;
@@ -117,6 +117,12 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
         if (winsB !== winsA) return winsB - winsA;
         return (b.totalScore || 0) - (a.totalScore || 0);
       }
+      if (activeCategory === 'crash') {
+        const winsA = a.winsCrash || 0;
+        const winsB = b.winsCrash || 0;
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
       // 'totalScore' (sips + chugs * 25)
       const scoreA = a.totalScore ?? (a.totalSips + 25 * a.totalChugs);
       const scoreB = b.totalScore ?? (b.totalSips + 25 * b.totalChugs);
@@ -161,6 +167,12 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
           primary: `${entry.winsPineapple || 0} ${language === 'ro' ? 'victorii' : 'wins'}`,
           secondary: `${language === 'ro' ? 'Jocuri' : 'Games'}: ${entry.gamesPlayed || 0}`,
           badgeBg: 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40',
+        };
+      case 'crash':
+        return {
+          primary: `${entry.winsCrash || 0} ${language === 'ro' ? 'victorii' : 'wins'}`,
+          secondary: `${language === 'ro' ? 'Jucate' : 'Played'}: ${entry.gamesPlayedCrash || 0}`,
+          badgeBg: 'bg-rose-950/80 text-rose-300 border-rose-500/40',
         };
       case 'totalScore':
       default: {
@@ -272,8 +284,8 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
         </div>
       )}
 
-      {/* 5 Category Tabs Switcher */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 bg-[#0b0805] p-1 rounded-xl border border-[#261c11]">
+      {/* 6 Category Tabs Switcher */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 bg-[#0b0805] p-1 rounded-xl border border-[#261c11]">
         <button
           onClick={() => setActiveCategory('monopoly')}
           className={`py-1.5 px-1 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
@@ -320,6 +332,18 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
         >
           <span className="text-sm">🍍</span>
           <span className="truncate">Pineapple</span>
+        </button>
+
+        <button
+          onClick={() => setActiveCategory('crash')}
+          className={`py-1.5 px-1 rounded-lg text-xs font-cinzel font-bold flex items-center justify-center gap-1 transition-all truncate ${
+            activeCategory === 'crash'
+              ? 'bg-gradient-to-r from-[#801010] to-[#b82222] text-white font-black shadow-md border border-[#ff6666]/70'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          <span className="text-sm">🐉</span>
+          <span className="truncate">Crash</span>
         </button>
 
         <button

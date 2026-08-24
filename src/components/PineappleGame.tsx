@@ -29,6 +29,8 @@ import {
 } from '../lib/pineappleFirestoreService';
 import { checkIsFoul } from '../lib/pineapplePokerEvaluator';
 import { getHeadToHeadStats, recordHeadToHeadMatch } from '../lib/headToHeadService';
+import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
+import { auth } from '../lib/firebase';
 
 interface PineappleGameProps {
   roomCode: string;
@@ -45,6 +47,29 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
 }) => {
   const { language, t, addXpForPlayer, recordWin, checkAchievement, updateProfileStats, awardMatchXp } = useApp();
   const [roomState, setRoomState] = useState<PineappleRoomState | null>(null);
+
+  // Active room tracking for friends
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (user && roomCode) {
+      const shortId = getUserCurrentShortId(user.uid);
+      setUserActiveRoom(user.uid, shortId, {
+        mode: 'pineapple',
+        roomCode,
+        status: roomState?.status === 'in_game' ? 'in_game' : 'lobby',
+        playerCount: roomState?.players.length || 1,
+        maxPlayers: 2,
+        hostName: roomState?.players.find((p) => p.isHost)?.name || localPlayer.name,
+      });
+    }
+    return () => {
+      const user = auth.currentUser;
+      if (user) {
+        const shortId = getUserCurrentShortId(user.uid);
+        setUserActiveRoom(user.uid, shortId, null);
+      }
+    };
+  }, [roomCode, roomState?.status, roomState?.players.length]);
   const [selectedSource, setSelectedSource] = useState<
     | { type: 'hand'; card: PlayingCard }
     | { type: 'board'; card: PlayingCard; fromRow: 'top' | 'middle' | 'bottom' }
@@ -149,54 +174,57 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
 
     const totalRoundsPlayed = (roomState.currentHand || 1) * 5;
     const isAntiFarming = (roomState.currentHand || 1) < 2 && (roomState.currentRoundInHand || 1) < 2;
+    const isBotMatch = Boolean(opponentState?.isBot);
+    const isCompletedMatch = roomState.status === 'finished' && !isAntiFarming;
 
-    // Record stats and award match XP/coins
-    updateProfileStats(
-      localPlayer.name || localPlayer.id,
-      Math.round(myAccumulatedSips),
-      0,
-      undefined,
-      isWinner ? 'pineapple' : undefined,
-      myPoints
-    );
-
-    if (opponentState) {
-      const winnerName = isWinner
-        ? localPlayer.name
-        : roomState.winnerId === opponentState.id
-        ? opponentState.name
-        : null;
-      recordHeadToHeadMatch(
-        localPlayer.name,
-        opponentState.name,
-        winnerName,
-        'pineapple',
-        !winnerName,
-        myPoints,
-        oppPoints
+    // Leaderboard & persistent stats: ONLY for completed matches against real human players (NOT bots, NOT unfinished)
+    if (!isBotMatch && isCompletedMatch) {
+      updateProfileStats(
+        localPlayer.name || localPlayer.id,
+        Math.round(myAccumulatedSips),
+        0,
+        undefined,
+        isWinner ? 'pineapple' : undefined,
+        myPoints
       );
-    }
-    
-    if (!isAntiFarming) {
+
+      if (opponentState) {
+        const winnerName = isWinner
+          ? localPlayer.name
+          : roomState.winnerId === opponentState.id
+          ? opponentState.name
+          : null;
+        recordHeadToHeadMatch(
+          localPlayer.name,
+          opponentState.name,
+          winnerName,
+          'pineapple',
+          !winnerName,
+          myPoints,
+          oppPoints
+        );
+      }
+
       awardMatchXp(localPlayer.name || localPlayer.id, 'pineapple', isWinner, totalRoundsPlayed, [], {
         sips: Math.round(myAccumulatedSips),
       });
+
+      checkAchievement(localPlayer.name || localPlayer.id, { type: 'pineapple_played', count: 1 });
+
+      if (isWinner) {
+        recordWin(localPlayer.name || localPlayer.id, 'pineapple');
+        checkAchievement(localPlayer.name || localPlayer.id, { type: 'pineapple_win', count: 1 });
+      }
     }
-    checkAchievement(localPlayer.name || localPlayer.id, { type: 'pineapple_played', count: 1 });
 
-    if (isWinner) {
-      recordWin(localPlayer.name || localPlayer.id, 'pineapple');
-      checkAchievement(localPlayer.name || localPlayer.id, { type: 'pineapple_win', count: 1 });
-
-      // Bot-specific victory achievements (3 difficulties)
-      if (opponentState?.isBot) {
-        if (opponentState.botDifficulty === 'easy') {
-          checkAchievement(localPlayer.name || localPlayer.id, { isPineappleBotWinEasy: true });
-        } else if (opponentState.botDifficulty === 'medium') {
-          checkAchievement(localPlayer.name || localPlayer.id, { isPineappleBotWinMedium: true });
-        } else if (opponentState.botDifficulty === 'hard') {
-          checkAchievement(localPlayer.name || localPlayer.id, { isPineappleBotWinHard: true });
-        }
+    // Bot-specific victory achievements (awarded for practice mode against AI)
+    if (isWinner && isBotMatch && roomState.status === 'finished') {
+      if (opponentState?.botDifficulty === 'easy') {
+        checkAchievement(localPlayer.name || localPlayer.id, { isPineappleBotWinEasy: true });
+      } else if (opponentState?.botDifficulty === 'medium') {
+        checkAchievement(localPlayer.name || localPlayer.id, { isPineappleBotWinMedium: true });
+      } else if (opponentState?.botDifficulty === 'hard') {
+        checkAchievement(localPlayer.name || localPlayer.id, { isPineappleBotWinHard: true });
       }
     }
   }, [roomState?.status, roomState?.winnerId, localPlayer.id, localPlayer.name, roomCode, myState?.sipsAccumulated, myState?.pointsAccumulated, opponentState?.name, opponentState?.id, opponentState?.pointsAccumulated, opponentState?.isBot, opponentState?.botDifficulty]);
@@ -864,7 +892,7 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
       <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-4 p-4 text-center">
         <div className="text-4xl animate-spin">🍍</div>
         <p className="font-cinzel text-amber-300 text-base">
-          {language === 'ro' ? 'Se deschide chilia de Pineapple...' : 'Connecting to Pineapple Room...'}
+          {language === 'ro' ? 'Se deschide camera de Pineapple...' : 'Connecting to Pineapple Room...'}
         </p>
       </div>
     );
@@ -906,22 +934,22 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
               className="px-3 py-1.5 rounded-xl bg-amber-950/60 hover:bg-amber-900 border border-amber-500/50 text-amber-300 text-xs font-cinzel font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <span>🔗</span>
-              <span>{copiedLink ? 'Link Copiat!' : 'Copiază Link Invitație'}</span>
+              <span>{language === 'ro' ? (copiedLink ? 'Link Copiat!' : 'Copiază Link Invitație') : (copiedLink ? 'Link Copied!' : 'Copy Invite Link')}</span>
             </button>
           </div>
 
           {/* Settings Summary */}
           <div className="grid grid-cols-2 gap-2 text-center text-xs font-cinzel">
             <div className="bg-[#120c07] p-2.5 rounded-xl border border-stone-800">
-              <span className="text-gray-400 block text-[10px] uppercase">Guri per Punct</span>
+              <span className="text-gray-400 block text-[10px] uppercase">{language === 'ro' ? 'Guri per Punct' : 'Sips per Point'}</span>
               <strong className="text-[#ffd700] text-sm sm:text-base">
-                {roomState.settings.sipsPerPoint} guri
+                {roomState.settings.sipsPerPoint} {language === 'ro' ? 'guri' : 'sips'}
               </strong>
             </div>
             <div className="bg-[#120c07] p-2.5 rounded-xl border border-stone-800">
-              <span className="text-gray-400 block text-[10px] uppercase">Prag Final Joc</span>
+              <span className="text-gray-400 block text-[10px] uppercase">{language === 'ro' ? 'Prag Final Joc' : 'Endgame Threshold'}</span>
               <strong className="text-red-400 text-sm sm:text-base">
-                {roomState.settings.sipsToEndGame} guri
+                {roomState.settings.sipsToEndGame} {language === 'ro' ? 'guri' : 'sips'}
               </strong>
             </div>
           </div>
@@ -931,21 +959,25 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
             <div className="flex items-center justify-between border-b border-[#2d2116] pb-1.5">
               <label className="text-xs font-cinzel font-bold text-[#ffd700] uppercase tracking-wider block flex items-center gap-1.5">
                 <span>👥</span>
-                <span>Călugări în Chilie ({roomState.players.length}/2)</span>
+                <span>{language === 'ro' ? `Călugări în Chilie (${roomState.players.length}/2)` : `Monks in Room (${roomState.players.length}/2)`}</span>
               </label>
 
               {isHost && roomState.players.length < 2 && (
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] text-gray-400 font-cinzel hidden xs:inline">+ Bot:</span>
                   {(['easy', 'medium', 'hard'] as PineappleBotDifficulty[]).map((diff) => {
-                    const label = diff === 'easy' ? '🟢 Ușor' : diff === 'medium' ? '🟡 Mediu' : '🔴 Greu';
+                    const label = diff === 'easy'
+                      ? (language === 'ro' ? '🟢 Ușor' : '🟢 Easy')
+                      : diff === 'medium'
+                      ? (language === 'ro' ? '🟡 Mediu' : '🟡 Medium')
+                      : (language === 'ro' ? '🔴 Greu' : '🔴 Hard');
                     return (
                       <button
                         key={diff}
                         type="button"
                         onClick={() => handleAddBot(diff)}
                         className="px-2 py-1 text-[10px] bg-[#2b1f14] hover:bg-[#3d2c1c] text-[#ffd700] border border-[#61452a] hover:border-[#ffd700]/70 rounded-lg font-cinzel font-bold transition-all active:scale-95 flex items-center gap-0.5 cursor-pointer shadow"
-                        title={`Adaugă bot ${BOT_PROFILES[diff]?.name}`}
+                        title={language === 'ro' ? `Adaugă bot ${BOT_PROFILES[diff]?.name}` : `Add bot ${BOT_PROFILES[diff]?.name}`}
                       >
                         <span>{label}</span>
                       </button>
@@ -973,22 +1005,22 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
                       <div className="min-w-0 flex-1">
                         <div className="font-cinzel font-bold text-xs sm:text-sm text-gray-200 truncate flex items-center gap-1.5">
                           <span style={{ color: p.color || '#e8c84a' }}>{p.name}</span>
-                          {isMe && <span className="text-amber-400 text-[10px]">(Tu)</span>}
+                          {isMe && <span className="text-amber-400 text-[10px]">{language === 'ro' ? '(Tu)' : '(You)'}</span>}
                         </div>
                         <div className="text-[10px] text-amber-400/80 flex items-center gap-1">
                           {p.isHost ? (
-                            '👑 Gazdă'
+                            language === 'ro' ? '👑 Gazdă' : '👑 Host'
                           ) : p.isBot ? (
                             <span className="flex items-center gap-1 text-amber-300">
                               <span>🤖 AI Bot</span>
                               {botProfile && (
                                 <span className="px-1 py-0.2 rounded text-[9px] bg-stone-900 border border-stone-700">
-                                  {botProfile.titleRo}
+                                  {language === 'ro' ? botProfile.titleRo : botProfile.titleEn}
                                 </span>
                               )}
                             </span>
                           ) : (
-                            '⚔️ Oaspete'
+                            language === 'ro' ? '⚔️ Oaspete' : '⚔️ Guest'
                           )}
                         </div>
                       </div>
@@ -999,7 +1031,7 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
                         type="button"
                         onClick={() => handleRemovePlayer(p.id)}
                         className="px-2 py-1 rounded-lg bg-red-950/70 hover:bg-red-900 border border-red-500/40 text-red-300 text-xs font-bold transition-all cursor-pointer flex-shrink-0"
-                        title={p.isBot ? 'Scoate botul' : 'Dă afară jucătorul'}
+                        title={p.isBot ? (language === 'ro' ? 'Scoate botul' : 'Remove bot') : (language === 'ro' ? 'Dă afară jucătorul' : 'Kick player')}
                       >
                         ✕
                       </button>
@@ -1010,7 +1042,7 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
 
               {roomState.players.length < 2 && (
                 <div className="border-2 border-dashed border-[#2d1e12] p-3 rounded-xl flex flex-col items-center justify-center text-center text-gray-500 text-xs">
-                  <span>Așteptăm al doilea jucător sau adaugă un bot...</span>
+                  <span>{language === 'ro' ? 'Așteptăm al doilea jucător sau adaugă un bot...' : 'Waiting for second player or add a bot...'}</span>
                 </div>
               )}
             </div>
@@ -1050,12 +1082,12 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
                 }`}
               >
                 {roomState.players.length >= 2
-                  ? 'Începe Meciul de Pineapple ➔'
-                  : 'Așteptăm al 2-lea călugăr...'}
+                  ? (language === 'ro' ? 'Începe Meciul de Pineapple ➔' : 'Start Pineapple Match ➔')
+                  : (language === 'ro' ? 'Așteptăm al 2-lea călugăr...' : 'Waiting for 2nd monk...')}
               </button>
             ) : (
               <div className="text-center py-2 text-xs font-cinzel text-amber-300 animate-pulse">
-                Așteptăm ca gazda să înceapă meciul...
+                {language === 'ro' ? 'Așteptăm ca gazda să înceapă meciul...' : 'Waiting for host to start match...'}
               </div>
             )}
 
@@ -1064,7 +1096,7 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
               onClick={onHome}
               className="w-full py-2 text-xs font-cinzel text-gray-400 hover:text-white transition-colors text-center cursor-pointer"
             >
-              ← Înapoi la Meniul Principal
+              {language === 'ro' ? '← Înapoi la Meniul Principal' : '← Back to Main Menu'}
             </button>
           </div>
         </div>

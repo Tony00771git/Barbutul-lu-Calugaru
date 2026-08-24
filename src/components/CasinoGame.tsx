@@ -9,6 +9,8 @@ import { triggerBettingTimeout, analyzePlayerCasinoBets } from '../lib/casinoFir
 import { CasinoDiceArena } from './CasinoDiceArena';
 import { HeadToHeadTracker } from './HeadToHeadTracker';
 import { recordHeadToHeadMatch } from '../lib/headToHeadService';
+import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
+import { auth } from '../lib/firebase';
 
 interface CasinoGameProps {
   casinoSocket: UseCasinoSocketReturn;
@@ -38,6 +40,29 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
     nextRound,
     clearError,
   } = casinoSocket;
+
+  // Active room tracking for friends
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (user && room?.roomCode) {
+      const shortId = getUserCurrentShortId(user.uid);
+      setUserActiveRoom(user.uid, shortId, {
+        mode: 'casino',
+        roomCode: room.roomCode,
+        status: room.status === 'in_game' ? 'in_game' : 'lobby',
+        playerCount: room.players.length,
+        maxPlayers: 6,
+        hostName: room.players.find((p) => p.isHost)?.name || localPlayer.name,
+      });
+    }
+    return () => {
+      const user = auth.currentUser;
+      if (user) {
+        const shortId = getUserCurrentShortId(user.uid);
+        setUserActiveRoom(user.uid, shortId, null);
+      }
+    };
+  }, [room?.roomCode, room?.status, room?.players.length]);
 
   // Local betting draft state during betting phase
   const [draftBets, setDraftBets] = useState<CasinoBet[]>([]);
@@ -165,9 +190,12 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
   useEffect(() => {
     if (room && room.status === 'finished' && !hasSavedFinalStats) {
       setHasSavedFinalStats(true);
-      const updates = room.players
-        .filter((p) => !p.isBot)
-        .map((p) => ({
+      const realPlayers = room.players.filter((p) => !p.isBot);
+      const isCompletedMultiplayerMatch = realPlayers.length >= 2 && room.status === 'finished';
+
+      // Leaderboard & profile stats: ONLY for completed matches with at least 2 real human players (NOT bot practice, NOT unfinished)
+      if (isCompletedMultiplayerMatch) {
+        const updates = realPlayers.map((p) => ({
           name: p.name,
           sips: p.guriTotal || 0,
           chugs: p.groapaTotal || 0,
@@ -175,22 +203,23 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
           winMode: (p.id === room.winnerId ? 'casino' : undefined) as 'casino' | undefined,
         }));
 
-      if (updates.length > 0) {
-        batchUpdateProfiles(updates);
-      }
+        if (updates.length > 0) {
+          batchUpdateProfiles(updates);
+        }
 
-      // Record 1v1 head-to-head match if 2 players played
-      if (room.players.length === 2) {
-        const p1 = room.players[0];
-        const p2 = room.players[1];
-        const winner = room.players.find((p) => p.id === room.winnerId);
-        recordHeadToHeadMatch(
-          p1.name,
-          p2.name,
-          winner ? winner.name : null,
-          'casino',
-          !winner
-        );
+        // Record 1v1 head-to-head match only if 2 real players played
+        if (room.players.length === 2 && !room.players[0].isBot && !room.players[1].isBot) {
+          const p1 = room.players[0];
+          const p2 = room.players[1];
+          const winner = room.players.find((p) => p.id === room.winnerId);
+          recordHeadToHeadMatch(
+            p1.name,
+            p2.name,
+            winner ? winner.name : null,
+            'casino',
+            !winner
+          );
+        }
       }
 
       // Check achievement for winner
@@ -363,19 +392,19 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                 onClick={handleCopyCode}
                 className="px-2.5 py-1 text-xs bg-[#241a12] hover:bg-[#382618] text-[#e8c84a] border border-[#523b24] rounded active:scale-95 transition-transform font-bold"
               >
-                {copiedCode ? '✓ Copiat' : 'Copiază'}
+                {language === 'ro' ? (copiedCode ? '✓ Copiat' : 'Copiază') : (copiedCode ? '✓ Copied' : 'Copy')}
               </button>
               <button
                 onClick={handleCopyLink}
                 className="px-2.5 py-1 text-xs bg-[#241a12] hover:bg-[#382618] text-[#e8c84a] border border-[#523b24] rounded active:scale-95 transition-transform font-bold"
               >
-                {copiedLink ? '✓ Link Copiat' : 'Link'}
+                {language === 'ro' ? (copiedLink ? '✓ Link Copiat' : 'Link') : (copiedLink ? '✓ Link Copied' : 'Link')}
               </button>
             </div>
           </div>
 
           <div className="mt-2 text-xs text-[#a39480]">
-            {t('casinoStartingChips')}: <strong className="text-[#e8c84a]">{room.startingChips} fise</strong>
+            {t('casinoStartingChips')}: <strong className="text-[#e8c84a]">{room.startingChips} {language === 'ro' ? 'fise' : 'chips'}</strong>
           </div>
         </div>
 
@@ -437,7 +466,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                         )}
                       </div>
                       <div className="text-[11px] text-[#a39480]">
-                        Sold: <span className="text-[#e8c84a] font-semibold">{p.balance} 🪙</span>
+                        {language === 'ro' ? 'Sold:' : 'Balance:'} <span className="text-[#e8c84a] font-semibold">{p.balance} 🪙</span>
                       </div>
                     </div>
                   </div>
@@ -533,9 +562,9 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                 {winner.name}
               </span>
               <div className="flex gap-4 text-xs text-[#a39480] bg-[#120a04] px-4 py-1.5 rounded-lg border border-[#4a341e]">
-                <span>Sold Final: <strong className="text-[#e8c84a]">{winner.balance} 🪙</strong></span>
-                <span>Guri: <strong>{winner.guriTotal}</strong></span>
-                <span>Gropi: <strong>{winner.groapaTotal}</strong></span>
+                <span>{language === 'ro' ? 'Sold Final:' : 'Final Balance:'} <strong className="text-[#e8c84a]">{winner.balance} 🪙</strong></span>
+                <span>{language === 'ro' ? 'Guri:' : 'Sips:'} <strong>{winner.guriTotal}</strong></span>
+                <span>{language === 'ro' ? 'Gropi:' : 'Chugs:'} <strong>{winner.groapaTotal}</strong></span>
               </div>
             </div>
           )}
@@ -570,7 +599,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                     <div>
                       <div className="font-bold text-xs text-[#f0ebe0] flex items-center gap-1.5">
                         <span style={{ color: p.color || '#e8c84a' }}>{p.name}</span>
-                        {isMe && <span className="text-[9px] bg-[#e8c84a]/20 text-[#e8c84a] px-1 rounded">TU</span>}
+                        {isMe && <span className="text-[9px] bg-[#e8c84a]/20 text-[#e8c84a] px-1 rounded">{language === 'ro' ? 'TU' : 'YOU'}</span>}
                       </div>
                       <div className="text-[10px] text-[#8c7860]">
                         {p.eliminated ? (
@@ -579,7 +608,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                           </span>
                         ) : (
                           <span className="text-emerald-400 font-semibold">
-                            🪙 {p.balance} fise
+                            🪙 {p.balance} {language === 'ro' ? 'fise' : 'chips'}
                           </span>
                         )}
                       </div>
@@ -587,8 +616,8 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
                   </div>
 
                   <div className="text-right text-[11px] text-[#a39480]">
-                    <div>🍺 {p.guriTotal} guri</div>
-                    <div>🔥 {p.groapaTotal} gropi</div>
+                    <div>🍺 {p.guriTotal} {language === 'ro' ? 'guri' : 'sips'}</div>
+                    <div>🔥 {p.groapaTotal} {language === 'ro' ? 'gropi' : 'chugs'}</div>
                   </div>
                 </div>
               );
@@ -601,7 +630,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
           onClick={onLeave}
           className="w-full py-3 bg-gradient-to-r from-[#b38f20] via-[#e8c84a] to-[#f8e178] text-[#1c1208] font-cinzel font-bold rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all"
         >
-          🏰 Înapoi la Meniu
+          {language === 'ro' ? '🏰 Înapoi la Meniu' : '🏰 Back to Menu'}
         </button>
       </div>
     );
@@ -656,21 +685,21 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
             <div>
               <span className="text-[11px] font-cinzel font-black uppercase tracking-widest text-red-400 bg-red-950/80 border border-red-700/60 px-3 py-1 rounded-full">
                 {isVictimFraud
-                  ? '🚨 TRIȘOR PRINS ÎN TAVERNĂ!'
+                  ? (language === 'ro' ? '🚨 TRIȘOR PRINS ÎN TAVERNĂ!' : '🚨 CHEATER CAUGHT IN TAVERN!')
                   : isVictimNonBettor
-                  ? '⚠️ N-AI PARIAT ÎN ACEASTĂ RUNDĂ!'
+                  ? (language === 'ro' ? '⚠️ N-AI PARIAT ÎN ACEASTĂ RUNDĂ!' : '⚠️ DID NOT BET THIS ROUND!')
                   : isVictimEliminated
-                  ? '💀 AI FOST ELIMINAT!'
-                  : '🥴 AI CEL MAI MIC SOLD DIN TAVERNĂ!'}
+                  ? (language === 'ro' ? '💀 AI FOST ELIMINAT!' : '💀 YOU WERE ELIMINATED!')
+                  : (language === 'ro' ? '🥴 AI CEL MAI MIC SOLD DIN TAVERNĂ!' : '🥴 LOWEST BALANCE IN TAVERN!')}
               </span>
               <h2 className="text-xl sm:text-2xl font-cinzel font-black text-[#ffd700] gold-text-glow mt-2">
                 {isVictimFraud
-                  ? 'PARIURILE TALE AU FOST ANULATE!'
+                  ? (language === 'ro' ? 'PARIURILE TALE AU FOST ANULATE!' : 'YOUR BETS HAVE BEEN CANCELLED!')
                   : isVictimNonBettor
-                  ? 'CINE NU PARIAZĂ, BEA CANONUL!'
+                  ? (language === 'ro' ? 'CINE NU PARIAZĂ, BEA CANONUL!' : 'WHO DOES NOT BET, DRINKS!')
                   : isVictimEliminated
-                  ? 'FĂRĂ GALBENI RĂMAȘI!'
-                  : 'TREBUIE SĂ BEI PEDEAPSA RUNDEI!'}
+                  ? (language === 'ro' ? 'FĂRĂ GALBENI RĂMAȘI!' : 'OUT OF COINS!')
+                  : (language === 'ro' ? 'TREBUIE SĂ BEI PEDEAPSA RUNDEI!' : 'MUST DRINK ROUND PENALTY!')}
               </h2>
             </div>
 
@@ -678,31 +707,33 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
             <div className="w-full bg-[#120805] border-2 border-red-500/80 rounded-2xl p-4 shadow-inner flex flex-col items-center gap-1">
               <span className="text-xs text-gray-400 font-cinzel font-bold">
                 {isVictimFraud
-                  ? 'CANON DE BĂUTURĂ PENTRU FRAUDĂ'
+                  ? (language === 'ro' ? 'CANON DE BĂUTURĂ PENTRU FRAUDĂ' : 'FRAUD DRINKING PENALTY')
                   : isVictimNonBettor
-                  ? 'PEDEAPSĂ PENTRU NEPARIERE'
+                  ? (language === 'ro' ? 'PEDEAPSĂ PENTRU NEPARIERE' : 'PENALTY FOR IDLE ROUND')
                   : round.penalty.type === 'groapa' || isVictimEliminated
-                  ? 'PEDEAPSĂ SUPREMĂ'
-                  : 'CANTITATE DE BĂUT'}
+                  ? (language === 'ro' ? 'PEDEAPSĂ SUPREMĂ' : 'SUPREME PENALTY')
+                  : (language === 'ro' ? 'CANTITATE DE BĂUT' : 'DRINKING AMOUNT')}
               </span>
               <span className="text-2xl sm:text-3xl font-cinzel font-black text-red-400 animate-pulse tracking-wide">
                 {isVictimFraud
-                  ? '🍺 +3 GURI DE CANON!'
+                  ? (language === 'ro' ? '🍺 +3 GURI DE CANON!' : '🍺 +3 PENALTY SIPS!')
                   : isVictimEliminated
-                  ? '🔥 CHUG IT ALL (GROAPĂ)!'
+                  ? (language === 'ro' ? '🔥 CHUG IT ALL (GROAPĂ)!' : '🔥 CHUG IT ALL (ABYSS)!')
                   : penaltyText}
               </span>
               <span className="text-[11px] text-gray-400 mt-1">
                 {isVictimFraud && myPayout?.fraudReason ? (
                   <span className="text-amber-300">
-                    Motiv: {myPayout.fraudReason}. Amendă: -{myPayout.fraudFine || 0}🪙
+                    {language === 'ro' ? 'Motiv:' : 'Reason:'} {myPayout.fraudReason}. {language === 'ro' ? 'Amendă:' : 'Fine:'} -{myPayout.fraudFine || 0}🪙
                   </span>
                 ) : isVictimNonBettor ? (
                   <span className="text-amber-300">
-                    Ai stat pe bară fără să pariezi fise. Starețul te pedepsește cu băutură!
+                    {language === 'ro' ? 'Ai stat pe bară fără să pariezi fise. Starețul te pedepsește cu băutură!' : 'You stayed idle without betting chips. The Abbot punishes you with drinking!'}
                   </span>
                 ) : (
-                  `Soldul tău este ${currentPlayer?.balance} 🪙. Bea înainte de tura următoare!`
+                  language === 'ro'
+                    ? `Soldul tău este ${currentPlayer?.balance} 🪙. Bea înainte de tura următoare!`
+                    : `Your balance is ${currentPlayer?.balance} 🪙. Drink before the next round!`
                 )}
               </span>
             </div>
@@ -712,7 +743,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
               onClick={() => setDismissedPenaltyCard(true)}
               className="w-full py-3.5 bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-black font-cinzel font-black text-base rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all uppercase tracking-wide border border-amber-300"
             >
-              🍺 AM BĂUT! (CONFIRMĂ)
+              {language === 'ro' ? '🍺 AM BĂUT! (CONFIRMĂ)' : '🍺 I DRANK! (CONFIRM)'}
             </button>
           </div>
         </div>
@@ -796,12 +827,12 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
               </span>
             </div>
             <span className="text-[10px] text-[#8c7860] font-cinzel font-bold hidden md:inline uppercase">
-              {timerSecondsLeft <= 5 ? 'Ultimele secunde!' : 'Timp Pariere'}
+              {language === 'ro' ? (timerSecondsLeft <= 5 ? 'Ultimele secunde!' : 'Timp Pariere') : (timerSecondsLeft <= 5 ? 'Final seconds!' : 'Betting Time')}
             </span>
           </div>
         ) : (
           <div className="text-[11px] font-cinzel font-bold text-[#a8c4a8] bg-[#0c160e] px-2.5 py-1 rounded-lg border border-[#2d4d2d]">
-            {isRolling ? '🎲 Aruncare...' : '📜 Rezultate'}
+            {language === 'ro' ? (isRolling ? '🎲 Aruncare...' : '📜 Rezultate') : (isRolling ? '🎲 Rolling...' : '📜 Results')}
           </div>
         )}
       </div>
@@ -817,11 +848,13 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
           {/* Top Felt Dice Tray Banner */}
           <div className="relative z-10 flex items-center justify-between bg-[#071209]/90 border border-[#2d5c31]/70 px-3 py-1 rounded-xl">
             <div className="flex items-center gap-1.5 text-xs font-cinzel font-black text-[#e8c84a] uppercase">
-              <span>🎲</span> Masa de Barbut
+              <span>🎲</span> {language === 'ro' ? 'Masa de Barbut' : 'Craps Table'}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-[#a8c4a8] font-semibold hidden sm:inline">
-                {round.diceResult ? 'Ultima aruncare:' : 'Zaruri pregătite:'}
+                {language === 'ro'
+                  ? (round.diceResult ? 'Ultima aruncare:' : 'Zaruri pregătite:')
+                  : (round.diceResult ? 'Last roll:' : 'Dice ready:')}
               </span>
               <div className="flex items-center gap-1.5">
                 <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-[#fff2a3] via-[#e8c84a] to-[#a67c15] border border-[#ffe98a] flex items-center justify-center font-cinzel font-black text-xs sm:text-sm text-[#2b1704] shadow">

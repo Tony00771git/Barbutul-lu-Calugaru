@@ -16,17 +16,273 @@ import {
   FriendEntry,
   FriendRequest,
   GameInvite,
+  ActiveRoomInfo,
 } from '../types';
 
 /**
- * Deterministically generates or formats a unique player Short ID (e.g. M7F9A2).
+ * Deterministically generates or formats a default unique player Short ID (e.g. M7F9A2).
  */
 export function generateShortId(uid: string): string {
+  if (!uid) return 'M-DEF1';
   const clean = uid.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
   if (clean.length >= 6) {
     return `M${clean.slice(-5)}`;
   }
   return `MK${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+}
+
+/**
+ * Retrieves the user's active short ID (either their custom set ID or generated default).
+ */
+export function getUserCurrentShortId(uid: string, customShortId?: string): string {
+  if (customShortId && customShortId.trim().length >= 3) {
+    return customShortId.trim().toUpperCase().replace(/#/g, '');
+  }
+  try {
+    const saved = localStorage.getItem(`user_custom_short_id_${uid}`);
+    if (saved && saved.trim().length >= 3) {
+      return saved.trim().toUpperCase().replace(/#/g, '');
+    }
+  } catch {}
+  return generateShortId(uid);
+}
+
+/**
+ * Validates a custom short ID.
+ * Must be 3-20 characters, alphanumeric, hyphens or underscores.
+ */
+export function validateCustomId(
+  rawId: string,
+  language: 'ro' | 'en' = 'ro'
+): { isValid: boolean; normalized: string; error?: string } {
+  const normalized = rawId.trim().toUpperCase().replace(/#/g, '');
+  if (!normalized) {
+    return {
+      isValid: false,
+      normalized: '',
+      error: language === 'ro' ? 'Te rugăm să introduci un ID.' : 'Please enter an ID.',
+    };
+  }
+  if (normalized.length < 3 || normalized.length > 20) {
+    return {
+      isValid: false,
+      normalized,
+      error:
+        language === 'ro'
+          ? 'ID-ul trebuie să aibă între 3 și 20 de caractere.'
+          : 'ID must be between 3 and 20 characters long.',
+    };
+  }
+  if (!/^[A-Z0-9_-]+$/.test(normalized)) {
+    return {
+      isValid: false,
+      normalized,
+      error:
+        language === 'ro'
+          ? 'ID-ul poate conține doar litere (fără diacritice), cifre, cratime (-) sau linii jos (_).'
+          : 'ID can only contain letters, numbers, hyphens (-) or underscores (_).',
+    };
+  }
+  return { isValid: true, normalized };
+}
+
+/**
+ * Checks if a custom short ID is available in Firestore public profiles.
+ */
+export async function checkCustomIdAvailability(
+  rawId: string,
+  myUid: string,
+  language: 'ro' | 'en' = 'ro'
+): Promise<{ available: boolean; normalized: string; message: string }> {
+  const validation = validateCustomId(rawId, language);
+  if (!validation.isValid) {
+    return { available: false, normalized: validation.normalized, message: validation.error! };
+  }
+
+  const { normalized } = validation;
+  try {
+    const docRef = doc(db, 'public_profiles', normalized);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      return {
+        available: true,
+        normalized,
+        message: language === 'ro' ? '✅ ID-ul este liber și disponibil!' : '✅ This ID is free and available!',
+      };
+    }
+    const data = snap.data();
+    if (data.uid === myUid) {
+      return {
+        available: true,
+        normalized,
+        message:
+          language === 'ro'
+            ? '✅ Acesta este deja ID-ul tău actual.'
+            : '✅ This is already your current ID.',
+      };
+    }
+    return {
+      available: false,
+      normalized,
+      message:
+        language === 'ro'
+          ? '❌ Acest ID este deja folosit de un alt jucător.'
+          : '❌ This ID is already claimed by another player.',
+    };
+  } catch (error) {
+    console.warn('Error checking custom ID availability:', error);
+    return {
+      available: false,
+      normalized,
+      message:
+        language === 'ro'
+          ? 'Eroare la verificarea disponibilității ID-ului.'
+          : 'Error checking ID availability.',
+    };
+  }
+}
+
+/**
+ * Updates the user's custom short ID in Firestore public_profiles, user document, and local cache.
+ */
+export async function updateUserCustomShortId(
+  uid: string,
+  newCustomId: string,
+  currentProfileData: Partial<UserFriendProfile>,
+  language: 'ro' | 'en' = 'ro'
+): Promise<{ success: boolean; updatedShortId?: string; error?: string }> {
+  if (!auth.currentUser || auth.currentUser.uid !== uid) {
+    return {
+      success: false,
+      error: language === 'ro' ? 'Nu ești autentificat.' : 'Not authenticated.',
+    };
+  }
+
+  const check = await checkCustomIdAvailability(newCustomId, uid, language);
+  if (!check.available) {
+    return { success: false, error: check.message };
+  }
+
+  const newShortId = check.normalized;
+  const oldShortId = currentProfileData.shortId;
+
+  try {
+    const newDocRef = doc(db, 'public_profiles', newShortId);
+    const payload: UserFriendProfile = {
+      uid,
+      shortId: newShortId,
+      displayName: currentProfileData.displayName || auth.currentUser.displayName || 'Călugăr Pelerin',
+      avatarIcon: currentProfileData.avatarIcon || 'monk_drunk',
+      currentLevel: currentProfileData.currentLevel || 1,
+      currentTitle_ro: currentProfileData.currentTitle_ro || 'Frate Pelerin',
+      currentTitle_en: currentProfileData.currentTitle_en || 'Pilgrim Brother',
+      activeRoom: currentProfileData.activeRoom || null,
+      updatedAt: serverTimestamp(),
+    };
+
+    // 1. Create/Update new public profile
+    await setDoc(newDocRef, payload, { merge: true });
+
+    // 2. If changing from a different previous shortId, remove the old public profile doc
+    if (oldShortId && oldShortId !== newShortId) {
+      try {
+        const oldDocRef = doc(db, 'public_profiles', oldShortId);
+        const oldSnap = await getDoc(oldDocRef);
+        if (oldSnap.exists() && oldSnap.data()?.uid === uid) {
+          await deleteDoc(oldDocRef);
+        }
+      } catch (delErr) {
+        console.warn('Could not clean up old public profile doc:', delErr);
+      }
+    }
+
+    // 3. Update in user's root document
+    try {
+      const userRef = doc(db, 'users', uid);
+      await updateDoc(userRef, {
+        shortId: newShortId,
+        customShortId: newShortId,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (uErr) {
+      // If user doc doesn't exist yet or update fails, try merge
+      try {
+        const userRef = doc(db, 'users', uid);
+        await setDoc(
+          userRef,
+          {
+            userId: uid,
+            shortId: newShortId,
+            customShortId: newShortId,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (mergeErr) {
+        console.warn('Could not save customShortId in user doc:', mergeErr);
+      }
+    }
+
+    // 4. Save to localStorage for instant UI loading
+    try {
+      localStorage.setItem(`user_custom_short_id_${uid}`, newShortId);
+    } catch {}
+
+    return { success: true, updatedShortId: newShortId };
+  } catch (err: any) {
+    console.error('Error saving custom short ID:', err);
+    return {
+      success: false,
+      error:
+        err?.message ||
+        (language === 'ro' ? 'Eroare la salvarea noului ID.' : 'Error saving new ID.'),
+    };
+  }
+}
+
+/**
+ * Resets the user's short ID back to the automatic generated ID.
+ */
+export async function resetToAutoGeneratedId(
+  uid: string,
+  currentProfileData: Partial<UserFriendProfile>,
+  language: 'ro' | 'en' = 'ro'
+): Promise<{ success: boolean; updatedShortId?: string; error?: string }> {
+  const autoId = generateShortId(uid);
+  return updateUserCustomShortId(uid, autoId, currentProfileData, language);
+}
+
+/**
+ * Sets or clears the user's active room in their public profile.
+ */
+export async function setUserActiveRoom(
+  uid: string,
+  shortId: string,
+  activeRoom: ActiveRoomInfo | null
+): Promise<void> {
+  if (!uid || !shortId) return;
+  const profileDocRef = doc(db, 'public_profiles', shortId);
+  try {
+    await updateDoc(profileDocRef, {
+      activeRoom: activeRoom || null,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    try {
+      await setDoc(
+        profileDocRef,
+        {
+          uid,
+          shortId,
+          activeRoom: activeRoom || null,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Could not update active room:', e);
+    }
+  }
 }
 
 /**
@@ -38,13 +294,14 @@ export async function ensureUserPublicProfile(
   avatarIcon: string = 'monk_drunk',
   currentLevel: number = 1,
   currentTitle_ro: string = 'Frate Pelerin',
-  currentTitle_en: string = 'Pilgrim Brother'
+  currentTitle_en: string = 'Pilgrim Brother',
+  customShortId?: string
 ): Promise<UserFriendProfile | null> {
   if (!auth.currentUser || auth.currentUser.uid !== uid) {
     return null;
   }
 
-  const shortId = generateShortId(uid);
+  const shortId = getUserCurrentShortId(uid, customShortId);
   const profileDocRef = doc(db, 'public_profiles', shortId);
 
   try {
@@ -226,7 +483,7 @@ export async function removeFriend(myUid: string, friendUid: string): Promise<bo
 }
 
 /**
- * Subscribes to the user's friends subcollection.
+ * Subscribes to the user's friends subcollection and merges live active room data.
  */
 export function subscribeToFriends(
   myUid: string,
@@ -236,20 +493,88 @@ export function subscribeToFriends(
   if (!myUid) return () => {};
 
   const colRef = collection(db, 'users', myUid, 'friends');
-  return onSnapshot(
+  const profileUnsubs: { [key: string]: () => void } = {};
+  let currentBaseFriends: FriendEntry[] = [];
+  const friendProfileMap: { [shortId: string]: Partial<UserFriendProfile> } = {};
+
+  const emitCombined = () => {
+    const combined = currentBaseFriends.map((f) => {
+      const extra = f.shortId ? friendProfileMap[f.shortId] : null;
+      return {
+        ...f,
+        displayName: extra?.displayName || f.displayName,
+        avatarIcon: extra?.avatarIcon || f.avatarIcon,
+        currentLevel: extra?.currentLevel || f.currentLevel,
+        currentTitle_ro: extra?.currentTitle_ro || f.currentTitle_ro,
+        activeRoom: extra?.activeRoom || null,
+      };
+    });
+    onUpdate(combined);
+  };
+
+  const unsubMain = onSnapshot(
     colRef,
     (snapshot) => {
       const list: FriendEntry[] = [];
+      const newShortIds = new Set<string>();
+
       snapshot.forEach((docSnap) => {
-        list.push(docSnap.data() as FriendEntry);
+        const data = docSnap.data() as FriendEntry;
+        list.push(data);
+        if (data.shortId) {
+          newShortIds.add(data.shortId);
+        }
       });
-      onUpdate(list);
+      currentBaseFriends = list;
+
+      // Clean up old unsubs
+      Object.keys(profileUnsubs).forEach((sId) => {
+        if (!newShortIds.has(sId)) {
+          if (profileUnsubs[sId]) profileUnsubs[sId]();
+          delete profileUnsubs[sId];
+          delete friendProfileMap[sId];
+        }
+      });
+
+      // Subscribe to public profiles for activeRoom info
+      newShortIds.forEach((sId) => {
+        if (!profileUnsubs[sId]) {
+          profileUnsubs[sId] = onSnapshot(
+            doc(db, 'public_profiles', sId),
+            (pSnap) => {
+              if (pSnap.exists()) {
+                const pData = pSnap.data() as UserFriendProfile;
+                friendProfileMap[sId] = {
+                  displayName: pData.displayName,
+                  avatarIcon: pData.avatarIcon,
+                  currentLevel: pData.currentLevel,
+                  currentTitle_ro: pData.currentTitle_ro,
+                  activeRoom: pData.activeRoom || null,
+                };
+              } else {
+                delete friendProfileMap[sId];
+              }
+              emitCombined();
+            },
+            (err) => {
+              console.warn(`Error subscribing to profile ${sId}:`, err);
+            }
+          );
+        }
+      });
+
+      emitCombined();
     },
     (err) => {
       console.warn('Friends subscription error:', err);
       if (onError) onError(err);
     }
   );
+
+  return () => {
+    unsubMain();
+    Object.values(profileUnsubs).forEach((u) => u());
+  };
 }
 
 /**

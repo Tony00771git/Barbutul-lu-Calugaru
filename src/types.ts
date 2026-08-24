@@ -302,6 +302,7 @@ export interface Profile {
   id: string;
   name: string;
   avatarIcon?: string;
+  isMaster?: boolean; // True for the primary account profile (Master Account)
   gamesPlayed: number;
   totalSips: number;
   totalChugs: number;
@@ -408,6 +409,16 @@ export interface TriviaQuestion {
 export type MonkState = 'sober' | 'tipsy' | 'wobbly' | 'drunk' | 'blackout' | 'dead' | 'resurrected';
 
 // Social & Friends 1v1 Invite Types
+export interface ActiveRoomInfo {
+  mode: 'crash' | 'duel' | 'pineapple' | 'casino';
+  roomCode: string;
+  status: 'lobby' | 'in_game';
+  playerCount?: number;
+  maxPlayers?: number;
+  hostName?: string;
+  updatedAt?: any;
+}
+
 export interface UserFriendProfile {
   uid: string;
   shortId: string;
@@ -417,6 +428,7 @@ export interface UserFriendProfile {
   currentLevel?: number;
   currentTitle_ro?: string;
   currentTitle_en?: string;
+  activeRoom?: ActiveRoomInfo | null;
   updatedAt?: any;
 }
 
@@ -427,6 +439,7 @@ export interface FriendEntry {
   shortId?: string;
   currentLevel?: number;
   currentTitle_ro?: string;
+  activeRoom?: ActiveRoomInfo | null;
   addedAt?: any;
 }
 

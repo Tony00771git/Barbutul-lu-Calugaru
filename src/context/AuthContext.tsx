@@ -49,17 +49,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (p) {
         setCloudProfile(p);
       } else if (auth.currentUser && auth.currentUser.uid === uid) {
-        // Initial setup for new user
-        const initial: CloudUserProfile = {
-          userId: uid,
-          displayName: auth.currentUser.displayName || 'Călugăr Pelerin',
-          avatarIcon: 'monk_drunk',
-          email: auth.currentUser.email || '',
+        // Initial setup for new user with Master Profile
+        const masterName = auth.currentUser.displayName || 'Starețul Mănăstirii';
+        const initialMasterProfile: Profile = {
+          id: `master_${uid.substring(0, 8)}`,
+          name: masterName,
+          avatarIcon: 'monk_master',
+          isMaster: true,
           gamesPlayed: 0,
           totalSips: 0,
           totalChugs: 0,
+          totalXP: 0,
+          currentLevel: 1,
+          currentTitle_ro: 'Ucenic de Tavernă',
+          currentTitle_en: 'Tavern Apprentice',
+          winsBoardgame: 0,
+          winsDuel: 0,
+          winsCasino: 0,
+          winsPineapple: 0,
+          winsCrash: 0,
+          gamesPlayedCrash: 0,
+          sipsDrunkCrash: 0,
+          totalPineapplePoints: 0,
+          unlockedAchievements: [],
+          createdAt: Date.now(),
+        };
+
+        const initial: CloudUserProfile = {
+          userId: uid,
+          displayName: masterName,
+          avatarIcon: 'monk_master',
+          email: auth.currentUser.email || '',
+          masterProfile: initialMasterProfile,
+          subProfiles: [],
+          profiles: [initialMasterProfile],
+          drunkenCoins: 100,
+          gamesPlayed: 0,
+          totalSips: 0,
+          totalChugs: 0,
+          totalXP: 0,
+          currentLevel: 1,
+          currentTitle_ro: 'Ucenic de Tavernă',
+          currentTitle_en: 'Tavern Apprentice',
           duelWins: 0,
           duelPlayed: 0,
+          winsBoardgame: 0,
+          winsDuel: 0,
+          winsCasino: 0,
+          winsPineapple: 0,
+          winsCrash: 0,
           unlockedAchievements: [],
         };
         await saveUserProfile(initial);

@@ -9,6 +9,7 @@ import { auth } from '../lib/firebase';
 import { getSyncedServerNow, syncServerClock } from '../lib/duelFirestoreService';
 import { HeadToHeadTracker } from './HeadToHeadTracker';
 import { recordHeadToHeadMatch } from '../lib/headToHeadService';
+import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
 
 interface DuelGameProps {
   socket: UseDuelSocketReturn;
@@ -40,6 +41,29 @@ export const DuelGame: React.FC<DuelGameProps> = ({
     errorMessage,
     clearError,
   } = socket;
+
+  // Track active room for friends
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (user && room?.roomCode) {
+      const shortId = getUserCurrentShortId(user.uid);
+      setUserActiveRoom(user.uid, shortId, {
+        mode: 'duel',
+        roomCode: room.roomCode,
+        status: room.status === 'in_game' ? 'in_game' : 'lobby',
+        playerCount: room.players.length,
+        maxPlayers: 2,
+        hostName: room.players.find((p) => p.isHost)?.name || localPlayer.name,
+      });
+    }
+    return () => {
+      const user = auth.currentUser;
+      if (user) {
+        const shortId = getUserCurrentShortId(user.uid);
+        setUserActiveRoom(user.uid, shortId, null);
+      }
+    };
+  }, [room?.roomCode, room?.status, room?.players.length]);
 
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -209,37 +233,47 @@ export const DuelGame: React.FC<DuelGameProps> = ({
       const guestPts = (p2Scores.sipsTotal || 0) + 25 * (p2Scores.chugsTotal || 0);
       const winner = hostPts < guestPts ? host.name : (guestPts < hostPts ? (guest ? guest.name : 'Jucător 2') : 'Egalitate');
 
-      // Record head-to-head match stats
-      const isTie = winner === 'Egalitate';
-      recordHeadToHeadMatch(
-        host.name,
-        guest ? guest.name : 'Jucător 2',
-        isTie ? null : winner,
-        'duel',
-        isTie
-      );
+      const isGuestBot = Boolean(guest?.id?.startsWith('bot_') || guest?.name?.includes('(AI)') || guest?.name?.includes('Onufrie'));
+      const isHostBot = Boolean(host?.id?.startsWith('bot_') || host?.name?.includes('(AI)'));
+      const isBotMatch = isGuestBot || isHostBot;
+      const isCompletedMatch = room.status === 'finished' && (room.currentRound || 0) >= 2;
 
-      // Batch update profiles with duel win tracking
-      [player1, player2].forEach(p => {
-        const isWinner = winner !== 'Egalitate' && p.name === winner;
-        updateProfileStats(p.name, p.sipsTotal, p.chugsTotal, p.avatarIcon, isWinner ? 'duel' : undefined);
-        if (isWinner && p.sipsTotal === 0 && p.chugsTotal === 0) {
-          checkAchievement(p.name, { isDuelFlawless: true, isDuelWin: true });
+      // Leaderboards & persistent rivalry: ONLY for completed matches between real humans (NOT bots, NOT unfinished)
+      if (!isBotMatch && isCompletedMatch) {
+        // Record head-to-head match stats
+        const isTie = winner === 'Egalitate';
+        recordHeadToHeadMatch(
+          host.name,
+          guest ? guest.name : 'Jucător 2',
+          isTie ? null : winner,
+          'duel',
+          isTie
+        );
+
+        // Batch update profiles with duel win tracking
+        [player1, player2].forEach(p => {
+          if (!p.id?.startsWith('bot_') && !p.name?.includes('(AI)')) {
+            const isWinner = winner !== 'Egalitate' && p.name === winner;
+            updateProfileStats(p.name, p.sipsTotal, p.chugsTotal, p.avatarIcon, isWinner ? 'duel' : undefined);
+            if (isWinner && p.sipsTotal === 0 && p.chugsTotal === 0) {
+              checkAchievement(p.name, { isDuelFlawless: true, isDuelWin: true });
+            }
+          }
+        });
+
+        // If authenticated, record match in Firestore
+        if (auth.currentUser) {
+          recordDuelMatchHistory({
+            matchId: `match_${Date.now()}_${room.code}`,
+            roomCode: room.code,
+            submode: room.submode,
+            difficulty: room.difficulty,
+            hostPlayerName: host.name,
+            guestPlayerName: guest ? guest.name : 'Jucător 2',
+            winnerName: winner,
+            roundsTotal: room.currentRound,
+          }).catch(err => console.warn('Could not record duel history in Firestore:', err));
         }
-      });
-
-      // If authenticated, record match in Firestore
-      if (auth.currentUser) {
-        recordDuelMatchHistory({
-          matchId: `match_${Date.now()}_${room.code}`,
-          roomCode: room.code,
-          submode: room.submode,
-          difficulty: room.difficulty,
-          hostPlayerName: host.name,
-          guestPlayerName: guest ? guest.name : 'Jucător 2',
-          winnerName: winner,
-          roundsTotal: room.currentRound,
-        }).catch(err => console.warn('Could not record duel history in Firestore:', err));
       }
 
       onEndGame([player1, player2]);

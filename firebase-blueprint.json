@@ -458,12 +458,13 @@
       "type": "object",
       "properties": {
         "uid": { "type": "string", "maxLength": 128 },
-        "shortId": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "shortId": { "type": "string", "minLength": 3, "maxLength": 20 },
         "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
         "avatarIcon": { "type": "string", "maxLength": 50000 },
         "currentLevel": { "type": "number" },
         "currentTitle_ro": { "type": "string", "maxLength": 100 },
         "currentTitle_en": { "type": "string", "maxLength": 100 },
+        "activeRoom": { "type": "object" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "shortId", "displayName"]

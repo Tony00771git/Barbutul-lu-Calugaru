@@ -3,8 +3,8 @@ import { Language, ThemeId, DiceSkin, Profile } from '../types';
 import { translations } from '../i18n/translations';
 import { ACHIEVEMENTS, Achievement } from '../data/achievements';
 import { useAuth } from './AuthContext';
-import { syncAccountProfilesToCloud } from '../lib/firestoreService';
-import { resetAllHeadToHead } from '../lib/headToHeadService';
+import { syncAccountProfilesToCloud, resetGlobalLeaderboard } from '../lib/firestoreService';
+import { resetAllHeadToHead, isBotPlayerName } from '../lib/headToHeadService';
 import {
   calculateProgression,
   calculateMatchXpGain,
@@ -85,10 +85,13 @@ interface AppContextType {
   autoSaveNewProfiles: boolean;
   setAutoSaveNewProfiles: (val: boolean) => void;
   profiles: Profile[];
+  masterProfile: Profile;
+  subProfiles: Profile[];
   drunkenCoins: number;
   addProfile: (name: string, avatarIcon?: string) => Profile | undefined;
   deleteProfile: (id: string) => void;
   updateProfileAvatar: (id: string, avatarIcon: string) => void;
+  updateProfileName: (id: string, name: string) => void;
   updateProfileStats: (playerName: string, sips: number, chugs: number, avatarIcon?: string, winMode?: 'boardgame' | 'duel' | 'casino' | 'pineapple', pineapplePoints?: number) => void;
   batchUpdateProfiles: (playerStats: Array<{ name: string; sips: number; chugs: number; avatarIcon?: string; winMode?: 'boardgame' | 'duel' | 'casino' | 'pineapple' }>) => void;
   recordWin: (playerName: string, mode: 'boardgame' | 'duel' | 'casino' | 'pineapple') => void;
@@ -117,6 +120,7 @@ interface AppContextType {
   activeLegendaryAchievement: { achievement: Achievement; playerName: string } | null;
   dismissLegendaryAchievement: () => void;
   resetAllStats: () => Promise<void> | void;
+  resetGlobalTavernLeaderboard: () => Promise<void>;
   customThemeBackgrounds: Record<ThemeId, string>;
   setCustomThemeBackground: (themeId: ThemeId, url: string) => void;
   resetCustomThemeBackground: (themeId: ThemeId) => void;
@@ -220,25 +224,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            const cleanProfiles: Profile[] = parsed.map((p, idx) => ({
-              id: p.id || generateUniqueId(`profile_${idx}`),
-              name: p.name || 'Călugăr',
-              avatarIcon: p.avatarIcon || 'monk_drunk',
-              gamesPlayed: 0,
-              totalSips: 0,
-              totalChugs: 0,
-              totalXP: 0,
-              currentLevel: 1,
-              currentTitle_ro: progDefault.titleRo,
-              currentTitle_en: progDefault.titleEn,
-              winsBoardgame: 0,
-              winsDuel: 0,
-              winsCasino: 0,
-              unlockedAchievements: [],
-              createdAt: p.createdAt || Date.now(),
-            }));
-            localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(cleanProfiles));
-            return cleanProfiles;
+            const cleanProfiles: Profile[] = parsed
+              .filter(p => p && p.name && !isBotPlayerName(p.name))
+              .map((p, idx) => ({
+                id: p.id || generateUniqueId(`profile_${idx}`),
+                name: p.name || 'Călugăr',
+                avatarIcon: p.avatarIcon || 'monk_drunk',
+                gamesPlayed: 0,
+                totalSips: 0,
+                totalChugs: 0,
+                totalXP: 0,
+                currentLevel: 1,
+                currentTitle_ro: progDefault.titleRo,
+                currentTitle_en: progDefault.titleEn,
+                winsBoardgame: 0,
+                winsDuel: 0,
+                winsCasino: 0,
+                unlockedAchievements: [],
+                createdAt: p.createdAt || Date.now(),
+              }));
+            if (cleanProfiles.length > 0) {
+              localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(cleanProfiles));
+              return cleanProfiles;
+            }
           }
         } catch (e) {
           console.error('Failed to migrate saved profiles', e);
@@ -247,7 +255,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const defaultClean: Profile[] = [
         { id: 'profile_default_1', name: 'Călugărul Vasile', avatarIcon: 'monk_drunk', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 1000000 },
-        { id: 'profile_default_2', name: 'Fratele Onufrie', avatarIcon: 'knight', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 500000 },
+        { id: 'profile_default_2', name: 'Fratele Pelerin', avatarIcon: 'knight', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 500000 },
       ];
       localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(defaultClean));
       return defaultClean;
@@ -259,34 +267,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const seenIds = new Set<string>();
-          const sanitized: Profile[] = parsed.map((p, idx) => {
-            let uniqueId = p.id;
-            if (!uniqueId || seenIds.has(uniqueId)) {
-              uniqueId = generateUniqueId(`profile_${idx}`);
-            }
-            seenIds.add(uniqueId);
-            const rawXP = Math.max(0, p.totalXP || 0);
-            const prog = calculateProgression(rawXP);
+          const sanitized: Profile[] = parsed
+            .filter(p => p && p.name && !isBotPlayerName(p.name))
+            .map((p, idx) => {
+              let uniqueId = p.id;
+              if (!uniqueId || seenIds.has(uniqueId)) {
+                uniqueId = generateUniqueId(`profile_${idx}`);
+              }
+              seenIds.add(uniqueId);
+              const rawXP = Math.max(0, p.totalXP || 0);
+              const prog = calculateProgression(rawXP);
 
-            return {
-              id: uniqueId,
-              name: p.name || 'Călugăr',
-              avatarIcon: p.avatarIcon || 'monk_drunk',
-              gamesPlayed: p.gamesPlayed || 0,
-              totalSips: p.totalSips || 0,
-              totalChugs: p.totalChugs || 0,
-              totalXP: rawXP,
-              currentLevel: p.currentLevel || prog.currentLevel,
-              currentTitle_ro: p.currentTitle_ro || prog.titleRo,
-              currentTitle_en: p.currentTitle_en || prog.titleEn,
-              winsBoardgame: p.winsBoardgame || 0,
-              winsDuel: p.winsDuel || 0,
-              winsCasino: p.winsCasino || 0,
-              unlockedAchievements: p.unlockedAchievements || [],
-              createdAt: p.createdAt || Date.now(),
-            };
-          });
-          return sanitized;
+              return {
+                id: uniqueId,
+                name: p.name || 'Călugăr',
+                avatarIcon: p.avatarIcon || 'monk_drunk',
+                gamesPlayed: p.gamesPlayed || 0,
+                totalSips: p.totalSips || 0,
+                totalChugs: p.totalChugs || 0,
+                totalXP: rawXP,
+                currentLevel: p.currentLevel || prog.currentLevel,
+                currentTitle_ro: p.currentTitle_ro || prog.titleRo,
+                currentTitle_en: p.currentTitle_en || prog.titleEn,
+                winsBoardgame: p.winsBoardgame || 0,
+                winsDuel: p.winsDuel || 0,
+                winsCasino: p.winsCasino || 0,
+                unlockedAchievements: p.unlockedAchievements || [],
+                createdAt: p.createdAt || Date.now(),
+              };
+            });
+          if (sanitized.length > 0) {
+            return sanitized;
+          }
         }
       } catch (e) {
         console.error('Failed to parse saved profiles', e);
@@ -295,7 +307,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return [
       { id: 'profile_default_1', name: 'Călugărul Vasile', avatarIcon: 'monk_drunk', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 1000000 },
-      { id: 'profile_default_2', name: 'Fratele Onufrie', avatarIcon: 'knight', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 500000 },
+      { id: 'profile_default_2', name: 'Fratele Pelerin', avatarIcon: 'knight', gamesPlayed: 0, totalSips: 0, totalChugs: 0, totalXP: 0, currentLevel: 1, currentTitle_ro: progDefault.titleRo, currentTitle_en: progDefault.titleEn, winsBoardgame: 0, winsDuel: 0, winsCasino: 0, unlockedAchievements: [], createdAt: Date.now() - 500000 },
     ];
   });
 
@@ -384,7 +396,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Merge cloud profiles with local profiles
       setProfiles(prev => {
         const merged = [...prev];
-        cloudProfile.profiles!.forEach(cp => {
+        cloudProfile.profiles!
+          .filter(cp => cp && cp.name && !isBotPlayerName(cp.name))
+          .forEach(cp => {
           const matchIdx = merged.findIndex(p => p.id === cp.id || p.name.trim().toLowerCase() === cp.name.trim().toLowerCase());
           const highestXp = Math.max(cp.totalXP || 0, matchIdx >= 0 ? (merged[matchIdx].totalXP || 0) : 0);
           const prog = calculateProgression(highestXp);
@@ -429,7 +443,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           }
         });
-        return merged;
+        return merged.filter(p => !isBotPlayerName(p.name));
       });
     }
   }, [user, cloudProfile]);
@@ -489,7 +503,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const checkAchievement = (playerName: string, event: AchievementEvent): string[] => {
     const trimmed = playerName.trim();
-    if (!trimmed) return [];
+    if (!trimmed || isBotPlayerName(trimmed)) return [];
     const lowerName = trimmed.toLowerCase();
     const newUnlockedList: string[] = [];
 
@@ -649,16 +663,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addProfile = (name: string, avatarIcon: string = 'monk_drunk'): Profile | undefined => {
     const trimmed = name.trim();
-    if (!trimmed) return undefined;
+    if (!trimmed || isBotPlayerName(trimmed)) return undefined;
     const existing = profiles.find(p => p.name.toLowerCase() === trimmed.toLowerCase());
     if (existing) return existing;
 
     const prog = calculateProgression(0);
 
     const newProfile: Profile = {
-      id: generateUniqueId('profile'),
+      id: generateUniqueId('subprofile'),
       name: trimmed,
       avatarIcon,
+      isMaster: false,
       gamesPlayed: 0,
       totalSips: 0,
       totalChugs: 0,
@@ -669,6 +684,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       winsBoardgame: 0,
       winsDuel: 0,
       winsCasino: 0,
+      winsPineapple: 0,
+      winsCrash: 0,
+      gamesPlayedCrash: 0,
+      sipsDrunkCrash: 0,
+      totalPineapplePoints: 0,
+      unlockedAchievements: [],
       createdAt: Date.now(),
     };
     setProfiles(prev => [...prev, newProfile]);
@@ -676,6 +697,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteProfile = (id: string) => {
+    const master = profiles.find(p => p.isMaster) || profiles[0];
+    if (master && master.id === id) {
+      return; // Do not delete Master Profile
+    }
     setProfiles(prev => prev.filter(p => p.id !== id));
   };
 
@@ -691,7 +716,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Unified global drunken coins spending (supports either spendDrunkenCoins(cost) or legacy spendDrunkenCoins(profileId, cost))
+  const updateProfileName = (id: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setProfiles(prev => prev.map(p => (p.id === id ? { ...p, name: trimmed } : p)));
+  };
+
+  // Derived Master Profile and Sub-Profiles
+  const masterProfile: Profile = profiles.find(p => p.isMaster) || profiles[0] || {
+    id: 'profile_master_default',
+    name: 'Starețul Mănăstirii',
+    avatarIcon: 'monk_master',
+    isMaster: true,
+    gamesPlayed: 0,
+    totalSips: 0,
+    totalChugs: 0,
+    totalXP: 0,
+    currentLevel: 1,
+    currentTitle_ro: 'Ucenic de Tavernă',
+    currentTitle_en: 'Tavern Apprentice',
+    winsBoardgame: 0,
+    winsDuel: 0,
+    winsCasino: 0,
+    winsPineapple: 0,
+    winsCrash: 0,
+    gamesPlayedCrash: 0,
+    sipsDrunkCrash: 0,
+    totalPineapplePoints: 0,
+    unlockedAchievements: [],
+    createdAt: Date.now(),
+  };
+
+  const subProfiles: Profile[] = profiles.filter(p => !p.isMaster && p.id !== masterProfile.id);
+
+  // Unified global drunken coins spending
   const spendDrunkenCoins = (profileIdOrCost: string | number, amount?: number): boolean => {
     const cost = typeof profileIdOrCost === 'number' ? profileIdOrCost : (amount || 0);
     if (cost <= 0) return true;
@@ -703,7 +761,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // Unified global drunken coins earning (supports addDrunkenCoins(amount) or legacy addDrunkenCoins(profileId, amount))
+  // Unified global drunken coins earning
   const addDrunkenCoins = (amountOrProfileId: string | number, amount?: number) => {
     const earned = typeof amountOrProfileId === 'number' ? amountOrProfileId : (amount || 0);
     if (earned <= 0) return;
@@ -719,19 +777,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newAchievements: string[] = [],
     extraStats?: { sips?: number; chugs?: number; gold?: number; chips?: number; flawless?: boolean }
   ): MatchXpBreakdown | null => {
-    // CRITICAL ANTI-FARMING RULE: If game ended under 2 turns, NO XP or Coins are awarded!
-    if (turnsPlayed < 2) {
+    if (turnsPlayed < 2 || isBotPlayerName(playerName)) {
       return null;
     }
 
     const trimmed = playerName.trim();
-    if (!trimmed) return null;
+    if (!trimmed || isBotPlayerName(trimmed)) return null;
     const lowerName = trimmed.toLowerCase();
 
     const existingProfile = profiles.find(p => p.name.trim().toLowerCase() === lowerName) || {
       id: generateUniqueId('profile'),
       name: trimmed,
       avatarIcon: 'monk_drunk',
+      isMaster: false,
       gamesPlayed: 0,
       totalSips: 0,
       totalChugs: 0,
@@ -739,22 +797,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       currentLevel: 1,
       currentTitle_ro: 'Ucenic de Tavernă',
       currentTitle_en: 'Tavern Apprentice',
+      winsBoardgame: 0,
+      winsDuel: 0,
+      winsCasino: 0,
+      winsPineapple: 0,
+      winsCrash: 0,
+      gamesPlayedCrash: 0,
+      sipsDrunkCrash: 0,
+      totalPineapplePoints: 0,
+      unlockedAchievements: [],
       createdAt: Date.now(),
     };
 
     const breakdown = calculateMatchXpGain(existingProfile, mode, isWinner, turnsPlayed, newAchievements, extraStats, drunkenCoins);
     if (!breakdown) return null;
 
-    // Add gained coins to the global pool!
+    // Add gained coins to the central treasury
     if (breakdown.drunkenCoinsGained > 0) {
       setAndPersistDrunkenCoins(prev => prev + breakdown.drunkenCoinsGained);
     }
 
+    const earnedXP = breakdown.totalGainedXP;
+
     setProfiles(prev => {
       const idx = prev.findIndex(p => p.name.trim().toLowerCase() === lowerName);
+      const masterIdx = prev.findIndex(p => p.isMaster) >= 0 ? prev.findIndex(p => p.isMaster) : 0;
       const prog = calculateProgression(breakdown.newTotalXP);
+
+      const next = [...prev];
       if (idx >= 0) {
-        const next = [...prev];
         next[idx] = {
           ...next[idx],
           totalXP: breakdown.newTotalXP,
@@ -762,19 +833,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           currentTitle_ro: prog.titleRo,
           currentTitle_en: prog.titleEn,
         };
-        return next;
       } else {
-        return [
-          ...prev,
-          {
-            ...existingProfile,
-            totalXP: breakdown.newTotalXP,
-            currentLevel: prog.currentLevel,
-            currentTitle_ro: prog.titleRo,
-            currentTitle_en: prog.titleEn,
-          },
-        ];
+        next.push({
+          ...existingProfile,
+          totalXP: breakdown.newTotalXP,
+          currentLevel: prog.currentLevel,
+          currentTitle_ro: prog.titleRo,
+          currentTitle_en: prog.titleEn,
+        });
       }
+
+      // If playing profile is a sub-profile, aggregate the earned XP into the Master Profile
+      if (idx !== masterIdx && masterIdx >= 0 && masterIdx < next.length) {
+        const master = next[masterIdx];
+        const masterNewXP = (master.totalXP || 0) + earnedXP;
+        const masterProg = calculateProgression(masterNewXP);
+        next[masterIdx] = {
+          ...master,
+          totalXP: masterNewXP,
+          currentLevel: masterProg.currentLevel,
+          currentTitle_ro: masterProg.titleRo,
+          currentTitle_en: masterProg.titleEn,
+        };
+      }
+
+      return next;
     });
 
     setActiveXpBreakdown({
@@ -788,12 +871,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const recordWin = (playerName: string, mode: 'boardgame' | 'duel' | 'casino' | 'pineapple') => {
     const trimmed = playerName.trim();
-    if (!trimmed) return;
+    if (!trimmed || isBotPlayerName(trimmed)) return;
     const lowerName = trimmed.toLowerCase();
 
     setProfiles(prev => {
-      return prev.map(p => {
-        if (p.name.trim().toLowerCase() === lowerName) {
+      const masterIdx = prev.findIndex(p => p.isMaster) >= 0 ? prev.findIndex(p => p.isMaster) : 0;
+      return prev.map((p, idx) => {
+        const isTarget = p.name.trim().toLowerCase() === lowerName;
+        const isMaster = idx === masterIdx && !p.isMaster;
+
+        if (isTarget || isMaster) {
           return {
             ...p,
             winsBoardgame: mode === 'boardgame' ? (p.winsBoardgame || 0) + 1 : (p.winsBoardgame || 0),
@@ -825,10 +912,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     pineapplePoints?: number
   ) => {
     const trimmed = playerName.trim();
-    if (!trimmed) return;
+    if (!trimmed || isBotPlayerName(trimmed)) return;
     const lowerName = trimmed.toLowerCase();
 
-    // Base XP gained per session (10) + performance XP if won
     let baseMatchXp = 10;
     if (winMode === 'duel') baseMatchXp += 35;
     else if (winMode === 'casino') baseMatchXp += 60;
@@ -837,6 +923,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setProfiles(prev => {
       let matched = false;
+      const masterIdx = prev.findIndex(p => p.isMaster) >= 0 ? prev.findIndex(p => p.isMaster) : 0;
+
       const updated = prev.map(p => {
         if (p.name.trim().toLowerCase() === lowerName) {
           matched = true;
@@ -862,12 +950,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return p;
       });
 
+      // Also aggregate stats and XP into Master Profile if playing profile is a sub-profile
+      if (masterIdx >= 0 && masterIdx < updated.length) {
+        const playingIsSub = updated.some(p => p.name.trim().toLowerCase() === lowerName && !p.isMaster && p.id !== updated[masterIdx].id);
+        if (playingIsSub) {
+          const master = updated[masterIdx];
+          const masterNextXP = (master.totalXP || 0) + baseMatchXp;
+          const masterProg = calculateProgression(masterNextXP);
+          updated[masterIdx] = {
+            ...master,
+            gamesPlayed: master.gamesPlayed + 1,
+            totalSips: master.totalSips + sips,
+            totalChugs: master.totalChugs + chugs,
+            totalXP: masterNextXP,
+            currentLevel: masterProg.currentLevel,
+            currentTitle_ro: masterProg.titleRo,
+            currentTitle_en: masterProg.titleEn,
+            winsBoardgame: winMode === 'boardgame' ? (master.winsBoardgame || 0) + 1 : (master.winsBoardgame || 0),
+            winsDuel: winMode === 'duel' ? (master.winsDuel || 0) + 1 : (master.winsDuel || 0),
+            winsCasino: winMode === 'casino' ? (master.winsCasino || 0) + 1 : (master.winsCasino || 0),
+            winsPineapple: winMode === 'pineapple' ? (master.winsPineapple || 0) + 1 : (master.winsPineapple || 0),
+            totalPineapplePoints: (master.totalPineapplePoints || 0) + (pineapplePoints || 0),
+          };
+        }
+      }
+
       if (!matched && lowerName.length > 0) {
         const prog = calculateProgression(baseMatchXp);
         updated.push({
           id: generateUniqueId('profile'),
           name: trimmed,
           avatarIcon: avatarIcon || 'monk_drunk',
+          isMaster: false,
           gamesPlayed: 1,
           totalSips: sips,
           totalChugs: chugs,
@@ -880,6 +994,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           winsCasino: winMode === 'casino' ? 1 : 0,
           winsPineapple: winMode === 'pineapple' ? 1 : 0,
           totalPineapplePoints: pineapplePoints || 0,
+          unlockedAchievements: [],
           createdAt: Date.now(),
         });
       }
@@ -906,12 +1021,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ) => {
     if (!playerStats || playerStats.length === 0) return;
 
+    // Filter out bots
+    const validStats = playerStats.filter(s => s.name && !isBotPlayerName(s.name));
+    if (validStats.length === 0) return;
+
     setProfiles(prev => {
       const updated = [...prev];
+      const masterIdx = prev.findIndex(p => p.isMaster) >= 0 ? prev.findIndex(p => p.isMaster) : 0;
 
-      playerStats.forEach(stat => {
+      validStats.forEach(stat => {
         const trimmed = stat.name.trim();
-        if (!trimmed) return;
+        if (!trimmed || isBotPlayerName(trimmed)) return;
         const lower = trimmed.toLowerCase();
 
         let baseMatchXp = 10;
@@ -941,12 +1061,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             winsCasino: stat.winMode === 'casino' ? (current.winsCasino || 0) + 1 : (current.winsCasino || 0),
             winsPineapple: stat.winMode === 'pineapple' ? (current.winsPineapple || 0) + 1 : (current.winsPineapple || 0),
           };
+
+          // Aggregate into Master if subprofile
+          if (existingIdx !== masterIdx && masterIdx >= 0 && masterIdx < updated.length) {
+            const master = updated[masterIdx];
+            const masterNextXP = (master.totalXP || 0) + baseMatchXp;
+            const masterProg = calculateProgression(masterNextXP);
+            updated[masterIdx] = {
+              ...master,
+              gamesPlayed: master.gamesPlayed + 1,
+              totalSips: master.totalSips + stat.sips,
+              totalChugs: master.totalChugs + stat.chugs,
+              totalXP: masterNextXP,
+              currentLevel: masterProg.currentLevel,
+              currentTitle_ro: masterProg.titleRo,
+              currentTitle_en: masterProg.titleEn,
+            };
+          }
         } else {
           const prog = calculateProgression(baseMatchXp);
           updated.push({
             id: generateUniqueId('profile'),
             name: trimmed,
             avatarIcon: stat.avatarIcon || 'monk_drunk',
+            isMaster: false,
             gamesPlayed: 1,
             totalSips: stat.sips,
             totalChugs: stat.chugs,
@@ -967,7 +1105,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     setTimeout(() => {
-      playerStats.forEach(stat => {
+      validStats.forEach(stat => {
         checkAchievement(stat.name, {
           sipsDelta: stat.sips,
           chugsDelta: stat.chugs,
@@ -993,6 +1131,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     playerName?: string;
   }) => {
     const targetName = stats.playerName || profiles[0]?.name || 'Jucător';
+    if (isBotPlayerName(targetName)) return;
     const sips = stats.sipsDelta || 0;
     const chugs = stats.chugsDelta || 0;
     updateProfileStats(
@@ -1013,8 +1152,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resetAllStats = async () => {
     const defaultProg = calculateProgression(0);
-    const wiped: Profile[] = profiles.map(p => ({
-      ...p,
+    const master = profiles.find(p => p.isMaster) || profiles[0];
+    const masterName = master?.name || user?.displayName || 'Starețul Mănăstirii';
+    const masterAvatar = master?.avatarIcon || 'monk_master';
+
+    // Fresh Master Profile starting clean with 0 subprofiles
+    const cleanMasterProfile: Profile = {
+      id: master?.id || generateUniqueId('master'),
+      name: masterName,
+      avatarIcon: masterAvatar,
+      isMaster: true,
       gamesPlayed: 0,
       totalSips: 0,
       totalChugs: 0,
@@ -1025,21 +1172,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       winsBoardgame: 0,
       winsDuel: 0,
       winsCasino: 0,
+      winsPineapple: 0,
+      winsCrash: 0,
+      gamesPlayedCrash: 0,
+      sipsDrunkCrash: 0,
+      totalPineapplePoints: 0,
       unlockedAchievements: [],
-    }));
+      createdAt: Date.now(),
+    };
 
-    setProfiles(wiped);
-    localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(wiped));
+    const cleanProfiles = [cleanMasterProfile];
+
+    setProfiles(cleanProfiles);
+    localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(cleanProfiles));
     setAndPersistDrunkenCoins(100);
     resetAllHeadToHead();
 
     if (user) {
       hasMergedCloudRef.current = user.uid;
       try {
-        await resetCloudAccount(wiped);
+        await resetCloudAccount(cleanProfiles);
       } catch (err) {
         console.warn('Reset cloud failed:', err);
       }
+    }
+  };
+
+  const resetGlobalTavernLeaderboard = async () => {
+    const cleanMaster = profiles.find(p => p.isMaster) || profiles[0];
+    try {
+      await resetGlobalLeaderboard(cleanMaster ? [cleanMaster] : undefined);
+    } catch (err) {
+      console.warn('Reset global leaderboard failed:', err);
     }
   };
 
@@ -1065,10 +1229,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       autoSaveNewProfiles,
       setAutoSaveNewProfiles,
       profiles,
+      masterProfile,
+      subProfiles,
       drunkenCoins,
       addProfile,
       deleteProfile,
       updateProfileAvatar,
+      updateProfileName,
       updateProfileStats,
       batchUpdateProfiles,
       recordWin,
@@ -1083,6 +1250,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activeLegendaryAchievement,
       dismissLegendaryAchievement,
       resetAllStats,
+      resetGlobalTavernLeaderboard,
       customThemeBackgrounds,
       setCustomThemeBackground,
       resetCustomThemeBackground,

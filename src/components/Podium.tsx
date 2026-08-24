@@ -52,6 +52,8 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, turnsPlayed, onPl
 
   // Save profile stats and award XP & Drunken Coins on mount
   useEffect(() => {
+    if (isTooShort) return; // Do not record stats for prematurely ended or unfinished matches (< 2 turns)
+
     const isNormalOrBoard = mode === 'boardgame' || mode === 'normal';
     const topPlayer = sortedPlayers[0];
     const boardWinnerName = (mode === 'boardgame' && topPlayer && !topPlayer.hasGivenUp) ? topPlayer.name : null;

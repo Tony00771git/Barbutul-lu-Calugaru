@@ -122,7 +122,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
     pineappleSettings?: PineappleMatchSettings,
     crashSettings?: CrashMatchSettings
   ) => {
-    const myName = playerNames[0]?.trim() || (role === 'host' ? 'Gazda' : 'Luptătorul');
+    const myName = playerNames[0]?.trim() || (role === 'host' ? (language === 'ro' ? 'Gazda' : 'Host') : (language === 'ro' ? 'Luptătorul' : 'Challenger'));
     let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
     const myAvatar = playerAvatars[0] || matchedProfile?.avatarIcon || 'monk_drunk';
 
@@ -225,8 +225,14 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
       const roomParam = params.get('room');
       const casinoParam = params.get('casino_room');
       const pineappleParam = params.get('pineapple_room');
+      const crashParam = params.get('crash_room');
 
-      if (pineappleParam) {
+      if (crashParam) {
+        setMode('crash');
+        setCrashRole('join');
+        setCrashRoomCodeInput(crashParam.toUpperCase());
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (pineappleParam) {
         setMode('pineapple');
         setPineappleRole('join');
         setPineappleRoomCodeInput(pineappleParam.toUpperCase());
@@ -268,7 +274,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
 
   const handleStart = () => {
     if (mode === 'crash') {
-      const myName = playerNames[0].trim() || (crashRole === 'join' ? 'Jucător Dragon' : 'Vânătorul de Dragoni');
+      const myName = playerNames[0].trim() || (crashRole === 'join' ? (language === 'ro' ? 'Jucător Dragon' : 'Dragon Hunter') : (language === 'ro' ? 'Vânătorul de Dragoni' : 'Dragon Lord'));
       let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
       const myAvatar = playerAvatars[0] || matchedProfile?.avatarIcon || 'monk_drunk';
 
@@ -305,7 +311,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
     }
 
     if (mode === 'pineapple') {
-      const myName = playerNames[0].trim() || (pineappleRole === 'join' ? 'Jucător Pineapple' : 'Fratele Vasile');
+      const myName = playerNames[0].trim() || (pineappleRole === 'join' ? (language === 'ro' ? 'Jucător Pineapple' : 'Pineapple Guest') : (language === 'ro' ? 'Fratele Vasile' : 'Brother Basil'));
       let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
       const myAvatar = playerAvatars[0] || matchedProfile?.avatarIcon || 'monk_drunk';
 
@@ -341,7 +347,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
     }
 
     if (mode === 'casino') {
-      const myName = playerNames[0].trim() || (casinoRole === 'host' ? 'Gazda Cazino' : 'Jucător Cazino');
+      const myName = playerNames[0].trim() || (casinoRole === 'host' ? (language === 'ro' ? 'Gazda Cazino' : 'Casino Host') : (language === 'ro' ? 'Jucător Cazino' : 'Casino Player'));
       let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
       const myAvatar = playerAvatars[0] || matchedProfile?.avatarIcon || 'monk_drunk';
 
@@ -366,7 +372,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
     }
 
     if (mode === 'duel') {
-      const myName = playerNames[0].trim() || (duelRole === 'host' ? 'Gazda Duelului' : 'Luptătorul Oaspete');
+      const myName = playerNames[0].trim() || (duelRole === 'host' ? (language === 'ro' ? 'Gazda Duelului' : 'Duel Host') : (language === 'ro' ? 'Luptătorul Oaspete' : 'Guest Challenger'));
       let matchedProfile = profiles.find((p) => p.name.trim().toLowerCase() === myName.toLowerCase());
       const myAvatar = playerAvatars[0] || matchedProfile?.avatarIcon || 'monk_drunk';
 
@@ -512,7 +518,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                     ? '🎰 Craps Duel'
                     : mode === 'pineapple'
                     ? '🍍 Pineapple'
-                    : '🐉 Crash 1v1'}
+                    : '🐉 Crash (2-6 Juc)'}
                 </span>
               </div>
 
@@ -625,7 +631,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                     }`}
                   >
                     <span>👑</span>
-                    <span className="truncate">{language === 'ro' ? 'Chilie 1v1' : '1v1 Room'}</span>
+                    <span className="truncate">{language === 'ro' ? 'Chilie (2-6 Juc)' : 'Room (2-6 P)'}</span>
                   </button>
 
                   <button
@@ -1288,10 +1294,10 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                 {mode === 'normal' && (
                   <div className="grid grid-cols-4 gap-1 pt-0.5">
                     {[
-                      { id: 'weak', label: 'Weak' },
-                      { id: 'medium', label: 'Mediu' },
-                      { id: 'extreme', label: 'Extreme' },
-                      { id: 'nightmare', label: 'Coșmar' },
+                      { id: 'weak', label: language === 'ro' ? 'Weak' : 'Weak' },
+                      { id: 'medium', label: language === 'ro' ? 'Mediu' : 'Medium' },
+                      { id: 'extreme', label: language === 'ro' ? 'Extreme' : 'Extreme' },
+                      { id: 'nightmare', label: language === 'ro' ? 'Coșmar' : 'Nightmare' },
                     ].map((item) => (
                       <button
                         key={item.id}

@@ -273,7 +273,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
       case 'start':
         setTurnResult({
           title: '🏰 POPAS LA START!',
-          reason: 'Ai aterizat direct pe chilia de START a mănăstirii.',
+          reason: 'Ai aterizat direct pe căsuța de START a mănăstirii.',
           sipsToDrink: 0,
           isChug: false,
           isImmune: true,
@@ -288,7 +288,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
           sipsToDrink: tile.sipsCount || 2,
           isChug: false,
           isImmune: false,
-          specialNote: 'Bea gurile mănăstirești prescrise de stareț!',
+          specialNote: 'Bea gurile prescrise!',
         });
         addLog(`${activePlayer.name} bea ${tile.sipsCount || 2} guri la ${tileName}.`, 'drink');
         break;
@@ -297,7 +297,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
         setParticleType('chug');
         setTurnResult({
           title: '🔥 GROAPĂ TOTALĂ! 🔥',
-          reason: `Ai picat pe chilia de GROAPĂ (Tile #${tile.index})!`,
+          reason: `Ai picat pe căsuța de GROAPĂ (Tile #${tile.index})!`,
           sipsToDrink: 0,
           isChug: true,
           isImmune: false,
@@ -344,8 +344,8 @@ export const BoardGame: React.FC<BoardGameProps> = ({
 
       case 'safe':
         setTurnResult({
-          title: '🛡️ CHILIE SIGURĂ!',
-          reason: 'Ai găsit adăpost în chilia starețului.',
+          title: '🛡️ ZONĂ SIGURĂ!',
+          reason: 'Ai găsit adăpost în camera starețului.',
           sipsToDrink: 0,
           isChug: false,
           isImmune: true,

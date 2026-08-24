@@ -10,6 +10,7 @@ import {
 import { useApp } from '../context/AppContext';
 import {
   addCrashBot,
+  removeCrashPlayer,
   calculateMultiplier,
   crashDragon,
   leaveCrashRoom,
@@ -26,6 +27,8 @@ import { getSyncedServerNow } from '../lib/duelFirestoreService';
 import { soundEffects } from '../lib/soundFx';
 import { AvatarDisplay } from './AvatarDisplay';
 import { CrashCanvas } from './CrashCanvas';
+import { useAuth } from '../context/AuthContext';
+import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
 
 interface CrashGameProps {
   roomCode: string;
@@ -41,6 +44,7 @@ export const CrashGame: React.FC<CrashGameProps> = ({
   onExit,
 }) => {
   const { t, language, recordGameStats, unlockAchievement } = useApp();
+  const { user } = useAuth();
 
   const [roomState, setRoomState] = useState<CrashRoomState | null>(null);
   const [currentMultiplier, setCurrentMultiplier] = useState<number>(1.00);
@@ -49,17 +53,40 @@ export const CrashGame: React.FC<CrashGameProps> = ({
   const [chickenPlayerName, setChickenPlayerName] = useState<string>('');
   const [prepCountdown, setPrepCountdown] = useState<number>(4);
 
+  // Sync player active room status for friends
+  useEffect(() => {
+    if (user && roomCode) {
+      const shortId = getUserCurrentShortId(user.uid);
+      setUserActiveRoom(user.uid, shortId, {
+        mode: 'crash',
+        roomCode,
+        status: roomState?.status === 'in_game' ? 'in_game' : 'lobby',
+        playerCount: roomState?.players.length || 1,
+        maxPlayers: 6,
+        hostName: roomState?.players.find((p) => p.isHost)?.name || localPlayer.name,
+      });
+    }
+    return () => {
+      if (user) {
+        const shortId = getUserCurrentShortId(user.uid);
+        setUserActiveRoom(user.uid, shortId, null);
+      }
+    };
+  }, [user, roomCode, roomState?.status, roomState?.players.length]);
+
   // Local auto-cashout controls
   const [autoCashout, setAutoCashout] = useState<boolean>(false);
   const [autoTargetInput, setAutoTargetInput] = useState<number>(2.00);
 
-  // Refs for loop & animation
+  // Refs for loop & animation & achievements
   const animFrameRef = useRef<number | null>(null);
   const hasTriggeredCrashRef = useRef<boolean>(false);
   const hasTriggeredAutoCashoutRef = useRef<boolean>(false);
   const hasTriggeredAllCashedOutCrashRef = useRef<boolean>(false);
   const triggeredBotCashoutSetRef = useRef<Set<string>>(new Set());
   const hasHandledGameOverRef = useRef<boolean>(false);
+  const consecutiveRoundWinsRef = useRef<number>(0);
+  const handledResolvedRoundNumRef = useRef<number>(-1);
 
   // 1. Real-time subscription to Firestore room
   useEffect(() => {
@@ -168,7 +195,7 @@ export const CrashGame: React.FC<CrashGameProps> = ({
           me.cashedOutAt == null
         ) {
           hasTriggeredAutoCashoutRef.current = true;
-          handleCashout(mult);
+          handleCashout(mult, true);
         }
 
         // Check AI Bots Cashout (Host triggers cashout for any bot in room, guarded by Set ref)
@@ -218,12 +245,14 @@ export const CrashGame: React.FC<CrashGameProps> = ({
     }
   }, [roomState?.status, roomState?.currentRound.phase, isHost, roomCode]);
 
-  // 6. Check Easter Egg "Puiul" 🐔 (3 consecutive cashouts under 1.50x)
+  // 6. Check Round Resolution Achievements & Easter Egg "Puiul" 🐔
   const chickenHandledRoundRef = useRef<number>(-1);
 
   useEffect(() => {
     if (roomState?.currentRound.phase === 'resolved') {
       const currentRoundNum = roomState.currentRound.roundNumber || 1;
+      
+      // Easter Egg Chicken check
       if (chickenHandledRoundRef.current !== currentRoundNum) {
         const chickenPlayer = roomState.players.find(p => (p.chickenStreak || 0) >= 3);
         if (chickenPlayer) {
@@ -240,8 +269,58 @@ export const CrashGame: React.FC<CrashGameProps> = ({
           }
         }
       }
+
+      // Round-level achievement checks
+      if (handledResolvedRoundNumRef.current !== currentRoundNum) {
+        handledResolvedRoundNumRef.current = currentRoundNum;
+        const myPlayer = roomState.players.find(p => p.id === localPlayer.id);
+        const oppPlayer = roomState.players.find(p => p.id !== localPlayer.id);
+
+        if (myPlayer) {
+          const isGroapa = roomState.currentRound.stakeType === 'groapa' || roomState.currentRound.isGroapaRound;
+          const myCashedOut = myPlayer.cashedOutAt != null;
+          const oppCashedOut = oppPlayer?.cashedOutAt != null;
+
+          const myWonRound = isGroapa
+            ? myCashedOut && (!oppCashedOut || (myPlayer.cashedOutAt || 0) > (oppPlayer?.cashedOutAt || 0))
+            : myCashedOut && (myPlayer.score || 0) >= (oppPlayer?.score || 0) && (oppPlayer?.roundSipsToDrink || 0) > 0;
+
+          if (myWonRound) {
+            consecutiveRoundWinsRef.current += 1;
+            if (consecutiveRoundWinsRef.current >= 5) {
+              unlockAchievement('crash_streak_5', localPlayer.name);
+            }
+            if (consecutiveRoundWinsRef.current >= 3) {
+              unlockAchievement('crash_streak_3', localPlayer.name);
+            }
+            if (myPlayer.cashedOutAt && myPlayer.cashedOutAt <= 2.00) {
+              unlockAchievement('crash_prudent_victor', localPlayer.name);
+            }
+            if (myPlayer.cashedOutAt && myPlayer.cashedOutAt >= 3.00) {
+              unlockAchievement('crash_fiery_victor', localPlayer.name);
+            }
+            if (isGroapa && !oppCashedOut) {
+              unlockAchievement('crash_groapa_survivor', localPlayer.name);
+            }
+            if (oppPlayer && (oppPlayer.roundSipsToDrink || 0) >= 3) {
+              unlockAchievement('crash_greed_punish', localPlayer.name);
+            }
+          } else if (!myCashedOut) {
+            consecutiveRoundWinsRef.current = 0;
+          }
+        }
+      }
     }
-  }, [roomState?.currentRound.phase, roomState?.currentRound.roundNumber, roomState?.players, localPlayer.id, localPlayer.name, unlockAchievement]);
+  }, [
+    roomState?.currentRound.phase,
+    roomState?.currentRound.roundNumber,
+    roomState?.currentRound.stakeType,
+    roomState?.currentRound.isGroapaRound,
+    roomState?.players,
+    localPlayer.id,
+    localPlayer.name,
+    unlockAchievement,
+  ]);
 
   // Auto-dismiss chicken modal safely after a few seconds
   useEffect(() => {
@@ -259,46 +338,72 @@ export const CrashGame: React.FC<CrashGameProps> = ({
       hasHandledGameOverRef.current = true;
       const isWinner = roomState.winnerId === localPlayer.id;
       const sipsDrunk = me?.totalGuriAcumulate || 0;
+      const gropiDrunk = me?.totalGroapaAcumulate || 0;
+      const isBotMatch = Boolean(opponent?.isBot);
 
       // Unlock Achievements
       unlockAchievement('first_crash', localPlayer.name);
       if (isWinner) {
-        if (opponent?.isBot) {
+        if (isBotMatch) {
           unlockAchievement('crash_bot_victor', localPlayer.name);
         }
-        recordGameStats({
-          mode: 'crash',
-          isWin: true,
-          sipsDelta: sipsDrunk,
-          isCrashWin: true,
-          playerName: localPlayer.name,
-        });
-      } else {
-        recordGameStats({
-          mode: 'crash',
-          isWin: false,
-          sipsDelta: sipsDrunk,
-          playerName: localPlayer.name,
-        });
+        if (sipsDrunk === 0 && gropiDrunk === 0) {
+          unlockAchievement('crash_flawless_match', localPlayer.name);
+        }
+      }
+
+      // Leaderboard & profile stats: ONLY for completed matches against REAL human opponents (NOT bots, NOT unfinished)
+      if (!isBotMatch) {
+        if (isWinner) {
+          recordGameStats({
+            mode: 'crash',
+            isWin: true,
+            sipsDelta: sipsDrunk,
+            isCrashWin: true,
+            playerName: localPlayer.name,
+          });
+        } else {
+          recordGameStats({
+            mode: 'crash',
+            isWin: false,
+            sipsDelta: sipsDrunk,
+            playerName: localPlayer.name,
+          });
+        }
       }
     }
-  }, [roomState?.status, roomState?.winnerId, localPlayer.id, localPlayer.name, me?.totalGuriAcumulate, opponent?.isBot, unlockAchievement, recordGameStats]);
+  }, [roomState?.status, roomState?.winnerId, localPlayer.id, localPlayer.name, me?.totalGuriAcumulate, me?.totalGroapaAcumulate, opponent?.isBot, unlockAchievement, recordGameStats]);
 
-  // Manual Cashout Handler
-  const handleCashout = async (multOverride?: number) => {
+  // Manual & Auto Cashout Handler
+  const handleCashout = async (multOverride?: number, isAutoSource?: boolean) => {
     if (!me || me.cashedOutAt != null) return;
     if (roomState?.currentRound.phase !== 'flying') return;
 
     const lockedMult = multOverride || currentMultiplier;
     soundEffects.playCashOut();
 
-    // Check achievement for high multiplier
-    if (lockedMult >= 20.00) {
+    // Check achievement for high multiplier tiers
+    if (lockedMult >= 50.00) {
+      unlockAchievement('crash_legendary_x50', localPlayer.name);
+    } else if (lockedMult >= 20.00) {
       unlockAchievement('crash_legendary_x20', localPlayer.name);
+    } else if (lockedMult >= 10.00) {
+      unlockAchievement('crash_titan_x10', localPlayer.name);
     } else if (lockedMult >= 5.00) {
       unlockAchievement('crash_high_multiplier', localPlayer.name);
     }
     unlockAchievement('crash_safe_landing', localPlayer.name);
+
+    if (isAutoSource) {
+      unlockAchievement('crash_auto_pilot', localPlayer.name);
+    }
+
+    const elapsedSeconds = roomState?.currentRound.roundStartTimestamp
+      ? (getSyncedServerNow() - roomState.currentRound.roundStartTimestamp) / 1000
+      : 5;
+    if (elapsedSeconds <= 2.0) {
+      unlockAchievement('crash_quick_escape', localPlayer.name);
+    }
 
     await playerCashOut(roomCode, localPlayer.id, lockedMult);
   };
@@ -383,7 +488,7 @@ export const CrashGame: React.FC<CrashGameProps> = ({
             <span className="text-4xl">🐉</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-amber-400 font-cinzel tracking-wider">
-            {language === 'ro' ? 'CHILIA CRASH 1v1' : '1v1 CRASH LAIR'}
+            {language === 'ro' ? 'CHILIA CRASH (2 - 6 JUCĂTORI)' : 'CRASH LAIR (2 - 6 PLAYERS)'}
           </h1>
           <p className="text-xs sm:text-sm text-stone-300">
             {language === 'ro'
@@ -393,76 +498,115 @@ export const CrashGame: React.FC<CrashGameProps> = ({
               {roomState.settings.sipsThreshold} {language === 'ro' ? 'guri' : 'sips'}
             </span>
           </p>
+          <p className="text-[11px] text-amber-300/80 font-barlow italic">
+            {language === 'ro'
+              ? '⚔️ În fiecare rundă, fiecare jucător își compară punctele cu cel care a făcut cele mai multe!'
+              : '⚔️ Each round, every player compares points against the highest round scorer!'}
+          </p>
         </div>
 
-        {/* Room Code Card */}
-        <div className="bg-stone-900/80 border-2 border-amber-500/40 rounded-2xl p-5 text-center shadow-2xl relative">
-          <p className="text-xs uppercase tracking-widest text-amber-300/80 mb-1">
+        {/* Room Code & Invite Link Card */}
+        <div className="bg-stone-900/80 border-2 border-amber-500/40 rounded-2xl p-5 text-center shadow-2xl space-y-3">
+          <p className="text-xs uppercase tracking-widest text-amber-300/80">
             {language === 'ro' ? 'Codul Chiliilor / Camerei' : 'Lair Room Code'}
           </p>
-          <div className="flex items-center justify-center gap-3">
-            <span className="text-4xl font-black tracking-widest text-white font-mono bg-black/50 px-5 py-2 rounded-xl border border-amber-500/30">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span className="text-3xl sm:text-4xl font-black tracking-widest text-white font-mono bg-black/50 px-5 py-2 rounded-xl border border-amber-500/30">
               {roomCode}
             </span>
             <button
               onClick={handleCopyCode}
-              className="p-3 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 rounded-xl text-amber-300 transition-colors"
+              className="p-3 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/50 rounded-xl text-amber-300 transition-colors font-bold text-xs flex items-center gap-1.5"
               title="Copiază codul"
             >
-              {copiedCode ? '✓' : '📋'}
+              <span>{copiedCode ? '✓' : '📋'}</span>
+              <span>{copiedCode ? (language === 'ro' ? 'Copiat!' : 'Copied!') : (language === 'ro' ? 'Copiază Cod' : 'Copy Code')}</span>
+            </button>
+            <button
+              onClick={() => {
+                const inviteUrl = `${window.location.origin}${window.location.pathname}?crash_room=${roomCode}`;
+                navigator.clipboard.writeText(inviteUrl);
+                setCopiedCode(true);
+                setTimeout(() => setCopiedCode(false), 2000);
+              }}
+              className="p-3 bg-red-950/60 hover:bg-red-900/80 border border-red-500/50 rounded-xl text-red-300 transition-colors font-bold text-xs flex items-center gap-1.5"
+              title="Copiază Link Invitație"
+            >
+              <span>🔗</span>
+              <span>{language === 'ro' ? 'Copiază Link' : 'Copy Link'}</span>
             </button>
           </div>
         </div>
 
         {/* Roster of Players (Up to 6) */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {roomState.players.map((p, idx) => (
-            <div key={p.id || idx} className="bg-stone-900/80 border border-amber-500/40 rounded-2xl p-3 text-center">
-              <div className="flex justify-center mb-1.5">
-                <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} size={48} />
-              </div>
-              <p className="font-bold text-amber-200 text-xs sm:text-sm truncate">{p.name}</p>
-              <span
-                className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full border inline-block mt-1 ${
-                  p.isHost
-                    ? 'text-amber-400 bg-amber-950/60 border-amber-500/30'
-                    : p.isBot
-                    ? 'text-teal-400 bg-teal-950/60 border-teal-500/30'
-                    : 'text-purple-300 bg-purple-950/60 border-purple-500/30'
-                }`}
-              >
-                {p.isHost ? 'Host' : p.isBot ? 'Bot AI' : 'Jucător'}
-              </span>
-            </div>
-          ))}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-cinzel font-bold text-amber-300">
+              {language === 'ro' ? 'Călugări în Chilie:' : 'Monks in Lair:'} ({roomState.players.length}/6)
+            </span>
+            <span className="text-[10px] text-stone-400">
+              {language === 'ro' ? 'Minim 2, Maxim 6' : 'Min 2, Max 6'}
+            </span>
+          </div>
 
-          {/* Empty slot / Add Bot if less than 6 players */}
-          {roomState.players.length < 6 && (
-            <div className="bg-stone-900/40 border border-dashed border-stone-600 rounded-2xl p-3 flex flex-col items-center justify-center text-center space-y-1.5">
-              <div className="w-9 h-9 rounded-full border-2 border-dashed border-stone-500 flex items-center justify-center text-stone-500 text-base animate-pulse">
-                +
-              </div>
-              <p className="text-[10px] text-stone-400">
-                {language === 'ro' ? 'Loc liber (max 6)' : 'Open slot (max 6)'}
-              </p>
-              {isHost && (
-                <div className="flex flex-col gap-1 w-full pt-0.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {roomState.players.map((p, idx) => (
+              <div key={p.id || idx} className="bg-stone-900/80 border border-amber-500/40 rounded-2xl p-3 text-center relative group">
+                {isHost && p.isBot && (
                   <button
-                    onClick={() => handleAddBot('prudent')}
-                    className="w-full py-1 px-1 bg-teal-800/50 hover:bg-teal-700/60 border border-teal-500/40 rounded-lg text-[10px] font-bold text-teal-200 transition-all"
+                    onClick={() => removeCrashPlayer(roomCode, p.id)}
+                    className="absolute top-1.5 right-1.5 w-5 h-5 bg-red-950/90 hover:bg-red-700 text-red-300 hover:text-white rounded-full text-xs font-bold flex items-center justify-center border border-red-500/50 transition-colors"
+                    title={language === 'ro' ? 'Elimină Bot' : 'Remove Bot'}
                   >
-                    🤖 + Bot Prudent
+                    ✕
                   </button>
-                  <button
-                    onClick={() => handleAddBot('risky')}
-                    className="w-full py-1 px-1 bg-orange-800/50 hover:bg-orange-700/60 border border-orange-500/40 rounded-lg text-[10px] font-bold text-orange-200 transition-all"
-                  >
-                    🔥 + Bot Înflăcărat
-                  </button>
+                )}
+                <div className="flex justify-center mb-1.5">
+                  <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} size={48} />
                 </div>
-              )}
-            </div>
-          )}
+                <p className="font-bold text-amber-200 text-xs sm:text-sm truncate">{p.name}</p>
+                <span
+                  className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded-full border inline-block mt-1 ${
+                    p.isHost
+                      ? 'text-amber-400 bg-amber-950/60 border-amber-500/30'
+                      : p.isBot
+                      ? 'text-teal-400 bg-teal-950/60 border-teal-500/30'
+                      : 'text-purple-300 bg-purple-950/60 border-purple-500/30'
+                  }`}
+                >
+                  {p.isHost ? 'Host' : p.isBot ? (p.botStyle === 'risky' ? 'Bot Înflăcărat' : 'Bot Prudent') : 'Jucător'}
+                </span>
+              </div>
+            ))}
+
+            {/* Empty slot / Add Bot if less than 6 players */}
+            {roomState.players.length < 6 && (
+              <div className="bg-stone-900/40 border border-dashed border-stone-600 rounded-2xl p-3 flex flex-col items-center justify-center text-center space-y-1.5 min-h-[120px]">
+                <div className="w-8 h-8 rounded-full border-2 border-dashed border-stone-500 flex items-center justify-center text-stone-500 text-base animate-pulse">
+                  +
+                </div>
+                <p className="text-[10px] text-stone-400">
+                  {language === 'ro' ? `Slot liber (${roomState.players.length + 1}/6)` : `Open slot (${roomState.players.length + 1}/6)`}
+                </p>
+                {isHost && (
+                  <div className="flex flex-col gap-1 w-full pt-0.5">
+                    <button
+                      onClick={() => handleAddBot('prudent')}
+                      className="w-full py-1 px-1 bg-teal-800/50 hover:bg-teal-700/60 border border-teal-500/40 rounded-lg text-[10px] font-bold text-teal-200 transition-all truncate"
+                    >
+                      🤖 + Bot Prudent
+                    </button>
+                    <button
+                      onClick={() => handleAddBot('risky')}
+                      className="w-full py-1 px-1 bg-orange-800/50 hover:bg-orange-700/60 border border-orange-500/40 rounded-lg text-[10px] font-bold text-orange-200 transition-all truncate"
+                    >
+                      🔥 + Bot Înflăcărat
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Action Controls */}
@@ -472,13 +616,13 @@ export const CrashGame: React.FC<CrashGameProps> = ({
               onClick={() => startCrashMatch(roomCode)}
               className="w-full py-4 bg-gradient-to-r from-red-600 via-amber-600 to-red-600 hover:from-red-500 hover:to-amber-500 text-white font-black text-lg tracking-wider rounded-2xl shadow-2xl border-2 border-amber-400 font-cinzel uppercase transition-transform active:scale-95"
             >
-              🔥 {language === 'ro' ? 'PORNEȘTE MEČIUL' : 'START MATCH'}
+              🔥 {language === 'ro' ? `PORNEȘTE MECIUL (${roomState.players.length} JUCĂTORI)` : `START MATCH (${roomState.players.length} PLAYERS)`}
             </button>
           ) : isHost ? (
             <p className="text-center text-xs text-stone-400">
               {language === 'ro'
-                ? 'Așteaptă conectarea călugărilor sau adaugă un Bot AI!'
-                : 'Waiting for players or add an AI Bot to begin!'}
+                ? 'Așteaptă conectarea călugărilor sau adaugă un Bot AI (minim 2 jucători)!'
+                : 'Waiting for players or add an AI Bot to begin (min 2 players)!'}
             </p>
           ) : (
             <p className="text-center text-xs text-amber-300 animate-pulse">
@@ -925,57 +1069,67 @@ export const CrashGame: React.FC<CrashGameProps> = ({
                 </div>
 
                 {/* Drinking Decree for each player */}
-                <div className="p-3 bg-red-950/50 border border-red-500/40 rounded-xl text-left space-y-1.5">
+                <div className="p-3 bg-red-950/50 border border-red-500/40 rounded-xl text-left space-y-2">
                   {(() => {
                     const allCrashed = roomState.players.every(x => x.cashedOutAt == null);
 
                     if (isGroapaRound) {
                       if (allCrashed) {
                         return (
-                          <div className="text-center space-y-1">
+                          <div className="text-center space-y-1 py-1">
                             <p className="text-xs font-black text-red-300 uppercase">
-                              💥 AMBII AȚI DAT CRASH!
+                              💥 {language === 'ro' ? 'TOȚI AȚI DAT CRASH!' : 'EVERYONE CRASHED!'}
                             </p>
                             <p className="text-xs font-bold text-amber-300">
-                              🕳️ Ambii dați câte o GROAPĂ! (+25 guri la total)
+                              🕳️ {language === 'ro' ? 'Toți beți câte o GROAPĂ! (+25 guri la total)' : 'Everyone chugs 1 GROAPĂ! (+25 sips)'}
                             </p>
                           </div>
                         );
                       }
 
                       const maxMult = Math.max(...roomState.players.map(x => x.cashedOutAt || 0));
-                      return roomState.players.map((p) => {
-                        const isMe = p.id === localPlayer.id;
-                        const isWinner = (p.cashedOutAt || 0) === maxMult && maxMult > 0;
+                      // Sort by cashout multiplier desc
+                      const sortedPlayers = [...roomState.players].sort((a, b) => (b.cashedOutAt || 0) - (a.cashedOutAt || 0));
 
-                        if (isWinner) {
-                          return (
-                            <div key={p.id} className="text-xs font-bold text-emerald-300 flex items-center justify-between">
-                              <span>👑 {p.name} {isMe && '(Tu)'}:</span>
-                              <span className="text-emerald-400 font-black">0 gropi (Câștigător)</span>
-                            </div>
-                          );
-                        }
+                      return (
+                        <div className="space-y-1.5">
+                          <p className="text-[10px] uppercase font-bold text-amber-300 border-b border-red-900/50 pb-1">
+                            {language === 'ro' ? '⚖️ Penalizări Runda Groapă:' : '⚖️ Groapă Round Penalties:'}
+                          </p>
+                          {sortedPlayers.map((p) => {
+                            const isMe = p.id === localPlayer.id;
+                            const isWinner = (p.cashedOutAt || 0) === maxMult && maxMult > 0;
 
-                        return (
-                          <div key={p.id} className="text-xs font-bold text-red-300 flex items-center justify-between">
-                            <span>🕳️ {p.name} {isMe && '(Tu)'}:</span>
-                            <span className="text-white font-black">1 GROAPĂ (+25 guri)</span>
-                          </div>
-                        );
-                      });
+                            if (isWinner) {
+                              return (
+                                <div key={p.id} className="text-xs font-bold text-emerald-300 flex items-center justify-between bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-500/30">
+                                  <span className="truncate">👑 {p.name} {isMe && '(Tu)'}:</span>
+                                  <span className="text-emerald-400 font-black flex-shrink-0 ml-1">0 gropi (Câștigător)</span>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div key={p.id} className="text-xs font-bold text-red-300 flex items-center justify-between bg-red-950/30 p-1.5 rounded-lg border border-red-900/40">
+                                <span className="truncate">🕳️ {p.name} {isMe && '(Tu)'}:</span>
+                                <span className="text-white font-black flex-shrink-0 ml-1">1 GROAPĂ (+25 guri)</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
                     }
 
                     // GURI ROUND
                     if (allCrashed) {
                       const stake = Math.round(currentRound.betValue || 1);
                       return (
-                        <div className="text-center space-y-1">
+                        <div className="text-center space-y-1 py-1">
                           <p className="text-xs font-black text-red-300 uppercase">
-                            💥 AMBII AȚI DAT CRASH!
+                            💥 {language === 'ro' ? 'TOȚI AȚI DAT CRASH!' : 'EVERYONE CRASHED!'}
                           </p>
                           <p className="text-xs font-bold text-amber-300">
-                            🍺 Ambii beți miza de <strong className="text-white">{stake} guri</strong>!
+                            🍺 {language === 'ro' ? 'Toți beți miza rundei de' : 'Everyone drinks round stake:'} <strong className="text-white">{stake} guri</strong>!
                           </p>
                         </div>
                       );
@@ -986,33 +1140,46 @@ export const CrashGame: React.FC<CrashGameProps> = ({
 
                     if (allEqual) {
                       return (
-                        <p className="text-xs font-bold text-amber-300 text-center">
+                        <p className="text-xs font-bold text-amber-300 text-center py-1">
                           🤝 {language === 'ro' ? 'Scoruri egale! Nimeni nu bea în această rundă.' : 'Tied scores! Nobody drinks this round.'}
                         </p>
                       );
                     }
 
-                    return roomState.players.map((p) => {
-                      const diff = Math.max(0, maxScore - (p.score || 0));
-                      const sipsRounded = Math.round(diff);
-                      const isMe = p.id === localPlayer.id;
+                    // Sort players by score descending
+                    const sortedPlayers = [...roomState.players].sort((a, b) => (b.score || 0) - (a.score || 0));
 
-                      if (sipsRounded === 0) {
-                        return (
-                          <div key={p.id} className="text-xs font-bold text-emerald-300 flex items-center justify-between">
-                            <span>👑 {p.name} {isMe && '(Tu)'}:</span>
-                            <span className="text-emerald-400 font-black">0 guri (Lider)</span>
-                          </div>
-                        );
-                      }
+                    return (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] uppercase font-bold text-amber-300 border-b border-red-900/50 pb-1 flex justify-between items-center">
+                          <span>{language === 'ro' ? '⚖️ Comparație cu Liderul Rundei:' : '⚖️ Sips Decree vs Round Leader:'}</span>
+                          <span className="text-emerald-400">Max: {maxScore} pct</span>
+                        </p>
+                        {sortedPlayers.map((p) => {
+                          const diff = Math.max(0, maxScore - (p.score || 0));
+                          const sipsRounded = Math.round(diff);
+                          const isMe = p.id === localPlayer.id;
 
-                      return (
-                        <div key={p.id} className="text-xs font-bold text-red-300 flex items-center justify-between">
-                          <span>🍺 {p.name} {isMe && '(Tu)'}:</span>
-                          <span className="text-white font-black">{sipsRounded} guri</span>
-                        </div>
-                      );
-                    });
+                          if (sipsRounded === 0) {
+                            return (
+                              <div key={p.id} className="text-xs font-bold text-emerald-300 flex items-center justify-between bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-500/30">
+                                <span className="truncate">👑 {p.name} {isMe && '(Tu)'}:</span>
+                                <span className="text-emerald-400 font-black flex-shrink-0 ml-1">0 guri (Lider - {p.score || 0} pct)</span>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div key={p.id} className="text-xs font-bold text-red-300 flex items-center justify-between bg-red-950/30 p-1.5 rounded-lg border border-red-900/40">
+                              <span className="truncate">🍺 {p.name} {isMe && '(Tu)'}:</span>
+                              <span className="text-white font-black flex-shrink-0 ml-1">
+                                {sipsRounded} guri <span className="text-[10px] text-stone-400 font-normal">(-{diff.toFixed(1)} pct)</span>
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
                   })()}
                 </div>
               </div>
@@ -1080,18 +1247,18 @@ export const CrashGame: React.FC<CrashGameProps> = ({
         )}
       </AnimatePresence>
 
-      {/* --- 5. MATCH FINISHED / VICTORY SCREEN --- */}
+      {/* --- 5. MATCH FINISHED / VICTORY & PODIUM SCREEN (2-6 PLAYERS) --- */}
       <AnimatePresence>
         {roomState.status === 'finished' && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-lg flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-lg flex items-center justify-center p-4 overflow-y-auto"
           >
             <motion.div
               initial={{ scale: 0.8, y: 30 }}
               animate={{ scale: 1, y: 0 }}
-              className="bg-stone-900 border-2 border-amber-400 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl text-center space-y-5"
+              className="bg-stone-900 border-2 border-amber-400 rounded-3xl p-5 sm:p-7 max-w-lg w-full shadow-2xl text-center space-y-4 my-auto"
             >
               <div className="text-5xl">
                 {roomState.winnerId === localPlayer.id ? '👑' : '💀'}
@@ -1109,34 +1276,86 @@ export const CrashGame: React.FC<CrashGameProps> = ({
                 </h2>
                 <p className="text-xs text-stone-300">
                   {language === 'ro'
-                    ? 'Unul dintre călugări a atins pragul maxim de guri băute.'
-                    : 'One monk has reached the drinking limit.'}
+                    ? 'Meciul s-a încheiat! Unul dintre călugări a atins pragul limită de băutură.'
+                    : 'Match finished! A player reached the match drinking limit.'}
                 </p>
               </div>
 
-              {/* Total Stats Summary */}
-              <div className="grid grid-cols-2 gap-3 bg-stone-950 p-4 rounded-2xl border border-stone-800">
-                <div className="p-3 bg-stone-900/80 rounded-xl border border-stone-700">
-                  <p className="text-xs font-bold text-amber-200 truncate">{me?.name}</p>
-                  <p className="text-2xl font-black text-red-400 mt-1">
-                    {me?.totalGuriAcumulate} 🍺
-                  </p>
-                  <span className="text-[10px] text-stone-400">Total guri băute</span>
-                </div>
-                <div className="p-3 bg-stone-900/80 rounded-xl border border-stone-700">
-                  <p className="text-xs font-bold text-stone-300 truncate">{opponent?.name}</p>
-                  <p className="text-2xl font-black text-red-400 mt-1">
-                    {opponent?.totalGuriAcumulate} 🍺
-                  </p>
-                  <span className="text-[10px] text-stone-400">Total guri băute</span>
+              {/* Full Standings Podium (All 2-6 Players) */}
+              <div className="bg-stone-950 p-3 sm:p-4 rounded-2xl border border-stone-800 space-y-2 text-left">
+                <p className="text-xs font-cinzel font-bold text-amber-300 uppercase tracking-wider pb-1 border-b border-stone-800 flex justify-between items-center">
+                  <span>🏆 {language === 'ro' ? 'Clasament Final (Podium):' : 'Final Standings Podium:'}</span>
+                  <span className="text-[10px] text-stone-400 font-normal">{roomState.players.length} {language === 'ro' ? 'jucători' : 'players'}</span>
+                </p>
+
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-0.5">
+                  {(() => {
+                    // Sort players by total drinks ascending (least drinks = rank 1)
+                    const ranked = [...roomState.players].sort((a, b) => {
+                      const totalA = (a.totalGuriAcumulate || 0) + (a.totalGroapaAcumulate || 0) * 25;
+                      const totalB = (b.totalGuriAcumulate || 0) + (b.totalGroapaAcumulate || 0) * 25;
+                      return totalA - totalB;
+                    });
+
+                    return ranked.map((p, idx) => {
+                      const isMe = p.id === localPlayer.id;
+                      const rank = idx + 1;
+                      const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+                      const isWinner = p.id === roomState.winnerId || rank === 1;
+                      const isLoser = p.id === roomState.loserId || rank === ranked.length;
+
+                      return (
+                        <div
+                          key={p.id}
+                          className={`p-2 sm:p-2.5 rounded-xl border flex items-center justify-between gap-2 transition-all ${
+                            isWinner
+                              ? 'bg-amber-950/60 border-amber-400 ring-1 ring-amber-400/40'
+                              : isLoser
+                              ? 'bg-red-950/50 border-red-500/60'
+                              : isMe
+                              ? 'bg-stone-900 border-amber-500/50'
+                              : 'bg-stone-900/80 border-stone-800'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="text-base font-black w-6 text-center">{medal}</span>
+                            <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} size={32} />
+                            <div className="truncate">
+                              <p className="text-xs font-bold text-amber-200 truncate">
+                                {p.name} {isMe && '(Tu)'}
+                              </p>
+                              <span className="text-[10px] text-stone-400">
+                                {isWinner
+                                  ? '🏆 Campion'
+                                  : isLoser
+                                  ? '💀 Eliminat'
+                                  : '🛡️ Supraviețuitor'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="text-right flex-shrink-0">
+                            <span className="text-sm font-black text-red-400 block">
+                              {p.totalGuriAcumulate || 0} 🍺
+                            </span>
+                            {(p.totalGroapaAcumulate || 0) > 0 && (
+                              <span className="text-[10px] font-bold text-amber-300 block">
+                                {p.totalGroapaAcumulate} 🕳️
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
 
               {/* Rematch & Main Menu Actions */}
-              <div className="space-y-2 pt-2">
+              <div className="space-y-2 pt-1">
                 <button
                   onClick={handleExit}
-                  className="w-full py-4 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-stone-950 font-black text-base rounded-2xl shadow-xl font-cinzel transition-transform active:scale-95"
+                  className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-stone-950 font-black text-base rounded-2xl shadow-xl font-cinzel transition-transform active:scale-95"
                 >
                   🏛️ {language === 'ro' ? 'MENIU PRINCIPAL' : 'MAIN MENU'}
                 </button>

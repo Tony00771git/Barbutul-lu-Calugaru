@@ -18,6 +18,10 @@ export interface CloudUserProfile {
   displayName: string;
   avatarIcon?: string;
   email?: string;
+  masterProfile?: Profile;
+  subProfiles?: Profile[];
+  profiles?: Profile[];
+  drunkenCoins?: number;
   gamesPlayed: number;
   totalSips: number;
   totalChugs: number;
@@ -31,7 +35,10 @@ export interface CloudUserProfile {
   winsDuel?: number;
   winsCasino?: number;
   winsPineapple?: number;
-  profiles?: Profile[];
+  winsCrash?: number;
+  gamesPlayedCrash?: number;
+  shortId?: string;
+  customShortId?: string;
   unlockedAchievements?: string[];
   createdAt?: any;
   updatedAt?: any;
@@ -41,6 +48,7 @@ export interface CloudLeaderboardEntry {
   id?: string;
   userId: string;
   profileId: string;
+  isMaster?: boolean;
   accountName?: string;
   displayName: string;
   avatarIcon?: string;
@@ -48,6 +56,7 @@ export interface CloudLeaderboardEntry {
   totalChugs: number;
   totalScore: number;
   totalXP?: number;
+  drunkenCoins?: number;
   currentLevel?: number;
   currentTitle_ro?: string;
   currentTitle_en?: string;
@@ -55,6 +64,8 @@ export interface CloudLeaderboardEntry {
   winsDuel: number;
   winsCasino: number;
   winsPineapple?: number;
+  winsCrash?: number;
+  gamesPlayedCrash?: number;
   gamesPlayed: number;
   duelWins?: number;
   duelPlayed?: number;
@@ -95,7 +106,34 @@ const sanitizeId = (str: string): string => {
   return str.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 60);
 };
 
-export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<void> {
+function cleanForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as any;
+  }
+  if (Array.isArray(data)) {
+    return data.map(item => cleanForFirestore(item)) as any;
+  }
+  if (typeof data === 'object') {
+    // Keep Firestore FieldValue / Timestamp / Date intact
+    if (
+      typeof (data as any)?.toMillis === 'function' ||
+      (data as any)?._methodName !== undefined ||
+      data instanceof Date
+    ) {
+      return data;
+    }
+    const res: any = {};
+    for (const [key, value] of Object.entries(data as Record<string, any>)) {
+      if (value !== undefined) {
+        res[key] = cleanForFirestore(value);
+      }
+    }
+    return res;
+  }
+  return data;
+}
+
+export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoins: number = 100): Promise<void> {
   if (!auth.currentUser) return;
   const userId = auth.currentUser.uid;
   const accountName = auth.currentUser.displayName || auth.currentUser.email || 'Călugăr Google';
@@ -105,19 +143,18 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
     const existing = await getDoc(doc(db, 'users', userId));
     const now = serverTimestamp();
 
-    // 1. Delete legacy account-level aggregate leaderboard entry if it exists
-    try {
-      await deleteDoc(doc(db, 'leaderboards', userId));
-    } catch {
-      // Ignore if document did not exist
-    }
+    // Determine Master Profile vs Sub-Profiles
+    const master = profiles.find(p => p.isMaster) || profiles[0];
+    const masterId = master ? master.id : 'profile_master';
 
     const sanitizedProfiles: Profile[] = profiles.map(p => {
+      const isMaster = p.id === masterId || p.isMaster === true;
       const prog = calculateProgression(p.totalXP || 0);
       return {
         id: p.id,
         name: (p.name || 'Călugăr').substring(0, 50),
-        avatarIcon: (p.avatarIcon || 'monk_drunk').substring(0, 50000),
+        avatarIcon: (p.avatarIcon || (isMaster ? 'monk_master' : 'monk_drunk')).substring(0, 50000),
+        isMaster,
         gamesPlayed: Math.max(0, p.gamesPlayed || 0),
         totalSips: Math.max(0, p.totalSips || 0),
         totalChugs: Math.max(0, p.totalChugs || 0),
@@ -129,10 +166,17 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
         winsDuel: Math.max(0, p.winsDuel || 0),
         winsCasino: Math.max(0, p.winsCasino || 0),
         winsPineapple: Math.max(0, p.winsPineapple || 0),
-        unlockedAchievements: (p.unlockedAchievements || []).slice(0, 50),
+        winsCrash: Math.max(0, p.winsCrash || 0),
+        gamesPlayedCrash: Math.max(0, p.gamesPlayedCrash || 0),
+        sipsDrunkCrash: Math.max(0, p.sipsDrunkCrash || 0),
+        totalPineapplePoints: Math.max(0, p.totalPineapplePoints || 0),
+        unlockedAchievements: (p.unlockedAchievements || []).slice(0, 80),
         createdAt: p.createdAt || Date.now(),
       };
     });
+
+    const sanitizedMaster = sanitizedProfiles.find(p => p.isMaster) || sanitizedProfiles[0];
+    const sanitizedSubProfiles = sanitizedProfiles.filter(p => !p.isMaster && p.id !== sanitizedMaster.id);
 
     const totalLocalSips = sanitizedProfiles.reduce((s, p) => s + p.totalSips, 0);
     const totalLocalChugs = sanitizedProfiles.reduce((s, p) => s + p.totalChugs, 0);
@@ -142,49 +186,58 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
     const totalDuelWins = sanitizedProfiles.reduce((s, p) => s + (p.winsDuel || 0), 0);
     const totalCasinoWins = sanitizedProfiles.reduce((s, p) => s + (p.winsCasino || 0), 0);
     const totalPineappleWins = sanitizedProfiles.reduce((s, p) => s + (p.winsPineapple || 0), 0);
+    const totalCrashWins = sanitizedProfiles.reduce((s, p) => s + (p.winsCrash || 0), 0);
 
     const mergedAchievements = Array.from(
       new Set(sanitizedProfiles.flatMap(p => p.unlockedAchievements || []))
-    ).slice(0, 50);
+    ).slice(0, 80);
 
-    const primaryProg = calculateProgression(sanitizedProfiles[0]?.totalXP || 0);
+    const masterProg = calculateProgression(sanitizedMaster.totalXP || totalLocalXP);
 
-    const userDocData = {
+    const userDocData: CloudUserProfile = {
       userId,
-      displayName: accountName.substring(0, 100),
-      avatarIcon: (sanitizedProfiles[0]?.avatarIcon || 'monk_drunk').substring(0, 50000),
+      displayName: (sanitizedMaster.name || accountName).substring(0, 100),
+      avatarIcon: (sanitizedMaster.avatarIcon || 'monk_drunk').substring(0, 50000),
       email: auth.currentUser.email ? auth.currentUser.email.substring(0, 256) : '',
+      masterProfile: sanitizedMaster,
+      subProfiles: sanitizedSubProfiles,
       profiles: sanitizedProfiles,
+      drunkenCoins: Math.max(0, drunkenCoins),
       gamesPlayed: totalLocalGames,
       totalSips: totalLocalSips,
       totalChugs: totalLocalChugs,
       totalXP: totalLocalXP,
-      currentLevel: primaryProg.currentLevel,
-      currentTitle_ro: primaryProg.titleRo,
-      currentTitle_en: primaryProg.titleEn,
+      currentLevel: masterProg.currentLevel,
+      currentTitle_ro: masterProg.titleRo,
+      currentTitle_en: masterProg.titleEn,
       duelWins: totalDuelWins,
       duelPlayed: totalDuelWins,
       winsBoardgame: totalBoardWins,
       winsDuel: totalDuelWins,
       winsCasino: totalCasinoWins,
       winsPineapple: totalPineappleWins,
+      winsCrash: totalCrashWins,
       unlockedAchievements: mergedAchievements,
       createdAt: (existing.exists() && existing.data()?.createdAt?.nanoseconds !== undefined) ? existing.data()?.createdAt : now,
       updatedAt: now,
     };
 
-    // Save to private user account
-    await setDoc(doc(db, 'users', userId), userDocData, { merge: true });
+    // Save to private user account document
+    await setDoc(doc(db, 'users', userId), cleanForFirestore(userDocData), { merge: true });
 
-    // Sync each INDIVIDUAL sub-profile as its own distinct entry on the global leaderboard
+    // Sync each profile (Master and Sub-Profiles) as distinct entries on the global leaderboard
+    const currentValidEntryIds = new Set<string>();
+
     for (const p of sanitizedProfiles) {
       const entryId = `${userId}_${sanitizeId(p.id)}`;
+      currentValidEntryIds.add(entryId);
       const totalScore = p.totalSips + 25 * p.totalChugs;
       const prog = calculateProgression(p.totalXP || 0);
 
-      const leaderboardData = {
+      const leaderboardData: CloudLeaderboardEntry = {
         userId,
         profileId: p.id,
+        isMaster: p.isMaster === true,
         accountName: accountName.substring(0, 100),
         displayName: p.name.substring(0, 100),
         avatarIcon: p.avatarIcon || 'monk_drunk',
@@ -192,6 +245,7 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
         totalChugs: p.totalChugs,
         totalScore,
         totalXP: p.totalXP || 0,
+        drunkenCoins: p.isMaster ? Math.max(0, drunkenCoins) : 0,
         currentLevel: prog.currentLevel,
         currentTitle_ro: prog.titleRo,
         currentTitle_en: prog.titleEn,
@@ -199,11 +253,13 @@ export async function syncAccountProfilesToCloud(profiles: Profile[]): Promise<v
         winsDuel: p.winsDuel || 0,
         winsCasino: p.winsCasino || 0,
         winsPineapple: p.winsPineapple || 0,
+        winsCrash: p.winsCrash || 0,
+        gamesPlayedCrash: p.gamesPlayedCrash || 0,
         gamesPlayed: p.gamesPlayed || 0,
         updatedAt: now,
       };
 
-      await setDoc(doc(db, 'leaderboards', entryId), leaderboardData, { merge: true });
+      await setDoc(doc(db, 'leaderboards', entryId), cleanForFirestore(leaderboardData), { merge: true });
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
@@ -224,7 +280,10 @@ export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promi
       displayName: (profile.displayName || auth.currentUser.displayName || 'Călugăr Google').substring(0, 100),
       avatarIcon: (profile.avatarIcon || 'monk_drunk').substring(0, 50000),
       email: auth.currentUser.email ? auth.currentUser.email.substring(0, 256) : '',
+      masterProfile: profile.masterProfile || existing.data()?.masterProfile || null,
+      subProfiles: profile.subProfiles || existing.data()?.subProfiles || [],
       profiles: profile.profiles || existing.data()?.profiles || [],
+      drunkenCoins: profile.drunkenCoins ?? existing.data()?.drunkenCoins ?? 100,
       gamesPlayed: Math.max(0, profile.gamesPlayed || 0),
       totalSips: Math.max(0, profile.totalSips || 0),
       totalChugs: Math.max(0, profile.totalChugs || 0),
@@ -238,12 +297,14 @@ export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promi
       winsDuel: Math.max(0, profile.winsDuel || 0),
       winsCasino: Math.max(0, profile.winsCasino || 0),
       winsPineapple: Math.max(0, profile.winsPineapple || 0),
-      unlockedAchievements: (profile.unlockedAchievements || []).slice(0, 50),
+      winsCrash: Math.max(0, profile.winsCrash || 0),
+      gamesPlayedCrash: Math.max(0, profile.gamesPlayedCrash || 0),
+      unlockedAchievements: (profile.unlockedAchievements || []).slice(0, 80),
       createdAt: (existing.exists() && existing.data()?.createdAt?.nanoseconds !== undefined) ? existing.data()?.createdAt : now,
       updatedAt: now,
     };
 
-    await setDoc(doc(db, 'users', userId), dataToSave, { merge: true });
+    await setDoc(doc(db, 'users', userId), cleanForFirestore(dataToSave), { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -251,12 +312,12 @@ export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promi
 
 /**
  * Fetches the global leaderboard.
- * CRITICAL: ONLY returns individual subprofiles! Filters out any master account aggregate docs.
+ * Returns individual profiles (Master and Sub-Profiles) with their ranking statistics.
  */
 export async function fetchGlobalLeaderboard(): Promise<CloudLeaderboardEntry[]> {
   const path = 'leaderboards';
   try {
-    const q = query(collection(db, 'leaderboards'), limit(200));
+    const q = query(collection(db, 'leaderboards'), limit(300));
     const querySnapshot = await getDocs(q);
     const results: CloudLeaderboardEntry[] = [];
     const currentUid = auth.currentUser?.uid;
@@ -267,23 +328,12 @@ export async function fetchGlobalLeaderboard(): Promise<CloudLeaderboardEntry[]>
       const entryUserId = data.userId || '';
       const profileId = data.profileId || '';
 
-      // 1. Detect and filter out legacy aggregate master account documents
-      const isLegacyAccountDoc =
-        docId === entryUserId ||
-        !profileId ||
-        profileId === entryUserId ||
-        data.isAccountAggregate === true;
-
-      if (isLegacyAccountDoc) {
-        // If this legacy account document belongs to the currently signed in user or admin, clean it up from Firestore!
-        if (
-          currentUid &&
-          (entryUserId === currentUid ||
-            auth.currentUser?.email === 'antoniu.andrei.radu@gmail.com')
-        ) {
+      // Clean up legacy aggregate documents if found
+      const isOldAggregateWithoutProfileId = docId === entryUserId && !profileId;
+      if (isOldAggregateWithoutProfileId) {
+        if (currentUid && (entryUserId === currentUid || auth.currentUser?.email === 'antoniu.andrei.radu@gmail.com')) {
           deleteDoc(doc(db, 'leaderboards', docId)).catch(() => {});
         }
-        // Skip from leaderboard results
         continue;
       }
 
@@ -295,7 +345,8 @@ export async function fetchGlobalLeaderboard(): Promise<CloudLeaderboardEntry[]>
       results.push({
         id: docId,
         userId: entryUserId,
-        profileId: profileId,
+        profileId: profileId || docId,
+        isMaster: data.isMaster === true,
         accountName: data.accountName || '',
         displayName: data.displayName || 'Călugăr Anonim',
         avatarIcon: data.avatarIcon || 'monk_drunk',
@@ -303,12 +354,16 @@ export async function fetchGlobalLeaderboard(): Promise<CloudLeaderboardEntry[]>
         totalChugs: chugs,
         totalScore: typeof data.totalScore === 'number' ? data.totalScore : sips + 25 * chugs,
         totalXP: rawXp,
+        drunkenCoins: data.drunkenCoins,
         currentLevel: data.currentLevel || prog.currentLevel,
         currentTitle_ro: data.currentTitle_ro || prog.titleRo,
         currentTitle_en: data.currentTitle_en || prog.titleEn,
         winsBoardgame: data.winsBoardgame || 0,
         winsDuel: data.winsDuel || data.duelWins || 0,
         winsCasino: data.winsCasino || 0,
+        winsPineapple: data.winsPineapple || 0,
+        winsCrash: data.winsCrash || 0,
+        gamesPlayedCrash: data.gamesPlayedCrash || 0,
         gamesPlayed: data.gamesPlayed || data.duelPlayed || 0,
         updatedAt: data.updatedAt,
       });
@@ -322,17 +377,17 @@ export async function fetchGlobalLeaderboard(): Promise<CloudLeaderboardEntry[]>
 
 /**
  * Resets the global leaderboard entries from Firestore.
- * Deletes any existing entries and re-synchronizes the individual sub-profiles.
+ * Deletes all leaderboard documents across the tavern (admin/owner) and re-syncs active profiles.
  */
 export async function resetGlobalLeaderboard(activeProfiles?: Profile[]): Promise<void> {
   const path = 'leaderboards';
   try {
-    const q = query(collection(db, 'leaderboards'), limit(300));
+    const q = query(collection(db, 'leaderboards'), limit(500));
     const querySnapshot = await getDocs(q);
     const currentUid = auth.currentUser?.uid;
     const isAdmin = auth.currentUser?.email === 'antoniu.andrei.radu@gmail.com';
 
-    // Delete all eligible entries (user's own or all if admin/owner)
+    // Delete all eligible entries
     const deletePromises: Promise<void>[] = [];
     querySnapshot.forEach((d) => {
       const data = d.data();
@@ -343,9 +398,9 @@ export async function resetGlobalLeaderboard(activeProfiles?: Profile[]): Promis
 
     await Promise.allSettled(deletePromises);
 
-    // If active profiles are passed, re-sync them as fresh individual subprofiles
+    // If active profiles are provided, re-sync them cleanly
     if (activeProfiles && activeProfiles.length > 0 && currentUid) {
-      await syncAccountProfilesToCloud(activeProfiles);
+      await syncAccountProfilesToCloud(activeProfiles, 100);
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
@@ -354,7 +409,7 @@ export async function resetGlobalLeaderboard(activeProfiles?: Profile[]): Promis
 
 /**
  * COMPLETELY resets user backend profile document (users/{userId}) and associated leaderboard records in Firestore.
- * Sets all sips, chugs, XP, levels, titles, wins, and unlocked achievements back to 0.
+ * Leaves 1 clean Master Profile (Level 1, 0 stats, 100 Drunken Coins, 0 subprofiles) and wipes all leaderboard records.
  */
 export async function resetAccountCloudDataAndLeaderboard(userId: string, cleanProfiles: Profile[]): Promise<void> {
   if (!auth.currentUser || auth.currentUser.uid !== userId) return;
@@ -365,10 +420,14 @@ export async function resetAccountCloudDataAndLeaderboard(userId: string, cleanP
     const now = serverTimestamp();
     const defaultProg = calculateProgression(0);
 
-    const sanitizedClean: Profile[] = (cleanProfiles || []).map((p, idx) => ({
-      id: p.id || sanitizeId(`profile_${idx}`),
-      name: (p.name || 'Călugăr').substring(0, 50),
-      avatarIcon: (p.avatarIcon || 'monk_drunk').substring(0, 50000),
+    const masterName = (cleanProfiles[0]?.name || auth.currentUser.displayName || 'Starețul Mănăstirii').substring(0, 50);
+    const masterAvatar = cleanProfiles[0]?.avatarIcon || 'monk_master';
+
+    const cleanMasterProfile: Profile = {
+      id: cleanProfiles[0]?.id || sanitizeId(`master_${userId.substring(0, 8)}`),
+      name: masterName,
+      avatarIcon: masterAvatar,
+      isMaster: true,
       gamesPlayed: 0,
       totalSips: 0,
       totalChugs: 0,
@@ -379,16 +438,24 @@ export async function resetAccountCloudDataAndLeaderboard(userId: string, cleanP
       winsBoardgame: 0,
       winsDuel: 0,
       winsCasino: 0,
+      winsPineapple: 0,
+      winsCrash: 0,
+      gamesPlayedCrash: 0,
+      sipsDrunkCrash: 0,
+      totalPineapplePoints: 0,
       unlockedAchievements: [],
-      createdAt: p.createdAt || Date.now(),
-    }));
+      createdAt: Date.now(),
+    };
 
-    const userCleanDoc = {
+    const userCleanDoc: CloudUserProfile = {
       userId,
-      displayName: (auth.currentUser.displayName || auth.currentUser.email || 'Călugăr Google').substring(0, 100),
-      avatarIcon: (sanitizedClean[0]?.avatarIcon || 'monk_drunk').substring(0, 50000),
+      displayName: masterName,
+      avatarIcon: masterAvatar,
       email: auth.currentUser.email ? auth.currentUser.email.substring(0, 256) : '',
-      profiles: sanitizedClean,
+      masterProfile: cleanMasterProfile,
+      subProfiles: [],
+      profiles: [cleanMasterProfile],
+      drunkenCoins: 100, // Fresh starting treasury
       gamesPlayed: 0,
       totalSips: 0,
       totalChugs: 0,
@@ -402,15 +469,16 @@ export async function resetAccountCloudDataAndLeaderboard(userId: string, cleanP
       winsDuel: 0,
       winsCasino: 0,
       winsPineapple: 0,
+      winsCrash: 0,
       unlockedAchievements: [],
       createdAt: (existing.exists() && existing.data()?.createdAt?.nanoseconds !== undefined) ? existing.data()?.createdAt : now,
       updatedAt: now,
     };
 
     // 1. Overwrite users/{userId}
-    await setDoc(doc(db, 'users', userId), userCleanDoc, { merge: true });
+    await setDoc(doc(db, 'users', userId), cleanForFirestore(userCleanDoc), { merge: true });
 
-    // 2. Query and delete old leaderboard records
+    // 2. Query and delete all old leaderboard records for this user
     const q = query(collection(db, 'leaderboards'), limit(300));
     const querySnapshot = await getDocs(q);
     const isAdmin = auth.currentUser.email === 'antoniu.andrei.radu@gmail.com';
@@ -425,31 +493,34 @@ export async function resetAccountCloudDataAndLeaderboard(userId: string, cleanP
 
     await Promise.allSettled(deletePromises);
 
-    // 3. Re-create clean 0-stat leaderboard documents for each profile
-    for (const p of sanitizedClean) {
-      const entryId = `${userId}_${sanitizeId(p.id)}`;
-      const leaderboardData = {
-        userId,
-        profileId: p.id,
-        accountName: (auth.currentUser.displayName || 'Călugăr Google').substring(0, 100),
-        displayName: p.name.substring(0, 100),
-        avatarIcon: p.avatarIcon || 'monk_drunk',
-        totalSips: 0,
-        totalChugs: 0,
-        totalScore: 0,
-        totalXP: 0,
-        currentLevel: 1,
-        currentTitle_ro: defaultProg.titleRo,
-        currentTitle_en: defaultProg.titleEn,
-        winsBoardgame: 0,
-        winsDuel: 0,
-        winsCasino: 0,
-        gamesPlayed: 0,
-        updatedAt: now,
-      };
+    // 3. Re-create single clean 0-stat leaderboard document for the Master Profile
+    const masterEntryId = `${userId}_${sanitizeId(cleanMasterProfile.id)}`;
+    const leaderboardData: CloudLeaderboardEntry = {
+      userId,
+      profileId: cleanMasterProfile.id,
+      isMaster: true,
+      accountName: (auth.currentUser.displayName || 'Călugăr Google').substring(0, 100),
+      displayName: cleanMasterProfile.name,
+      avatarIcon: cleanMasterProfile.avatarIcon || 'monk_master',
+      totalSips: 0,
+      totalChugs: 0,
+      totalScore: 0,
+      totalXP: 0,
+      drunkenCoins: 100,
+      currentLevel: 1,
+      currentTitle_ro: defaultProg.titleRo,
+      currentTitle_en: defaultProg.titleEn,
+      winsBoardgame: 0,
+      winsDuel: 0,
+      winsCasino: 0,
+      winsPineapple: 0,
+      winsCrash: 0,
+      gamesPlayedCrash: 0,
+      gamesPlayed: 0,
+      updatedAt: now,
+    };
 
-      await setDoc(doc(db, 'leaderboards', entryId), leaderboardData);
-    }
+    await setDoc(doc(db, 'leaderboards', masterEntryId), cleanForFirestore(leaderboardData));
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -460,11 +531,11 @@ export async function recordDuelMatchHistory(match: Omit<CloudDuelHistory, 'crea
   const path = `duel_histories/${match.matchId}`;
 
   try {
-    await setDoc(doc(db, 'duel_histories', match.matchId), {
+    await setDoc(doc(db, 'duel_histories', match.matchId), cleanForFirestore({
       ...match,
       creatorUid: auth.currentUser.uid,
       createdAt: serverTimestamp(),
-    });
+    }));
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
   }

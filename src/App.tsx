@@ -227,7 +227,7 @@ function MainAppContent() {
         setCurrentScreen('crash');
       } catch (err: any) {
         console.error('Error starting crash room:', err);
-        alert(err?.message || 'Eroare la crearea chiliei Crash! Te rugăm să reîncerci.');
+        alert(err?.message || 'Eroare la crearea camerei Crash! Te rugăm să reîncerci.');
       }
     } else if (role === 'join' && roomCode) {
       try {
@@ -255,7 +255,7 @@ function MainAppContent() {
   const handleEndGame = (finalPlayers: Player[], turns: number = 5) => {
     setActivePlayers(finalPlayers);
     setMatchTurnsPlayed(turns);
-    if (finalPlayers.length === 2 && (gameMode === 'boardgame' || gameMode === 'normal')) {
+    if (finalPlayers.length === 2 && (gameMode === 'boardgame' || gameMode === 'normal') && turns >= 2) {
       const p1 = finalPlayers[0];
       const p2 = finalPlayers[1];
       const score1 = p1.hasGivenUp ? 999999 : (p1.sipsTotal + 25 * p1.chugsTotal);

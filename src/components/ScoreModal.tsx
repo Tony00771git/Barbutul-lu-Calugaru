@@ -116,11 +116,12 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
   // Drunkenness title helper
   const getDrunkennessTitle = (sips: number, chugs: number) => {
     const totalScore = sips + chugs * 25;
-    if (totalScore === 0) return { title: '😇 Monah Treaz', color: 'text-emerald-400', bg: 'bg-emerald-950/60' };
-    if (totalScore <= 10) return { title: '🍺 Ucenic Vesel', color: 'text-yellow-400', bg: 'bg-yellow-950/60' };
-    if (totalScore <= 25) return { title: '🥴 Frate Amețit', color: 'text-amber-400', bg: 'bg-amber-950/60' };
-    if (totalScore <= 45) return { title: '😵 Călugăr Turmentat', color: 'text-orange-400', bg: 'bg-orange-950/60' };
-    return { title: '👑 Arhimandritul Berii', color: 'text-red-400', bg: 'bg-red-950/60' };
+    const isRo = language === 'ro';
+    if (totalScore === 0) return { title: isRo ? '😇 Monah Treaz' : '😇 Sober Monk', color: 'text-emerald-400', bg: 'bg-emerald-950/60' };
+    if (totalScore <= 10) return { title: isRo ? '🍺 Ucenic Vesel' : '🍺 Merry Apprentice', color: 'text-yellow-400', bg: 'bg-yellow-950/60' };
+    if (totalScore <= 25) return { title: isRo ? '🥴 Frate Amețit' : '🥴 Tipsy Friar', color: 'text-amber-400', bg: 'bg-amber-950/60' };
+    if (totalScore <= 45) return { title: isRo ? '😵 Călugăr Turmentat' : '😵 Drunken Monk', color: 'text-orange-400', bg: 'bg-orange-950/60' };
+    return { title: isRo ? '👑 Arhimandritul Berii' : '👑 Beer Archimandrite', color: 'text-red-400', bg: 'bg-red-950/60' };
   };
 
   // Sort active players by drunkenness score (sips + 25 * chugs)

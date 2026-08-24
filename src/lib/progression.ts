@@ -89,6 +89,9 @@ export const ACHIEVEMENT_DIFFICULTY_MAP: Record<string, AchievementDifficulty> =
   first_crash: 'bronze',
   crash_safe_landing: 'bronze',
   crash_chicken_egg: 'bronze',
+  crash_prudent_victor: 'bronze',
+  crash_auto_pilot: 'bronze',
+  crash_quick_escape: 'bronze',
   pass_dice_turn: 'bronze',
   quick_reflex: 'bronze',
   sip_apprentice_10: 'bronze',
@@ -115,6 +118,11 @@ export const ACHIEVEMENT_DIFFICULTY_MAP: Record<string, AchievementDifficulty> =
   pineapple_fantasyland_streak: 'silver',
   crash_high_multiplier: 'silver',
   crash_bot_victor: 'silver',
+  crash_fiery_victor: 'silver',
+  crash_groapa_survivor: 'silver',
+  crash_streak_3: 'silver',
+  crash_greed_punish: 'silver',
+  crash_games_5: 'silver',
   sips_century_100: 'silver',
   chug_veteran_10: 'silver',
   monopoly_land_baron: 'silver',
@@ -134,6 +142,10 @@ export const ACHIEVEMENT_DIFFICULTY_MAP: Record<string, AchievementDifficulty> =
   legend_duel_grandmaster: 'gold',
   legend_pineapple_master: 'gold',
   legend_crash_master: 'gold',
+  crash_titan_x10: 'gold',
+  crash_streak_5: 'gold',
+  crash_flawless_match: 'gold',
+  crash_games_15: 'gold',
   legend_survivor_100_turns: 'gold',
   legend_speed_titan: 'gold',
 
@@ -141,6 +153,9 @@ export const ACHIEVEMENT_DIFFICULTY_MAP: Record<string, AchievementDifficulty> =
   pineapple_bot_hard: 'platinum',
   legend_pineapple_royal_flush: 'platinum',
   crash_legendary_x20: 'platinum',
+  crash_penta_champion: 'platinum',
+  crash_iron_liver: 'platinum',
+  crash_bot_master_both: 'platinum',
   legend_tycoon: 'platinum',
   legend_ascended: 'platinum',
   legend_tri_champion: 'platinum',
@@ -153,6 +168,8 @@ export const ACHIEVEMENT_DIFFICULTY_MAP: Record<string, AchievementDifficulty> =
   // LEGEND (400 XP) - Supreme ultra-endgame milestones
   legend_1000_sips: 'legend',
   legend_50_chugs: 'legend',
+  crash_legendary_x50: 'legend',
+  legend_crash_grandmaster_25: 'legend',
 };
 
 export const getAchievementXp = (achievementId: string): number => {
@@ -318,7 +335,7 @@ export const getAchievementCoinReward = (difficulty: AchievementDifficulty): num
  * XP & Drunken Coins Breakdown calculation for end of match
  */
 export interface MatchXpBreakdown {
-  mode: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple';
+  mode: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'crash';
   turnsPlayed: number;
   participationXP: number;
   turnsXP: number;
@@ -358,7 +375,7 @@ export interface MatchXpBreakdown {
 
 export const calculateMatchXpGain = (
   currentProfile: Profile,
-  mode: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple',
+  mode: 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'crash',
   isWinner: boolean,
   turnsPlayed: number = 5,
   newAchievementsUnlocked: string[] = [],
@@ -381,6 +398,7 @@ export const calculateMatchXpGain = (
   else if (mode === 'duel') participationXP = 20;
   else if (mode === 'casino') participationXP = 25;
   else if (mode === 'pineapple') participationXP = 25;
+  else if (mode === 'crash') participationXP = 22;
 
   // 2. Turns Played Formula
   let turnsXP = 0;
@@ -412,6 +430,11 @@ export const calculateMatchXpGain = (
     turnsXP = Math.min(140, rawTurnsXp);
     turnsFormulaTextRo = `${safeTurns} mâini jucate × 7 XP`;
     turnsFormulaTextEn = `${safeTurns} hands played × 7 XP`;
+  } else if (mode === 'crash') {
+    const rawTurnsXp = Math.round(safeTurns * 7.5);
+    turnsXP = Math.min(125, rawTurnsXp);
+    turnsFormulaTextRo = `${safeTurns} runde zbor × 7.5 XP`;
+    turnsFormulaTextEn = `${safeTurns} flight rounds × 7.5 XP`;
   }
 
   // 3. Performance / Winner XP
@@ -437,6 +460,11 @@ export const calculateMatchXpGain = (
       performanceXP = 60;
       performanceReasonRo = 'Câștigător Moșia Mănăstirii (Locul 1)';
       performanceReasonEn = 'Monastery Estate Champion (1st Place)';
+    } else if (mode === 'crash') {
+      performanceXP = 50;
+      if (extraStats?.flawless) performanceXP += 25;
+      performanceReasonRo = extraStats?.flawless ? 'Zbor Fără Prăbușire (Flawless)' : 'Campion Dragon Crash 1v1';
+      performanceReasonEn = extraStats?.flawless ? 'Flawless Flight Champion' : '1v1 Dragon Crash Winner';
     } else if (mode === 'normal') {
       performanceXP = 35;
       performanceReasonRo = 'Regele Tavernei (Cel mai rezistent băutor)';
@@ -476,6 +504,7 @@ export const calculateMatchXpGain = (
   else if (mode === 'duel') baseCoins = 10;
   else if (mode === 'casino') baseCoins = 12;
   else if (mode === 'pineapple') baseCoins = 14;
+  else if (mode === 'crash') baseCoins = 12;
 
   coinsBreakdown.push({
     icon: '🍺',
@@ -491,6 +520,7 @@ export const calculateMatchXpGain = (
   else if (mode === 'duel') turnsCoins = Math.floor(safeTurns * 1.5);
   else if (mode === 'casino') turnsCoins = Math.floor(safeTurns * 1.5);
   else if (mode === 'pineapple') turnsCoins = Math.floor(safeTurns * 1.5);
+  else if (mode === 'crash') turnsCoins = Math.floor(safeTurns * 1.5);
 
   if (turnsCoins > 0) {
     coinsBreakdown.push({
@@ -508,6 +538,7 @@ export const calculateMatchXpGain = (
     else if (mode === 'casino') winCoins = 35;
     else if (mode === 'duel') winCoins = 25;
     else if (mode === 'pineapple') winCoins = 28;
+    else if (mode === 'crash') winCoins = 26;
 
     coinsBreakdown.push({
       icon: '👑',

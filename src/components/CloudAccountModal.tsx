@@ -16,7 +16,7 @@ interface CloudAccountModalProps {
   onClose: () => void;
 }
 
-type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'totalScore';
+type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'pineapple' | 'crash' | 'totalScore';
 
 export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, onClose }) => {
   const {
@@ -111,6 +111,18 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
       if (leaderboardCategory === 'casino') {
         const winsA = a.winsCasino || 0;
         const winsB = b.winsCasino || 0;
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
+      if (leaderboardCategory === 'pineapple') {
+        const winsA = a.winsPineapple || 0;
+        const winsB = b.winsPineapple || 0;
+        if (winsB !== winsA) return winsB - winsA;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      }
+      if (leaderboardCategory === 'crash') {
+        const winsA = a.winsCrash || 0;
+        const winsB = b.winsCrash || 0;
         if (winsB !== winsA) return winsB - winsA;
         return (b.totalScore || 0) - (a.totalScore || 0);
       }
@@ -400,8 +412,8 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
           {/* TAB 2: GLOBAL LEADERBOARD (4 TABS) */}
           {activeSubtab === 'leaderboard' && (
             <div className="space-y-3 animate-fade-in">
-              {/* 4 Tabs Selector for Leaderboard */}
-              <div className="grid grid-cols-4 gap-1 bg-[#0b0805] p-1 rounded-xl border border-[#251d14]">
+              {/* 6 Tabs Selector for Leaderboard */}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-[#0b0805] p-1 rounded-xl border border-[#251d14]">
                 <button
                   onClick={() => setLeaderboardCategory('monopoly')}
                   className={`py-1.5 px-1 rounded-lg text-center font-cinzel font-bold text-[10px] sm:text-[11px] transition-all flex flex-col items-center justify-center leading-tight ${
@@ -439,6 +451,30 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                 </button>
 
                 <button
+                  onClick={() => setLeaderboardCategory('pineapple')}
+                  className={`py-1.5 px-1 rounded-lg text-center font-cinzel font-bold text-[10px] sm:text-[11px] transition-all flex flex-col items-center justify-center leading-tight ${
+                    leaderboardCategory === 'pineapple'
+                      ? 'bg-[#e8c84a] text-black shadow font-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span>🍍 Pineapple</span>
+                  <span className="text-[9px] opacity-80 font-barlow">Victorii</span>
+                </button>
+
+                <button
+                  onClick={() => setLeaderboardCategory('crash')}
+                  className={`py-1.5 px-1 rounded-lg text-center font-cinzel font-bold text-[10px] sm:text-[11px] transition-all flex flex-col items-center justify-center leading-tight ${
+                    leaderboardCategory === 'crash'
+                      ? 'bg-[#e8c84a] text-black shadow font-black'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span>🐉 Crash</span>
+                  <span className="text-[9px] opacity-80 font-barlow">Victorii</span>
+                </button>
+
+                <button
                   onClick={() => setLeaderboardCategory('totalScore')}
                   className={`py-1.5 px-1 rounded-lg text-center font-cinzel font-bold text-[10px] sm:text-[11px] transition-all flex flex-col items-center justify-center leading-tight ${
                     leaderboardCategory === 'totalScore'
@@ -446,8 +482,8 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                       : 'text-gray-400 hover:text-white'
                   }`}
                 >
-                  <span>🔥 Scor Total</span>
-                  <span className="text-[9px] opacity-80 font-barlow">Guri+Gropi×25</span>
+                  <span>🔥 Total</span>
+                  <span className="text-[9px] opacity-80 font-barlow">Guri+Gropi</span>
                 </button>
               </div>
 
@@ -457,6 +493,8 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                   {leaderboardCategory === 'monopoly' && '🏰 Top Victorii Monopoly / Joc de Tablă'}
                   {leaderboardCategory === 'duel' && '⚔️ Top Victorii Duel 1v1 Trivia'}
                   {leaderboardCategory === 'casino' && '🎲 Top Victorii Barbut Duel Casino'}
+                  {leaderboardCategory === 'pineapple' && '🍍 Top Victorii Poker Chinezesc Pineapple'}
+                  {leaderboardCategory === 'crash' && '🐉 Top Victorii Dragon Crash 1v1'}
                   {leaderboardCategory === 'totalScore' && '🔥 Top Scor Global (Guri + Gropi × 25)'}
                 </span>
                 <button

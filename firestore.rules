@@ -31,6 +31,8 @@ service cloud.firestore {
         (!('avatarIcon' in data) || (data.avatarIcon is string && data.avatarIcon.size() <= 50000)) &&
         (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
         (!('profiles' in data) || (data.profiles is list && data.profiles.size() <= 50)) &&
+        (!('shortId' in data) || (data.shortId is string && data.shortId.size() <= 20)) &&
+        (!('customShortId' in data) || (data.customShortId is string && data.customShortId.size() <= 20)) &&
         data.gamesPlayed is number && data.gamesPlayed >= 0 &&
         data.totalSips is number && data.totalSips >= 0 &&
         data.totalChugs is number && data.totalChugs >= 0 &&
@@ -40,6 +42,7 @@ service cloud.firestore {
         (!('winsDuel' in data) || (data.winsDuel is number && data.winsDuel >= 0)) &&
         (!('winsCasino' in data) || (data.winsCasino is number && data.winsCasino >= 0)) &&
         (!('winsPineapple' in data) || (data.winsPineapple is number && data.winsPineapple >= 0)) &&
+        (!('winsCrash' in data) || (data.winsCrash is number && data.winsCrash >= 0)) &&
         (!('totalXP' in data) || (data.totalXP is number && data.totalXP >= 0)) &&
         (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
         (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100)) &&
@@ -93,12 +96,13 @@ service cloud.firestore {
     function isValidPublicProfile(data) {
       return data.keys().hasAll(['uid', 'shortId', 'displayName']) &&
         data.uid is string && data.uid == request.auth.uid &&
-        data.shortId is string && data.shortId.size() >= 4 && data.shortId.size() <= 16 &&
+        data.shortId is string && data.shortId.size() >= 3 && data.shortId.size() <= 20 &&
         data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
         (!('avatarIcon' in data) || (data.avatarIcon is string && data.avatarIcon.size() <= 50000)) &&
         (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
         (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100)) &&
-        (!('currentTitle_en' in data) || (data.currentTitle_en is string && data.currentTitle_en.size() <= 100));
+        (!('currentTitle_en' in data) || (data.currentTitle_en is string && data.currentTitle_en.size() <= 100)) &&
+        (!('activeRoom' in data) || data.activeRoom == null || data.activeRoom is map);
     }
 
     // Friend Record Validation (Within user's friends subcollection)
@@ -107,9 +111,10 @@ service cloud.firestore {
         data.friendUid is string && data.friendUid.size() <= 128 &&
         data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
         (!('avatarIcon' in data) || (data.avatarIcon is string && data.avatarIcon.size() <= 50000)) &&
-        (!('shortId' in data) || (data.shortId is string && data.shortId.size() <= 16)) &&
+        (!('shortId' in data) || (data.shortId is string && data.shortId.size() <= 20)) &&
         (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
-        (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100));
+        (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100)) &&
+        (!('activeRoom' in data) || data.activeRoom == null || data.activeRoom is map);
     }
 
     // Friend Request Validation
@@ -120,7 +125,7 @@ service cloud.firestore {
         data.fromName is string && data.fromName.size() >= 1 && data.fromName.size() <= 100 &&
         data.status in ['pending', 'accepted', 'declined'] &&
         (!('fromAvatar' in data) || (data.fromAvatar is string && data.fromAvatar.size() <= 50000)) &&
-        (!('fromShortId' in data) || (data.fromShortId is string && data.fromShortId.size() <= 16));
+        (!('fromShortId' in data) || (data.fromShortId is string && data.fromShortId.size() <= 20));
     }
 
     // Game Invite Validation (1v1 Duel, Pineapple, Crash)
