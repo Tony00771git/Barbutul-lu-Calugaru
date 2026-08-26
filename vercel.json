@@ -17,11 +17,15 @@
       ]
     },
     {
-      "source": "/(manifest\\.json|sw\\.js)",
+      "source": "/(manifest\\.json|sw\\.js|\\.well-known/assetlinks\\.json)",
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
           "value": "*"
+        },
+        {
+          "key": "Content-Type",
+          "value": "application/json"
         },
         {
           "key": "Cache-Control",

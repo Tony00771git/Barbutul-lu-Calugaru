@@ -16,6 +16,7 @@ import {
   DuelQuestion,
   DuelRoomState,
   DuelSubmode,
+  TavernEmoteMessage,
 } from '../types';
 
 let serverClockOffset = 0;
@@ -576,6 +577,21 @@ export async function endDuelGame(roomCode: string): Promise<void> {
     const roomRef = doc(db, 'duel_rooms', formattedCode);
     await updateDoc(roomRef, {
       status: 'finished',
+      updatedAt: Date.now(),
+    });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+}
+
+export async function sendDuelEmote(roomCode: string, emote: TavernEmoteMessage): Promise<void> {
+  const formattedCode = roomCode.toUpperCase().trim();
+  const path = `duel_rooms/${formattedCode}`;
+
+  try {
+    const roomRef = doc(db, 'duel_rooms', formattedCode);
+    await updateDoc(roomRef, {
+      lastEmote: emote,
       updatedAt: Date.now(),
     });
   } catch (err) {

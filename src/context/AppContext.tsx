@@ -11,6 +11,19 @@ import {
   MatchXpBreakdown,
   getAchievementXp,
 } from '../lib/progression';
+import {
+  DailyQuestDefinition,
+  UserDailyQuestState,
+  DailyQuestPoolState,
+  QuestEvent,
+  DAILY_QUEST_MAP,
+  initializeDailyQuestState,
+  getTimeUntilRomaniaMidnight,
+  getRomaniaDateKey,
+  evaluateQuestProgress,
+} from '../data/dailyQuests';
+import { SHOP_CATALOG, DEFAULT_UNLOCKED_ITEMS } from '../data/shopCatalog';
+import { soundEffects } from '../lib/soundFx';
 
 export interface AchievementEvent {
   type?: string;
@@ -126,6 +139,22 @@ interface AppContextType {
   resetCustomThemeBackground: (themeId: ThemeId) => void;
   syncWithCloud: () => Promise<void>;
   t: (key: string, params?: Record<string, string | number>) => string;
+  // Shop & Inventory System
+  purchasedItems: string[];
+  isItemPurchased: (itemIdOrKey: string) => boolean;
+  purchaseShopItem: (itemIdOrKey: string, cost: number, onPurchased?: () => void) => boolean;
+  hasPerk: (perkKey: string) => boolean;
+  equipCustomTitle: (titleKey: string, titleRo: string, titleEn: string, targetProfileId?: string) => void;
+  // Daily Quests System
+  dailyQuestPool: DailyQuestPoolState;
+  activeDailyQuests: Array<DailyQuestDefinition & UserDailyQuestState>;
+  trackQuestEvent: (event: QuestEvent) => void;
+  claimDailyQuestReward: (questId: string) => boolean;
+  claimDailyBonusChest: () => boolean;
+  timeUntilQuestReset: { hours: number; minutes: number; seconds: number; formatted: string };
+  completedUnclaimedQuestsCount: number;
+  activeQuestCompletedNotification: { title: string; desc: string; reward: number; icon: string } | null;
+  dismissQuestCompletedNotification: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -138,6 +167,8 @@ const STORAGE_KEYS = {
   DRUNKEN_COINS: 'barbut_monk_drunken_coins_total',
   AUTO_SAVE_PROFILES: 'barbut_monk_auto_save_profiles',
   CUSTOM_THEME_BGS: 'barbut_monk_custom_theme_bgs',
+  DAILY_QUESTS: 'barbut_monk_daily_quests_v1',
+  PURCHASED_ITEMS: 'barbut_monk_purchased_items',
 };
 
 export const generateUniqueId = (prefix = 'id'): string => {
@@ -164,6 +195,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cellar: '',
       great_hall: '',
       dungeon: '',
+      crypt: '',
     };
   });
 
@@ -198,17 +230,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [theme, setThemeState] = useState<ThemeId>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.THEME) as ThemeId;
-    return ['tavern', 'cellar', 'great_hall', 'dungeon'].includes(saved) ? saved : 'tavern';
+    return ['tavern', 'cellar', 'great_hall', 'dungeon', 'crypt'].includes(saved) ? saved : 'tavern';
   });
 
   const [diceSkin, setDiceSkinState] = useState<DiceSkin>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.DICE_SKIN) as DiceSkin;
-    return ['gold', 'bone', 'wood'].includes(saved) ? saved : 'gold';
+    return ['gold', 'bone', 'wood', 'ruby', 'ice', 'obsidian'].includes(saved) ? saved : 'gold';
   });
 
   const [autoSaveNewProfiles, setAutoSaveNewProfilesState] = useState<boolean>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.AUTO_SAVE_PROFILES);
     return saved === null ? true : saved === 'true';
+  });
+
+  // Shop & Inventory Owned Items state
+  const [purchasedItems, setPurchasedItems] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.PURCHASED_ITEMS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return Array.from(new Set([...DEFAULT_UNLOCKED_ITEMS, ...parsed]));
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse saved purchased items', e);
+    }
+    return [...DEFAULT_UNLOCKED_ITEMS];
   });
 
   const [profiles, setProfiles] = useState<Profile[]>(() => {
@@ -363,6 +411,208 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const dismissXpBreakdown = () => {
     setActiveXpBreakdown(null);
   };
+
+  // -------------------------------------------------------------
+  // DAILY QUEST SYSTEM (3 tasks / day, reset at 12:00 AM Romania time)
+  // -------------------------------------------------------------
+  const [dailyQuestPool, setDailyQuestPool] = useState<DailyQuestPoolState>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DAILY_QUESTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return initializeDailyQuestState(parsed);
+      }
+    } catch (e) {
+      console.error('Failed to parse saved daily quests', e);
+    }
+    return initializeDailyQuestState(null);
+  });
+
+  const [timeUntilQuestReset, setTimeUntilQuestReset] = useState(() => getTimeUntilRomaniaMidnight());
+
+  // 1-second interval to update countdown timer and automatically handle 12 AM Romania reset
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const remaining = getTimeUntilRomaniaMidnight();
+      setTimeUntilQuestReset(remaining);
+
+      const todayKey = getRomaniaDateKey();
+      setDailyQuestPool(prev => {
+        if (prev.dateKey !== todayKey) {
+          const fresh = initializeDailyQuestState(null);
+          try {
+            localStorage.setItem(STORAGE_KEYS.DAILY_QUESTS, JSON.stringify(fresh));
+          } catch (e) {}
+          return fresh;
+        }
+        return prev;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Map active daily quests with their static definitions
+  const activeDailyQuests = React.useMemo(() => {
+    return (dailyQuestPool.quests || []).map(uq => {
+      const def = DAILY_QUEST_MAP.get(uq.questId) || {
+        id: uq.questId,
+        category: 'general' as const,
+        titleRo: 'Misiune Călugărească',
+        titleEn: 'Monastic Quest',
+        descRo: 'Sarcina mănăstirii',
+        descEn: 'Monastery task',
+        icon: '🎯',
+        target: 1,
+        coinReward: 25,
+      };
+      return {
+        ...def,
+        ...uq,
+      };
+    });
+  }, [dailyQuestPool]);
+
+  // Floating quest completion notification state
+  const [activeQuestCompletedNotification, setActiveQuestCompletedNotification] = useState<{
+    title: string;
+    desc: string;
+    reward: number;
+    icon: string;
+  } | null>(null);
+
+  const dismissQuestCompletedNotification = () => {
+    setActiveQuestCompletedNotification(null);
+  };
+
+  // Event dispatcher for quest progress
+  const trackQuestEvent = (event: QuestEvent) => {
+    const todayKey = getRomaniaDateKey();
+
+    setDailyQuestPool(prev => {
+      const currentPool = prev.dateKey === todayKey ? prev : initializeDailyQuestState(null);
+      let hasChanges = false;
+      let newlyCompletedQuest: DailyQuestDefinition | null = null;
+
+      const updatedQuests = (currentPool.quests || []).map(uq => {
+        const def = DAILY_QUEST_MAP.get(uq.questId);
+        if (!def) return uq;
+
+        const newProgress = evaluateQuestProgress(def, event, uq.progress);
+        const isNowCompleted = newProgress >= def.target;
+
+        if (newProgress !== uq.progress || isNowCompleted !== uq.completed) {
+          hasChanges = true;
+          if (isNowCompleted && !uq.completed) {
+            newlyCompletedQuest = def;
+          }
+          return {
+            ...uq,
+            progress: newProgress,
+            completed: isNowCompleted,
+          };
+        }
+        return uq;
+      });
+
+      if (!hasChanges) return prev;
+
+      const newPoolState: DailyQuestPoolState = {
+        ...currentPool,
+        quests: updatedQuests,
+      };
+
+      try {
+        localStorage.setItem(STORAGE_KEYS.DAILY_QUESTS, JSON.stringify(newPoolState));
+      } catch (e) {}
+
+      if (newlyCompletedQuest) {
+        const quest = newlyCompletedQuest as DailyQuestDefinition;
+        soundEffects.playQuestComplete();
+        setActiveQuestCompletedNotification({
+          title: language === 'ro' ? quest.titleRo : quest.titleEn,
+          desc: language === 'ro' ? quest.descRo : quest.descEn,
+          reward: quest.coinReward,
+          icon: quest.icon,
+        });
+      }
+
+      return newPoolState;
+    });
+  };
+
+  // Claim individual quest reward
+  const claimDailyQuestReward = (questId: string): boolean => {
+    const questDef = DAILY_QUEST_MAP.get(questId);
+    if (!questDef) return false;
+
+    let claimedSuccess = false;
+
+    setDailyQuestPool(prev => {
+      const targetIdx = (prev.quests || []).findIndex(q => q.questId === questId);
+      if (targetIdx === -1) return prev;
+
+      const target = prev.quests[targetIdx];
+      if (!target.completed || target.claimed) return prev;
+
+      claimedSuccess = true;
+      const updatedQuests = [...prev.quests];
+      updatedQuests[targetIdx] = {
+        ...target,
+        claimed: true,
+      };
+
+      const newPoolState = {
+        ...prev,
+        quests: updatedQuests,
+      };
+
+      try {
+        localStorage.setItem(STORAGE_KEYS.DAILY_QUESTS, JSON.stringify(newPoolState));
+      } catch (e) {}
+
+      // Add coins directly to global unified treasury
+      setAndPersistDrunkenCoins(c => c + questDef.coinReward);
+
+      return newPoolState;
+    });
+
+    return claimedSuccess;
+  };
+
+  // Claim 3/3 daily bonus chest (+50 Drunken Coins)
+  const claimDailyBonusChest = (): boolean => {
+    let claimedSuccess = false;
+
+    setDailyQuestPool(prev => {
+      const allDone = (prev.quests || []).length === 3 && prev.quests.every(q => q.completed);
+      if (!allDone || prev.bonusClaimed) return prev;
+
+      claimedSuccess = true;
+      const newPoolState = {
+        ...prev,
+        bonusClaimed: true,
+      };
+
+      try {
+        localStorage.setItem(STORAGE_KEYS.DAILY_QUESTS, JSON.stringify(newPoolState));
+      } catch (e) {}
+
+      setAndPersistDrunkenCoins(c => c + 50);
+
+      return newPoolState;
+    });
+
+    return claimedSuccess;
+  };
+
+  // Count of completed but unclaimed items
+  const completedUnclaimedQuestsCount = React.useMemo(() => {
+    const questUnclaimed = (dailyQuestPool.quests || []).filter(q => q.completed && !q.claimed).length;
+    const allDone = (dailyQuestPool.quests || []).length === 3 && dailyQuestPool.quests.every(q => q.completed);
+    const bonusUnclaimed = (allDone && !dailyQuestPool.bonusClaimed) ? 1 : 0;
+    return questUnclaimed + bonusUnclaimed;
+  }, [dailyQuestPool]);
 
   // Track initial cloud sync per user UID so we merge cloud profiles when user logs in on a new device
   const hasMergedCloudRef = useRef<string | null>(null);
@@ -767,6 +1017,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (earned <= 0) return;
 
     setAndPersistDrunkenCoins(prev => prev + earned);
+  };
+
+  // Check if an item or skin is owned / unlocked
+  const isItemPurchased = (itemIdOrKey: string): boolean => {
+    if (!itemIdOrKey) return false;
+    if (DEFAULT_UNLOCKED_ITEMS.includes(itemIdOrKey)) return true;
+    return purchasedItems.includes(itemIdOrKey);
+  };
+
+  // Buy an item from the shop, persist it, and apply immediately
+  const purchaseShopItem = (
+    itemIdOrKey: string,
+    cost: number,
+    onPurchased?: () => void
+  ): boolean => {
+    // If already owned, apply callback without charging
+    if (isItemPurchased(itemIdOrKey)) {
+      if (onPurchased) onPurchased();
+      return true;
+    }
+
+    if (drunkenCoins < cost) {
+      return false;
+    }
+
+    // Deduct coins
+    setAndPersistDrunkenCoins(prev => Math.max(0, prev - cost));
+
+    // Save item to inventory
+    setPurchasedItems(prev => {
+      const updated = Array.from(new Set([...prev, itemIdOrKey]));
+      const catalogItem = SHOP_CATALOG.find(i => i.id === itemIdOrKey || i.key === itemIdOrKey);
+      if (catalogItem) {
+        updated.push(catalogItem.id);
+        updated.push(catalogItem.key);
+        if (catalogItem.diceSkinKey) updated.push(catalogItem.diceSkinKey);
+        if (catalogItem.themeKey) updated.push(catalogItem.themeKey);
+        if (catalogItem.perkKey) updated.push(catalogItem.perkKey);
+        if (catalogItem.titleKey) updated.push(catalogItem.titleKey);
+      }
+      const uniqueUpdated = Array.from(new Set(updated));
+      try {
+        localStorage.setItem(STORAGE_KEYS.PURCHASED_ITEMS, JSON.stringify(uniqueUpdated));
+      } catch (e) {
+        console.error('Failed to save purchased items', e);
+      }
+      return uniqueUpdated;
+    });
+
+    if (onPurchased) {
+      onPurchased();
+    }
+
+    soundEffects.playPurchaseSuccess();
+    return true;
+  };
+
+  const hasPerk = (perkKey: string): boolean => {
+    return isItemPurchased(perkKey);
+  };
+
+  const equipCustomTitle = (titleKey: string, titleRo: string, titleEn: string, targetProfileId?: string) => {
+    setProfiles(prev => {
+      const targetIdx = targetProfileId
+        ? prev.findIndex(p => p.id === targetProfileId)
+        : (prev.findIndex(p => p.isMaster) >= 0 ? prev.findIndex(p => p.isMaster) : 0);
+
+      if (targetIdx === -1) return prev;
+
+      const updated = [...prev];
+      updated[targetIdx] = {
+        ...updated[targetIdx],
+        currentTitle_ro: titleRo,
+        currentTitle_en: titleEn,
+      };
+      return updated;
+    });
+    soundEffects.playEquip();
   };
 
   const awardMatchXp = (
@@ -1256,6 +1584,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       resetCustomThemeBackground,
       syncWithCloud,
       t,
+      // Shop & Inventory System
+      purchasedItems,
+      isItemPurchased,
+      purchaseShopItem,
+      hasPerk,
+      equipCustomTitle,
+      // Daily Quests System
+      dailyQuestPool,
+      activeDailyQuests,
+      trackQuestEvent,
+      claimDailyQuestReward,
+      claimDailyBonusChest,
+      timeUntilQuestReset,
+      completedUnclaimedQuestsCount,
+      activeQuestCompletedNotification,
+      dismissQuestCompletedNotification,
     }}>
       {children}
     </AppContext.Provider>

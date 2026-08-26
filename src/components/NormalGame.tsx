@@ -13,7 +13,7 @@ interface NormalGameProps {
   initialPlayers: Player[];
   difficulty: Difficulty;
   customDoubles: CustomDoubles;
-  onEndGame: (finalPlayers: Player[]) => void;
+  onEndGame: (finalPlayers: Player[], turnsPlayed?: number) => void;
   onOpenRules: () => void;
 }
 
@@ -32,7 +32,7 @@ export const NormalGame: React.FC<NormalGameProps> = ({
   onEndGame,
   onOpenRules,
 }) => {
-  const { t, diceSkin, checkAchievement } = useApp();
+  const { t, diceSkin, theme, checkAchievement, trackQuestEvent } = useApp();
 
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
   const [activePlayerIndex, setActivePlayerIndex] = useState<number>(0);
@@ -107,6 +107,13 @@ export const NormalGame: React.FC<NormalGameProps> = ({
       isChug: isChug,
     });
 
+    if (addedSips > 0) {
+      trackQuestEvent({ type: 'drink_sips', count: addedSips });
+    }
+    if (addedChugs > 0) {
+      trackQuestEvent({ type: 'drink_chug', count: addedChugs });
+    }
+
     // Reset turn state
     setNormalCount(0);
     setDoubleCount(0);
@@ -158,6 +165,11 @@ export const NormalGame: React.FC<NormalGameProps> = ({
       setIsRolling(false);
 
       const isDouble = d1 === d2;
+
+      trackQuestEvent({ type: 'roll_dice', count: 1, dice: [d1, d2] });
+      if (isDouble) {
+        trackQuestEvent({ type: 'roll_double', dice: [d1, d2] });
+      }
 
       if (!isDouble) {
         // NON-DOUBLE: Accumulates sips
@@ -282,6 +294,7 @@ export const NormalGame: React.FC<NormalGameProps> = ({
     const sipsToDrink = normalCount > 0 ? normalCount : 1;
 
     checkAchievement(activePlayer.name, { isPassDice: true });
+    trackQuestEvent({ type: 'pass_dice' });
 
     setTurnResult({
       reason: `Ai ales să pasezi tura după ${normalCount} aruncări acumulate.`,
@@ -440,7 +453,12 @@ export const NormalGame: React.FC<NormalGameProps> = ({
             📜 {t('tabRules')}
           </button>
           <button
-            onClick={() => onEndGame(players)}
+            onClick={() => {
+              trackQuestEvent({ type: 'game_completed', mode: 'normal', isWinner: true });
+              trackQuestEvent({ type: 'theme_played', theme });
+              trackQuestEvent({ type: 'dice_skin_played', diceSkin });
+              onEndGame(players, totalTurnsPlayed);
+            }}
             className="flex-1 py-2.5 rounded-xl border border-[#e8c84a] bg-[#e8c84a]/20 text-xs font-cinzel font-bold text-[#e8c84a] hover:bg-[#e8c84a]/30"
           >
             🏁 {t('endGame')}

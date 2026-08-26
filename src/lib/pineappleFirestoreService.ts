@@ -17,6 +17,7 @@ import {
   PineapplePlayerState,
   PineappleRoomState,
   PlayingCard,
+  TavernEmoteMessage,
 } from '../types';
 import {
   checkFantasyLandTriggers,
@@ -710,4 +711,62 @@ export async function endPineappleMatch(
     });
   });
 }
+
+/**
+ * Broadcasts an instant Tavern Emote reaction across Pineapple Poker room.
+ */
+export async function sendPineappleEmote(code: string, emote: TavernEmoteMessage): Promise<void> {
+  const roomRef = doc(db, 'pineapple_rooms', code.trim().toUpperCase());
+  try {
+    await updateDoc(roomRef, {
+      lastEmote: emote,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (e) {
+    console.warn('[Pineapple] Error sending emote:', e);
+  }
+}
+
+/**
+ * Auto-plays default safe moves if player times out (15s AFK shield).
+ */
+export async function autoPlayPineappleTimeout(code: string, playerId: string): Promise<void> {
+  const roomRef = doc(db, 'pineapple_rooms', code.trim().toUpperCase());
+  try {
+    const snap = await getDoc(roomRef);
+    if (!snap.exists()) return;
+    const data = snap.data() as PineappleRoomState;
+    if (data.status !== 'in_hand') return;
+
+    const player = data.players.find(p => p.id === playerId);
+    if (!player || player.handLocked || !player.currentHandCards || player.currentHandCards.length === 0) return;
+
+    const board: PineappleBoard = {
+      top: [...player.board.top],
+      middle: [...player.board.middle],
+      bottom: [...player.board.bottom],
+    };
+    const hand = [...player.currentHandCards];
+    const discarded = [...(player.discarded || [])];
+
+    // Safely place cards on available slots
+    while (hand.length > 0) {
+      const card = hand.shift()!;
+      if (board.bottom.length < 5) {
+        board.bottom.push(card);
+      } else if (board.middle.length < 5) {
+        board.middle.push(card);
+      } else if (board.top.length < 3) {
+        board.top.push(card);
+      } else {
+        discarded.push(card);
+      }
+    }
+
+    await lockPineapplePlayerHand(code, playerId, board, discarded);
+  } catch (e) {
+    console.warn('[Pineapple] Error in autoPlayPineappleTimeout:', e);
+  }
+}
+
 

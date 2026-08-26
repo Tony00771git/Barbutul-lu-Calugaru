@@ -11,6 +11,9 @@ import { HeadToHeadTracker } from './HeadToHeadTracker';
 import { recordHeadToHeadMatch } from '../lib/headToHeadService';
 import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
 import { auth } from '../lib/firebase';
+import { NetworkConnectionBadge } from './NetworkConnectionBadge';
+import { TavernEmotesOverlay } from './TavernEmotesOverlay';
+import { saveActiveSession } from '../lib/sessionManager';
 
 interface CasinoGameProps {
   casinoSocket: UseCasinoSocketReturn;
@@ -25,7 +28,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
   localPlayer,
   onLeave,
 }) => {
-  const { t, checkAchievement, batchUpdateProfiles } = useApp();
+  const { t, language, theme, diceSkin, checkAchievement, batchUpdateProfiles, awardMatchXp, trackQuestEvent } = useApp();
   const {
     room,
     playerId,
@@ -63,6 +66,13 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
       }
     };
   }, [room?.roomCode, room?.status, room?.players.length]);
+
+  // Save active session for auto-reconnection
+  useEffect(() => {
+    if (room?.code && localPlayer) {
+      saveActiveSession('casino', room.code, localPlayer, room.hostPlayerId === localPlayer.id);
+    }
+  }, [room?.code, room?.hostPlayerId, localPlayer]);
 
   // Local betting draft state during betting phase
   const [draftBets, setDraftBets] = useState<CasinoBet[]>([]);
@@ -191,9 +201,11 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
     if (room && room.status === 'finished' && !hasSavedFinalStats) {
       setHasSavedFinalStats(true);
       const realPlayers = room.players.filter((p) => !p.isBot);
-      const isCompletedMultiplayerMatch = realPlayers.length >= 2 && room.status === 'finished';
+      const roundsPlayed = room.currentRound || 1;
+      const isAntiFarming = roundsPlayed < 2;
+      const isCompletedMultiplayerMatch = realPlayers.length >= 2 && room.status === 'finished' && !isAntiFarming;
 
-      // Leaderboard & profile stats: ONLY for completed matches with at least 2 real human players (NOT bot practice, NOT unfinished)
+      // Leaderboard & profile stats: ONLY for completed matches with at least 2 real human players (NOT bot practice, NOT unfinished, >= 2 rounds)
       if (isCompletedMultiplayerMatch) {
         const updates = realPlayers.map((p) => ({
           name: p.name,
@@ -206,6 +218,28 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
         if (updates.length > 0) {
           batchUpdateProfiles(updates);
         }
+
+        // Award match XP for each real player
+        realPlayers.forEach(p => {
+          const isWinner = p.id === room.winnerId;
+          awardMatchXp(p.name, 'casino', isWinner, roundsPlayed, [], {
+            sips: p.guriTotal || 0,
+            chugs: p.groapaTotal || 0,
+            chips: p.balance,
+          });
+
+          if (p.id === playerId) {
+            trackQuestEvent({ type: 'game_completed', mode: 'casino', isWinner });
+            trackQuestEvent({ type: 'theme_played', theme });
+            trackQuestEvent({ type: 'dice_skin_played', diceSkin });
+            if (p.guriTotal && p.guriTotal > 0) {
+              trackQuestEvent({ type: 'drink_sips', count: p.guriTotal });
+            }
+            if (p.groapaTotal && p.groapaTotal > 0) {
+              trackQuestEvent({ type: 'drink_chug', count: p.groapaTotal });
+            }
+          }
+        });
 
         // Record 1v1 head-to-head match only if 2 real players played
         if (room.players.length === 2 && !room.players[0].isBot && !room.players[1].isBot) {
@@ -223,7 +257,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
       }
 
       // Check achievement for winner
-      if (room.winnerId) {
+      if (room.winnerId && !isAntiFarming) {
         const winner = room.players.find((p) => p.id === room.winnerId);
         if (winner && !winner.isBot) {
           checkAchievement(winner.name, {
@@ -234,7 +268,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
         }
       }
     }
-  }, [room, hasSavedFinalStats, batchUpdateProfiles, checkAchievement]);
+  }, [room, hasSavedFinalStats, batchUpdateProfiles, checkAchievement, awardMatchXp]);
 
   // Add a bet to the draft
   const handleAddBet = (type: CasinoBetType, numberValue?: number) => {
@@ -788,53 +822,56 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
           <span className="truncate max-w-[130px] sm:max-w-none">{penaltyText}</span>
         </div>
 
-        {/* Right: Circular High-Visibility Betting Timer */}
-        {isBetting ? (
-          <div className="flex items-center gap-2">
-            {/* Circular SVG Timer */}
-            <div className="relative w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center">
-              <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                <circle
-                  cx="18"
-                  cy="18"
-                  r={timerRadius}
-                  className="stroke-[#2a1c10] fill-none"
-                  strokeWidth="3.5"
-                />
-                <circle
-                  cx="18"
-                  cy="18"
-                  r={timerRadius}
-                  className={`fill-none transition-all duration-300 ${
-                    timerSecondsLeft <= 5
-                      ? 'stroke-red-500 animate-pulse'
-                      : timerSecondsLeft <= 10
-                      ? 'stroke-amber-400'
-                      : 'stroke-[#e8c84a]'
+        {/* Right: Circular High-Visibility Betting Timer & Connection Badge */}
+        <div className="flex items-center gap-2">
+          <NetworkConnectionBadge />
+          {isBetting ? (
+            <div className="flex items-center gap-2">
+              {/* Circular SVG Timer */}
+              <div className="relative w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center">
+                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r={timerRadius}
+                    className="stroke-[#2a1c10] fill-none"
+                    strokeWidth="3.5"
+                  />
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r={timerRadius}
+                    className={`fill-none transition-all duration-300 ${
+                      timerSecondsLeft <= 5
+                        ? 'stroke-red-500 animate-pulse'
+                        : timerSecondsLeft <= 10
+                        ? 'stroke-amber-400'
+                        : 'stroke-[#e8c84a]'
+                    }`}
+                    strokeWidth="3.5"
+                    strokeDasharray={timerCircumference}
+                    strokeDashoffset={timerOffset}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span
+                  className={`absolute font-mono font-black text-xs sm:text-sm ${
+                    timerSecondsLeft <= 5 ? 'text-red-400 animate-bounce' : 'text-[#f8e178]'
                   }`}
-                  strokeWidth="3.5"
-                  strokeDasharray={timerCircumference}
-                  strokeDashoffset={timerOffset}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span
-                className={`absolute font-mono font-black text-xs sm:text-sm ${
-                  timerSecondsLeft <= 5 ? 'text-red-400 animate-bounce' : 'text-[#f8e178]'
-                }`}
-              >
-                {timerSecondsLeft}
+                >
+                  {timerSecondsLeft}
+                </span>
+              </div>
+              <span className="text-[10px] text-[#8c7860] font-cinzel font-bold hidden md:inline uppercase">
+                {language === 'ro' ? (timerSecondsLeft <= 5 ? 'Ultimele secunde!' : 'Timp Pariere') : (timerSecondsLeft <= 5 ? 'Final seconds!' : 'Betting Time')}
               </span>
             </div>
-            <span className="text-[10px] text-[#8c7860] font-cinzel font-bold hidden md:inline uppercase">
-              {language === 'ro' ? (timerSecondsLeft <= 5 ? 'Ultimele secunde!' : 'Timp Pariere') : (timerSecondsLeft <= 5 ? 'Final seconds!' : 'Betting Time')}
-            </span>
-          </div>
-        ) : (
-          <div className="text-[11px] font-cinzel font-bold text-[#a8c4a8] bg-[#0c160e] px-2.5 py-1 rounded-lg border border-[#2d4d2d]">
-            {language === 'ro' ? (isRolling ? '🎲 Aruncare...' : '📜 Rezultate') : (isRolling ? '🎲 Rolling...' : '📜 Results')}
-          </div>
-        )}
+          ) : (
+            <div className="text-[11px] font-cinzel font-bold text-[#a8c4a8] bg-[#0c160e] px-2.5 py-1 rounded-lg border border-[#2d4d2d]">
+              {language === 'ro' ? (isRolling ? '🎲 Aruncare...' : '📜 Rezultate') : (isRolling ? '🎲 Rolling...' : '📜 Results')}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
@@ -1359,6 +1396,13 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
           })}
         </div>
       </div>
+
+      {/* Tavern Quick Emotes & Sound FX Overlay */}
+      <TavernEmotesOverlay
+        lastEmote={room?.lastEmote}
+        onSendEmote={(emote) => casinoSocket.sendEmote(emote)}
+        localPlayer={localPlayer}
+      />
     </div>
   );
 };

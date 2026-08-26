@@ -1,14 +1,25 @@
 export type GameMode = 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'crash';
 export type Language = 'ro' | 'en';
-export type ThemeId = 'tavern' | 'cellar' | 'great_hall' | 'dungeon';
-export type DiceSkin = 'gold' | 'bone' | 'wood';
+export type ThemeId = 'tavern' | 'cellar' | 'great_hall' | 'dungeon' | 'crypt';
+export type DiceSkin =
+  | 'gold'
+  | 'bone'
+  | 'wood'
+  | 'ruby'
+  | 'ice'
+  | 'obsidian'
+  | 'amethyst'
+  | 'crimson_dragon'
+  | 'celestial_gold'
+  | 'spectral_jade'
+  | 'tavern_oak';
 export type Difficulty = 'weak' | 'medium' | 'extreme' | 'nightmare';
 export type DuelSubmode = 'general' | 'football';
 export type DuelDifficulty = 'easy' | 'medium' | 'hard';
 
 // Crash (1v1 Dragon Multiplier) Types
 export type CrashBotStyle = 'prudent' | 'risky';
-export type CrashStakeMode = 'guri' | 'groapa' | 'dynamic';
+export type CrashStakeMode = 'guri' | 'dynamic' | 'high_mult' | 'groapa';
 export type CrashRoundStakeType = 'guri' | 'groapa';
 
 export interface CrashPlayerState {
@@ -67,6 +78,7 @@ export interface CrashRoomState {
   winnerId: string | null;
   loserId: string | null;
   history?: CrashHistoryItem[];
+  lastEmote?: TavernEmoteMessage | null;
   updatedAt?: any;
 }
 
@@ -159,6 +171,7 @@ export interface PineappleRoomState {
   lastHandResult?: PineappleHandResult | null;
   winnerId?: string | null;
   loserId?: string | null;
+  lastEmote?: TavernEmoteMessage | null;
   updatedAt?: any;
 }
 
@@ -230,6 +243,7 @@ export interface CasinoRoomState {
   round: CasinoRound;
   winnerId?: string | null;
   eliminationOrder?: string[]; // Player IDs in order of elimination (first eliminated -> last eliminated)
+  lastEmote?: TavernEmoteMessage | null;
   updatedAt?: any;
 }
 
@@ -286,6 +300,7 @@ export interface DuelRoomState {
     a_en: [string, string, string, string];
     correct?: number;
   } | null;
+  lastEmote?: TavernEmoteMessage | null;
 }
 
 export interface DuelPlayer {
@@ -467,3 +482,105 @@ export interface GameInvite {
   createdAt?: any;
   updatedAt?: any;
 }
+
+export type ShopItemCategory = 'dice' | 'themes' | 'perks' | 'titles' | 'emotes';
+
+// CS-Style Case Opening & Cosmetic Rarities
+export type CosmeticRarity = 'milspec' | 'restricted' | 'classified' | 'covert' | 'rareSpecial';
+
+export type CosmeticItemType = 'diceSkin' | 'theme' | 'avatar' | 'cardBack';
+
+export interface CosmeticRarityMeta {
+  rarity: CosmeticRarity;
+  nameRo: string;
+  nameEn: string;
+  color: string;
+  borderClass: string;
+  bgClass: string;
+  textClass: string;
+  glowClass: string;
+  dropChance: number; // percentage, e.g. 45, 28, 16, 8, 3
+}
+
+export interface CosmeticItem {
+  id: string;
+  type: CosmeticItemType;
+  rarity: CosmeticRarity;
+  name: string;
+  nameEn?: string;
+  descRo?: string;
+  descEn?: string;
+  icon: string;
+  exclusiveToChest: boolean;
+  diceSkinKey?: DiceSkin | string;
+  themeKey?: ThemeId | string;
+  avatarKey?: string;
+  cardBackKey?: string;
+  previewGradient?: string;
+}
+
+export interface ChestDef {
+  id: string;
+  key: string;
+  nameRo: string;
+  nameEn: string;
+  descRo: string;
+  descEn: string;
+  cost: number;
+  icon: string;
+  color: string;
+  bannerGradient: string;
+  items: CosmeticItem[];
+}
+
+export interface ChestOpenResult {
+  chest: ChestDef;
+  winningItem: CosmeticItem;
+  isDuplicate: boolean;
+  refundAmount: number;
+  rolledOdds: number; // e.g. 0.03
+}
+
+export interface TavernEmoteMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  senderAvatar?: string;
+  emoteKey: string;
+  textRo: string;
+  textEn: string;
+  icon: string;
+  timestamp: number;
+}
+
+export interface TavernEmoteDef {
+  id: string;
+  key: string;
+  nameRo: string;
+  nameEn: string;
+  textRo: string;
+  textEn: string;
+  descRo: string;
+  descEn: string;
+  icon: string;
+  cost: number;
+  soundType: 'cheers' | 'roll_heavy' | 'cry' | 'pour' | 'blessing';
+}
+
+export interface ShopItemDef {
+  id: string;
+  key: string;
+  category: ShopItemCategory;
+  nameRo: string;
+  nameEn: string;
+  descRo: string;
+  descEn: string;
+  cost: number;
+  icon: string;
+  diceSkinKey?: DiceSkin;
+  themeKey?: ThemeId;
+  perkKey?: string;
+  titleKey?: string;
+  emoteKey?: string;
+}
+

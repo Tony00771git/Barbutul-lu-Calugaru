@@ -27,7 +27,7 @@ import { HeadToHeadTracker } from './HeadToHeadTracker';
 interface BoardGameProps {
   initialPlayers: Player[];
   boardDiceCount: 1 | 2;
-  onEndGame: (finalPlayers: Player[]) => void;
+  onEndGame: (finalPlayers: Player[], turnsPlayed?: number) => void;
   onOpenRules: () => void;
 }
 
@@ -53,7 +53,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
   onEndGame,
   onOpenRules,
 }) => {
-  const { t, diceSkin, language, checkAchievement } = useApp();
+  const { t, diceSkin, theme, language, checkAchievement, trackQuestEvent } = useApp();
 
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
   const [activePlayerIndex, setActivePlayerIndex] = useState<number>(0);
@@ -80,6 +80,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
 
   // Turn End Drinking Popup (Mandatory after each turn)
   const [turnResult, setTurnResult] = useState<PendingTurnResult | null>(null);
+  const [totalBoardTurns, setTotalBoardTurns] = useState<number>(0);
 
   // Modal active states
   const [inspectTile, setInspectTile] = useState<BoardTile | null>(null);
@@ -111,6 +112,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
   const advanceTurn = () => {
     setTurnResult(null);
     setHoppingTileIndex(null);
+    setTotalBoardTurns(prev => prev + 1);
 
     let nextIdx = (activePlayerIndex + 1) % players.length;
     let loopCount = 0;
@@ -165,6 +167,11 @@ export const BoardGame: React.FC<BoardGameProps> = ({
 
     setDiceValues(rolls);
     const totalSteps = rolls.reduce((a, b) => a + b, 0);
+
+    trackQuestEvent({ type: 'roll_dice', count: rolls.length, dice: rolls });
+    if (rolls.length === 2 && rolls[0] === rolls[1]) {
+      trackQuestEvent({ type: 'roll_double', dice: rolls });
+    }
 
     addLog(`${activePlayer.name} a dat zarul: 🎲 ${rolls.join(' + ')} = ${totalSteps}`, 'buy');
 
@@ -542,7 +549,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
 
     const remaining = players.filter(p => !p.hasGivenUp && p.id !== activePlayer.id);
     if (remaining.length <= 1) {
-      onEndGame(players);
+      onEndGame(players, totalBoardTurns);
     } else {
       advanceTurn();
     }
@@ -855,7 +862,12 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             📜 {t('tabRules')}
           </button>
           <button
-            onClick={() => onEndGame(players)}
+            onClick={() => {
+              trackQuestEvent({ type: 'game_completed', mode: 'boardgame', isWinner: true });
+              trackQuestEvent({ type: 'theme_played', theme });
+              trackQuestEvent({ type: 'dice_skin_played', diceSkin });
+              onEndGame(players, totalBoardTurns);
+            }}
             className="py-2 px-3 rounded-xl border border-[#e8c84a] bg-[#e8c84a]/20 text-xs font-cinzel font-bold text-[#e8c84a] hover:bg-[#e8c84a]/30"
           >
             🏁 {t('endGame')}
@@ -880,6 +892,12 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             // Apply drinking score to player before advancing
             const addedSips = turnResult.isImmune ? 0 : (turnResult.isChug ? 0 : turnResult.sipsToDrink);
             const addedChugs = turnResult.isChug ? 1 : 0;
+            if (addedSips > 0) {
+              trackQuestEvent({ type: 'drink_sips', count: addedSips });
+            }
+            if (addedChugs > 0) {
+              trackQuestEvent({ type: 'drink_chug', count: addedChugs });
+            }
             setPlayers(prev => prev.map((p, idx) => {
               if (idx === activePlayerIndex) {
                 return {

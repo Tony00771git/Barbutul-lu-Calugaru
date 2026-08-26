@@ -90,6 +90,34 @@ export const Dice: React.FC<DiceProps> = ({
           dotColor: 'bg-[#f0ebe0]',
           glow: 'shadow-[0_0_12px_rgba(166,106,56,0.5)]',
         };
+      case 'ruby':
+        return {
+          bg: 'bg-gradient-to-br from-[#ef4444] via-[#dc2626] to-[#7f1d1d]',
+          border: 'border-[#fca5a5]',
+          dotColor: 'bg-[#ffe4e6] shadow-[0_0_6px_rgba(255,255,255,0.8)]',
+          glow: 'shadow-[0_0_18px_rgba(239,68,68,0.8)]',
+        };
+      case 'ice':
+        return {
+          bg: 'bg-gradient-to-br from-[#bae6fd] via-[#38bdf8] to-[#0369a1]',
+          border: 'border-[#e0f2fe]',
+          dotColor: 'bg-[#082f49] shadow-[0_0_4px_rgba(224,242,254,0.6)]',
+          glow: 'shadow-[0_0_18px_rgba(56,189,248,0.8)]',
+        };
+      case 'obsidian':
+        return {
+          bg: 'bg-gradient-to-br from-[#3b0764] via-[#581c87] to-[#170a24]',
+          border: 'border-[#d946ef]',
+          dotColor: 'bg-[#f0abfc] shadow-[0_0_8px_rgba(217,70,239,0.9)]',
+          glow: 'shadow-[0_0_20px_rgba(217,70,239,0.8)]',
+        };
+      default:
+        return {
+          bg: 'bg-gradient-to-br from-[#f8e178] via-[#e8c84a] to-[#b38f20]',
+          border: 'border-[#ffe98a]',
+          dotColor: 'bg-[#2b1a0d]',
+          glow: 'shadow-[0_0_15px_rgba(232,200,74,0.6)]',
+        };
     }
   };
 

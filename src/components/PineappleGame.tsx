@@ -26,11 +26,17 @@ import {
   startPineappleMatch,
   subscribeToPineappleRoom,
   updatePineapplePlayerBoard,
+  sendPineappleEmote,
+  autoPlayPineappleTimeout,
 } from '../lib/pineappleFirestoreService';
 import { checkIsFoul } from '../lib/pineapplePokerEvaluator';
 import { getHeadToHeadStats, recordHeadToHeadMatch } from '../lib/headToHeadService';
 import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
 import { auth } from '../lib/firebase';
+import { NetworkConnectionBadge } from './NetworkConnectionBadge';
+import { TavernEmotesOverlay } from './TavernEmotesOverlay';
+import { saveActiveSession, clearActiveSession } from '../lib/sessionManager';
+import { reconnectionService } from '../lib/reconnectionService';
 
 interface PineappleGameProps {
   roomCode: string;
@@ -45,8 +51,16 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
   isHost,
   onHome,
 }) => {
-  const { language, t, addXpForPlayer, recordWin, checkAchievement, updateProfileStats, awardMatchXp } = useApp();
+  const { language, t, theme, diceSkin, addXpForPlayer, recordWin, checkAchievement, updateProfileStats, awardMatchXp, trackQuestEvent } = useApp();
   const [roomState, setRoomState] = useState<PineappleRoomState | null>(null);
+  const [turnSecondsRemaining, setTurnSecondsRemaining] = useState<number | null>(null);
+
+  // Save active session for auto-reconnection
+  useEffect(() => {
+    if (roomCode && roomState) {
+      saveActiveSession('pineapple', roomCode, localPlayer, isHost);
+    }
+  }, [roomCode, roomState, localPlayer, isHost]);
 
   // Active room tracking for friends
   useEffect(() => {
@@ -99,11 +113,45 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
   // Subscribe to real-time room updates
   useEffect(() => {
     if (!roomCode) return;
-    const unsubscribe = subscribeToPineappleRoom(roomCode, state => {
-      setRoomState(state);
-    });
+    const unsubscribe = subscribeToPineappleRoom(
+      roomCode,
+      (state) => {
+        if (state) {
+          setRoomState(state);
+          reconnectionService.notifyConnected('pineapple', roomCode);
+        } else {
+          reconnectionService.notifyDisconnected('pineapple', 'Camera nu mai există.');
+        }
+      },
+      (err) => {
+        reconnectionService.notifyDisconnected('pineapple', err?.message || 'Eroare conexiune');
+      }
+    );
     return () => unsubscribe();
   }, [roomCode]);
+
+  // Register reconnection handler for pineapple
+  useEffect(() => {
+    const unregister = reconnectionService.registerHandler('pineapple', async (session) => {
+      console.log('[Pineapple] Auto-reconnecting to room:', session.roomCode);
+      return new Promise<boolean>((resolve) => {
+        const unsub = subscribeToPineappleRoom(
+          session.roomCode,
+          (state) => {
+            if (state) {
+              setRoomState(state);
+              reconnectionService.notifyConnected('pineapple', session.roomCode);
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          },
+          () => resolve(false)
+        );
+      });
+    });
+    return unregister;
+  }, []);
 
   // Sync local player state when new hand/round arrives
   useEffect(() => {
@@ -160,6 +208,43 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
   const myState = roomState?.players.find(p => p.id === localPlayer.id);
   const opponentState = roomState?.players.find(p => p.id !== localPlayer.id);
 
+  // 15-second Auto-Play Timeout Shield for active turn
+  useEffect(() => {
+    if (
+      !roomState ||
+      roomState.status !== 'in_hand' ||
+      !myState ||
+      myState.handLocked ||
+      !myState.currentHandCards ||
+      myState.currentHandCards.length === 0
+    ) {
+      setTurnSecondsRemaining(null);
+      return;
+    }
+
+    setTurnSecondsRemaining(15);
+    const interval = setInterval(() => {
+      setTurnSecondsRemaining((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(interval);
+          autoPlayPineappleTimeout(roomCode, localPlayer.id);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [
+    roomState?.currentHand,
+    roomState?.currentRoundInHand,
+    roomState?.status,
+    myState?.handLocked,
+    roomCode,
+    localPlayer.id,
+  ]);
+
   // Match completion XP, Win & Achievements award
   useEffect(() => {
     if (!roomState || roomState.status !== 'finished') return;
@@ -176,6 +261,15 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
     const isAntiFarming = (roomState.currentHand || 1) < 2 && (roomState.currentRoundInHand || 1) < 2;
     const isBotMatch = Boolean(opponentState?.isBot);
     const isCompletedMatch = roomState.status === 'finished' && !isAntiFarming;
+
+    if (roomState.status === 'finished') {
+      trackQuestEvent({ type: 'game_completed', mode: 'pineapple', isWinner });
+      trackQuestEvent({ type: 'theme_played', theme });
+      trackQuestEvent({ type: 'dice_skin_played', diceSkin });
+      if (myAccumulatedSips > 0) {
+        trackQuestEvent({ type: 'drink_sips', count: Math.round(myAccumulatedSips) });
+      }
+    }
 
     // Leaderboard & persistent stats: ONLY for completed matches against real human players (NOT bots, NOT unfinished)
     if (!isBotMatch && isCompletedMatch) {
@@ -1257,33 +1351,51 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
           </button>
           <div className="min-w-0">
             <div className="text-xs sm:text-sm font-cinzel font-black text-[#ffd700] truncate">
-              Pineapple 1v1 • Mâna #{roomState.currentHand}
+              {language === 'ro' ? `Pineapple 1v1 • Mâna #${roomState.currentHand}` : `Pineapple 1v1 • Hand #${roomState.currentHand}`}
             </div>
             <div className="text-[9px] sm:text-[10px] font-cinzel text-gray-400 truncate">
               {myState?.inFantasyLand
-                ? '✨ Faza Fantasy Land (13 cărți)'
-                : `Runda #${roomState.currentRoundInHand}/5 (${
+                ? (language === 'ro' ? '✨ Faza Fantasy Land (13 cărți)' : '✨ Fantasy Land Phase (13 cards)')
+                : language === 'ro'
+                ? `Runda #${roomState.currentRoundInHand}/5 (${
                     roomState.currentRoundInHand === 1 ? '5 cărți' : '3 cărți (2 pui, 1 arunci)'
+                  })`
+                : `Round #${roomState.currentRoundInHand}/5 (${
+                    roomState.currentRoundInHand === 1 ? '5 cards' : '3 cards (2 set, 1 discard)'
                   })`}
             </div>
           </div>
         </div>
 
-        {/* Center: Live Sips Tracker */}
-        <div className="hidden md:flex items-center bg-[#0a0704] px-2.5 py-1 rounded-lg border border-stone-800 text-[11px] font-cinzel">
-          <div className="text-center">
-            <div className="text-[8px] text-gray-400 uppercase tracking-wider">Guri Acumulate</div>
-            <div className="font-black">
-              <span className="text-emerald-400 font-bold">{myState?.sipsAccumulated.toFixed(1)} (Tu)</span>
-              <span className="text-gray-600"> vs </span>
-              <span className="text-red-400 font-bold">{opponentState?.sipsAccumulated.toFixed(1)} ({opponentState?.name})</span>
-              <span className="text-gray-500 text-[9px]"> / {roomState.settings.sipsToEndGame}</span>
+        {/* Center: Live Sips Tracker & Turn Countdown */}
+        <div className="flex items-center gap-2">
+          {turnSecondsRemaining !== null && (
+            <div className={`px-2 py-0.5 rounded-lg border text-[11px] font-cinzel font-bold flex items-center gap-1 animate-pulse ${
+              turnSecondsRemaining <= 5
+                ? 'bg-red-950/80 border-red-500/80 text-red-300'
+                : 'bg-amber-950/80 border-amber-500/60 text-amber-300'
+            }`}>
+              <span>⏳</span>
+              <span>{turnSecondsRemaining}s {language === 'ro' ? '(Auto-Play)' : '(Auto-Play)'}</span>
+            </div>
+          )}
+
+          <div className="hidden md:flex items-center bg-[#0a0704] px-2.5 py-1 rounded-lg border border-stone-800 text-[11px] font-cinzel">
+            <div className="text-center">
+              <div className="text-[8px] text-gray-400 uppercase tracking-wider">{language === 'ro' ? 'Guri Acumulate' : 'Accumulated Sips'}</div>
+              <div className="font-black">
+                <span className="text-emerald-400 font-bold">{myState?.sipsAccumulated.toFixed(1)} ({language === 'ro' ? 'Tu' : 'You'})</span>
+                <span className="text-gray-600"> vs </span>
+                <span className="text-red-400 font-bold">{opponentState?.sipsAccumulated.toFixed(1)} ({opponentState?.name})</span>
+                <span className="text-gray-500 text-[9px]"> / {roomState.settings.sipsToEndGame}</span>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Right: End Match button & Interactive Opponent Mini Board */}
         <div className="flex items-center gap-1.5">
+          <NetworkConnectionBadge />
           <button
             type="button"
             onClick={() => setShowEndConfirm(true)}
@@ -1671,6 +1783,13 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
           </div>
         </div>
       )}
+
+      {/* Tavern Quick Emotes & Sound FX Overlay */}
+      <TavernEmotesOverlay
+        lastEmote={roomState?.lastEmote}
+        onSendEmote={(emote) => sendPineappleEmote(roomCode, emote)}
+        localPlayer={localPlayer}
+      />
     </div>
   );
 };

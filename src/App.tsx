@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { GameMode, Difficulty, CustomDoubles, Player, ThemeId, DuelSubmode, DuelDifficulty, PineappleBotDifficulty } from './types';
@@ -18,6 +18,7 @@ import { ThemeBackground } from './components/ThemeBackground';
 import { LegendaryBanner } from './components/LegendaryBanner';
 import { XpGainModal } from './components/XpGainModal';
 import { DrunkenCoinsShopModal } from './components/DrunkenCoinsShopModal';
+import { DailyQuestsModal } from './components/DailyQuestsModal';
 import { useDuelSocket } from './hooks/useDuelSocket';
 import { useCasinoSocket } from './hooks/useCasinoSocket';
 import { createPineappleRoom, joinPineappleRoom, addPineappleBot } from './lib/pineappleFirestoreService';
@@ -25,6 +26,9 @@ import { createCrashRoom, joinCrashRoom, addCrashBot } from './lib/crashFirestor
 import { recordHeadToHeadMatch } from './lib/headToHeadService';
 import { PineappleMatchSettings, CrashMatchSettings, CrashBotStyle, GameInvite } from './types';
 import { GameInvitePopup } from './components/GameInvitePopup';
+import { getActiveSession, clearActiveSession } from './lib/sessionManager';
+import { ReconnectingOverlay } from './components/ReconnectingOverlay';
+import { reconnectionService } from './lib/reconnectionService';
 
 type AppScreen = 'setup' | 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'crash' | 'podium';
 
@@ -35,6 +39,8 @@ function MainAppContent() {
     language,
     profiles,
     drunkenCoins,
+    activeDailyQuests,
+    dailyQuestPool,
     activeLegendaryAchievement,
     dismissLegendaryAchievement,
     activeXpBreakdown,
@@ -102,6 +108,41 @@ function MainAppContent() {
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
   const [showCloudModal, setShowCloudModal] = useState<boolean>(false);
   const [showCoinsModal, setShowCoinsModal] = useState<boolean>(false);
+  const [showDailyQuestsModal, setShowDailyQuestsModal] = useState<boolean>(false);
+
+  // Automatic Session Reconnection Shield (anti-page-refresh & anti-network drop)
+  useEffect(() => {
+    const active = getActiveSession();
+    if (!active || !active.roomCode || !active.mode) return;
+
+    if (active.mode === 'duel') {
+      setDuelLocalPlayer(active.localPlayer);
+      setGameMode('duel');
+      duelSocket.joinRoom(active.roomCode, active.localPlayer);
+      setCurrentScreen('duel');
+    } else if (active.mode === 'casino') {
+      setCasinoLocalPlayer(active.localPlayer);
+      setGameMode('casino');
+      casinoSocket.joinRoom(active.roomCode, active.localPlayer);
+      setCurrentScreen('casino');
+    } else if (active.mode === 'pineapple') {
+      setPineappleLocalPlayer(active.localPlayer);
+      setPineappleRoomCode(active.roomCode);
+      setPineappleIsHost(active.isHost);
+      setGameMode('pineapple');
+      joinPineappleRoom(active.roomCode, active.localPlayer).then(() => {
+        setCurrentScreen('pineapple');
+      });
+    } else if (active.mode === 'crash') {
+      setCrashLocalPlayer(active.localPlayer);
+      setCrashRoomCode(active.roomCode);
+      setCrashIsHost(active.isHost);
+      setGameMode('crash');
+      joinCrashRoom(active.roomCode, active.localPlayer).then(() => {
+        setCurrentScreen('crash');
+      });
+    }
+  }, []);
 
   const handleStartGame = (
     mode: GameMode,
@@ -202,6 +243,8 @@ function MainAppContent() {
   };
 
   const handleLeavePineapple = () => {
+    clearActiveSession();
+    reconnectionService.cancelAndExit();
     try {
       window.history.replaceState({}, document.title, window.location.pathname);
     } catch (e) {}
@@ -246,6 +289,8 @@ function MainAppContent() {
   };
 
   const handleLeaveCrash = () => {
+    clearActiveSession();
+    reconnectionService.cancelAndExit();
     try {
       window.history.replaceState({}, document.title, window.location.pathname);
     } catch (e) {}
@@ -373,6 +418,23 @@ function MainAppContent() {
           </button>
 
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Daily Quests Button with active / ready count badge */}
+            <button
+              onClick={() => setShowDailyQuestsModal(true)}
+              className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-amber-950 via-[#3a200a] to-[#261509] border border-amber-400 text-xs font-cinzel font-bold text-yellow-300 hover:brightness-125 flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.3)] active:scale-95 transition-all relative"
+              title={language === 'ro' ? 'Misiuni Zilnice Călugărești (Reset la 00:00)' : 'Daily Quests (Resets at 12:00 AM)'}
+            >
+              <span>🎯</span>
+              <span className="hidden xs:inline">{language === 'ro' ? 'Misiuni' : 'Quests'}</span>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full border ${
+                activeDailyQuests.some(q => q.completed && !q.claimed) || (!dailyQuestPool.bonusClaimed && activeDailyQuests.filter(q => q.completed).length === 3)
+                  ? 'bg-yellow-400 text-black border-yellow-300 animate-pulse font-black'
+                  : 'bg-black/60 text-amber-300 border-amber-500/40'
+              }`}>
+                {activeDailyQuests.filter(q => q.completed).length}/3
+              </span>
+            </button>
+
             {/* Drunken Coins Treasury & Balance Button */}
             <button
               onClick={() => setShowCoinsModal(true)}
@@ -454,6 +516,7 @@ function MainAppContent() {
             onOpenRules={() => setShowRulesModal(true)}
             onOpenCloudModal={() => setShowCloudModal(true)}
             onOpenCoinsModal={() => setShowCoinsModal(true)}
+            onOpenDailyQuests={() => setShowDailyQuestsModal(true)}
           />
         )}
 
@@ -590,8 +653,21 @@ function MainAppContent() {
         onClose={() => setShowCoinsModal(false)}
       />
 
+      {/* Daily Quests Modal */}
+      <DailyQuestsModal
+        isOpen={showDailyQuestsModal}
+        onClose={() => setShowDailyQuestsModal(false)}
+        onOpenBazaar={() => {
+          setShowDailyQuestsModal(false);
+          setShowCoinsModal(true);
+        }}
+      />
+
       {/* Global Live Game Invite Floating Banner */}
       <GameInvitePopup onAcceptInvite={handleAcceptGameInvite} />
+
+      {/* Global Automatic Reconnection Overlay during live game disconnects */}
+      <ReconnectingOverlay onLeaveGame={handleHomeClick} />
     </div>
   );
 }

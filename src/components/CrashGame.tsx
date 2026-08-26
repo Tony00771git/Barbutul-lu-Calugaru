@@ -22,13 +22,19 @@ import {
   startNextCrashRound,
   subscribeToCrashRoom,
   updateCrashPlayerSettings,
+  sendCrashEmote,
 } from '../lib/crashFirestoreService';
 import { getSyncedServerNow } from '../lib/duelFirestoreService';
 import { soundEffects } from '../lib/soundFx';
 import { AvatarDisplay } from './AvatarDisplay';
 import { CrashCanvas } from './CrashCanvas';
+import { CrashSessionTracker, CrashSessionRoundRecord } from './CrashSessionTracker';
 import { useAuth } from '../context/AuthContext';
 import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
+import { NetworkConnectionBadge } from './NetworkConnectionBadge';
+import { TavernEmotesOverlay } from './TavernEmotesOverlay';
+import { saveActiveSession, clearActiveSession } from '../lib/sessionManager';
+import { reconnectionService } from '../lib/reconnectionService';
 
 interface CrashGameProps {
   roomCode: string;
@@ -43,15 +49,18 @@ export const CrashGame: React.FC<CrashGameProps> = ({
   isHost,
   onExit,
 }) => {
-  const { t, language, recordGameStats, unlockAchievement } = useApp();
+  const { t, language, theme, diceSkin, recordGameStats, unlockAchievement, awardMatchXp, trackQuestEvent } = useApp();
   const { user } = useAuth();
 
   const [roomState, setRoomState] = useState<CrashRoomState | null>(null);
   const [currentMultiplier, setCurrentMultiplier] = useState<number>(1.00);
+  const [optimisticCashout, setOptimisticCashout] = useState<number | null>(null);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [showChickenModal, setShowChickenModal] = useState<boolean>(false);
   const [chickenPlayerName, setChickenPlayerName] = useState<string>('');
   const [prepCountdown, setPrepCountdown] = useState<number>(4);
+  const [sessionRecords, setSessionRecords] = useState<CrashSessionRoundRecord[]>([]);
+  const [isLocalCrashed, setIsLocalCrashed] = useState<boolean>(false);
 
   // Sync player active room status for friends
   useEffect(() => {
@@ -90,17 +99,56 @@ export const CrashGame: React.FC<CrashGameProps> = ({
 
   // 1. Real-time subscription to Firestore room
   useEffect(() => {
-    const unsubscribe = subscribeToCrashRoom(roomCode, updatedRoom => {
-      if (updatedRoom) {
-        setRoomState(updatedRoom);
+    const unsubscribe = subscribeToCrashRoom(
+      roomCode,
+      (updatedRoom) => {
+        if (updatedRoom) {
+          setRoomState(updatedRoom);
+          reconnectionService.notifyConnected('crash', roomCode);
+        } else {
+          reconnectionService.notifyDisconnected('crash', 'Camera nu mai există.');
+        }
+      },
+      (err) => {
+        reconnectionService.notifyDisconnected('crash', err?.message || 'Eroare conexiune Crash');
       }
-    });
+    );
 
     return () => {
       unsubscribe();
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
   }, [roomCode]);
+
+  // Register reconnection handler for crash
+  useEffect(() => {
+    const unregister = reconnectionService.registerHandler('crash', async (session) => {
+      console.log('[Crash] Auto-reconnecting to room:', session.roomCode);
+      return new Promise<boolean>((resolve) => {
+        const unsub = subscribeToCrashRoom(
+          session.roomCode,
+          (updatedRoom) => {
+            if (updatedRoom) {
+              setRoomState(updatedRoom);
+              reconnectionService.notifyConnected('crash', session.roomCode);
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          },
+          () => resolve(false)
+        );
+      });
+    });
+    return unregister;
+  }, []);
+
+  // Save active session for auto-reconnection
+  useEffect(() => {
+    if (roomCode && roomState) {
+      saveActiveSession('crash', roomCode, localPlayer, isHost);
+    }
+  }, [roomCode, roomState, localPlayer, isHost]);
 
   // 2. Identify local and opponent players
   const me = roomState?.players.find(p => p.id === localPlayer.id);
@@ -109,6 +157,7 @@ export const CrashGame: React.FC<CrashGameProps> = ({
   // Reset round refs on round change or prep phase
   useEffect(() => {
     if (roomState?.currentRound.phase === 'prep') {
+      setIsLocalCrashed(false);
       hasTriggeredCrashRef.current = false;
       hasTriggeredAutoCashoutRef.current = false;
       hasTriggeredAllCashedOutCrashRef.current = false;
@@ -119,10 +168,12 @@ export const CrashGame: React.FC<CrashGameProps> = ({
   // 3. Prep phase countdown timer (Host triggers flight when countdown ends)
   useEffect(() => {
     if (roomState?.status === 'in_game' && roomState.currentRound.phase === 'prep') {
+      setIsLocalCrashed(false);
       hasTriggeredCrashRef.current = false;
       hasTriggeredAutoCashoutRef.current = false;
       hasTriggeredAllCashedOutCrashRef.current = false;
       triggeredBotCashoutSetRef.current.clear();
+      setOptimisticCashout(null);
       setCurrentMultiplier(1.00);
       setPrepCountdown(4);
 
@@ -149,6 +200,7 @@ export const CrashGame: React.FC<CrashGameProps> = ({
     if (roomState?.status === 'in_game' && roomState.currentRound.phase === 'flying') {
       const startTime = roomState.currentRound.roundStartTimestamp;
       const targetCrash = roomState.currentRound.crashPoint;
+      let lastUiUpdateTime = 0;
 
       const tick = () => {
         const now = getSyncedServerNow();
@@ -159,22 +211,24 @@ export const CrashGame: React.FC<CrashGameProps> = ({
         const allCashedOut =
           roomState.players &&
           roomState.players.length > 0 &&
-          roomState.players.every(p => p.cashedOutAt != null);
+          roomState.players.every(p => p.cashedOutAt != null || (p.id === localPlayer.id && optimisticCashout != null));
 
         if (allCashedOut && !hasTriggeredAllCashedOutCrashRef.current) {
           hasTriggeredAllCashedOutCrashRef.current = true;
           setTimeout(() => {
             if (!hasTriggeredCrashRef.current) {
               hasTriggeredCrashRef.current = true;
+              setIsLocalCrashed(true);
               soundEffects.playDragonCrash();
               crashDragon(roomCode);
             }
           }, 800);
         }
 
-        // Check if reached crash point
+        // Check if reached crash point - IMMEDIATELY trigger visual crash without freezing
         if (mult >= targetCrash) {
           setCurrentMultiplier(targetCrash);
+          setIsLocalCrashed(true);
           if (!hasTriggeredCrashRef.current) {
             hasTriggeredCrashRef.current = true;
             soundEffects.playDragonCrash();
@@ -183,7 +237,11 @@ export const CrashGame: React.FC<CrashGameProps> = ({
           return;
         }
 
-        setCurrentMultiplier(mult);
+        // Smooth state update throttle (~30 FPS for React virtual DOM diffing, canvas renders native 60+ FPS)
+        if (now - lastUiUpdateTime >= 32) {
+          lastUiUpdateTime = now;
+          setCurrentMultiplier(mult);
+        }
 
         // Check Local Auto-Cashout
         if (
@@ -192,7 +250,8 @@ export const CrashGame: React.FC<CrashGameProps> = ({
           mult >= autoTargetInput &&
           !hasTriggeredAutoCashoutRef.current &&
           me &&
-          me.cashedOutAt == null
+          me.cashedOutAt == null &&
+          optimisticCashout == null
         ) {
           hasTriggeredAutoCashoutRef.current = true;
           handleCashout(mult, true);
@@ -229,6 +288,7 @@ export const CrashGame: React.FC<CrashGameProps> = ({
     autoCashout,
     autoTargetInput,
     me?.cashedOutAt,
+    optimisticCashout,
     opponent?.cashedOutAt,
     isHost,
     roomCode,
@@ -270,20 +330,55 @@ export const CrashGame: React.FC<CrashGameProps> = ({
         }
       }
 
-      // Round-level achievement checks
+      // Round-level achievement checks & Session P/L tracking
       if (handledResolvedRoundNumRef.current !== currentRoundNum) {
         handledResolvedRoundNumRef.current = currentRoundNum;
         const myPlayer = roomState.players.find(p => p.id === localPlayer.id);
-        const oppPlayer = roomState.players.find(p => p.id !== localPlayer.id);
+        const oppPlayers = roomState.players.filter(p => p.id !== localPlayer.id);
+        const oppPlayer = oppPlayers[0];
 
         if (myPlayer) {
           const isGroapa = roomState.currentRound.stakeType === 'groapa' || roomState.currentRound.isGroapaRound;
           const myCashedOut = myPlayer.cashedOutAt != null;
           const oppCashedOut = oppPlayer?.cashedOutAt != null;
 
+          const mySipsDrank = myPlayer.roundSipsToDrink || 0;
+          const myGroapaDrank = myPlayer.roundGroapaToDrink || 0;
+          const oppSipsDrank = oppPlayers.reduce((acc, p) => acc + (p.roundSipsToDrink || 0), 0);
+          const netDelta = oppSipsDrank - mySipsDrank;
+
           const myWonRound = isGroapa
             ? myCashedOut && (!oppCashedOut || (myPlayer.cashedOutAt || 0) > (oppPlayer?.cashedOutAt || 0))
-            : myCashedOut && (myPlayer.score || 0) >= (oppPlayer?.score || 0) && (oppPlayer?.roundSipsToDrink || 0) > 0;
+            : myCashedOut && (myPlayer.score || 0) >= (oppPlayer?.score || 0) && oppSipsDrank > 0;
+
+          // Record session ledger entry
+          setSessionRecords(prev => {
+            if (prev.some(r => r.roundNumber === currentRoundNum)) return prev;
+            return [
+              ...prev,
+              {
+                roundNumber: currentRoundNum,
+                stakeType: isGroapa ? 'groapa' : 'guri',
+                betValue: roomState.currentRound.betValue || 1,
+                crashPoint: roomState.currentRound.crashPoint,
+                myCashedOutAt: myPlayer.cashedOutAt ?? null,
+                myScore: myPlayer.score || 0,
+                mySipsDrank,
+                myGroapaDrank,
+                opponentsSipsDrank: oppSipsDrank,
+                netSipsDelta: netDelta,
+                wonRound: myWonRound,
+                timestamp: Date.now(),
+              },
+            ];
+          });
+
+          if (mySipsDrank > 0) {
+            trackQuestEvent({ type: 'drink_sips', count: mySipsDrank });
+          }
+          if (myGroapaDrank > 0) {
+            trackQuestEvent({ type: 'drink_chug', count: myGroapaDrank });
+          }
 
           if (myWonRound) {
             consecutiveRoundWinsRef.current += 1;
@@ -340,20 +435,34 @@ export const CrashGame: React.FC<CrashGameProps> = ({
       const sipsDrunk = me?.totalGuriAcumulate || 0;
       const gropiDrunk = me?.totalGroapaAcumulate || 0;
       const isBotMatch = Boolean(opponent?.isBot);
+      const roundsPlayed = roomState.currentRound?.roundNumber || 1;
+      const isAntiFarming = roundsPlayed < 2;
 
-      // Unlock Achievements
-      unlockAchievement('first_crash', localPlayer.name);
-      if (isWinner) {
-        if (isBotMatch) {
-          unlockAchievement('crash_bot_victor', localPlayer.name);
-        }
-        if (sipsDrunk === 0 && gropiDrunk === 0) {
-          unlockAchievement('crash_flawless_match', localPlayer.name);
+      // Daily Quest Tracking
+      trackQuestEvent({ type: 'game_completed', mode: 'crash', isWinner });
+      trackQuestEvent({ type: 'theme_played', theme });
+      trackQuestEvent({ type: 'dice_skin_played', diceSkin });
+
+      // Unlock Achievements (only for real matches)
+      if (!isAntiFarming) {
+        unlockAchievement('first_crash', localPlayer.name);
+        if (isWinner) {
+          if (isBotMatch) {
+            unlockAchievement('crash_bot_victor', localPlayer.name);
+          }
+          if (sipsDrunk === 0 && gropiDrunk === 0) {
+            unlockAchievement('crash_flawless_match', localPlayer.name);
+          }
         }
       }
 
-      // Leaderboard & profile stats: ONLY for completed matches against REAL human opponents (NOT bots, NOT unfinished)
-      if (!isBotMatch) {
+      // Leaderboard & profile stats: ONLY for completed matches against REAL human opponents (NOT bots, NOT unfinished, >= 2 rounds)
+      if (!isBotMatch && !isAntiFarming) {
+        awardMatchXp(localPlayer.name, 'duel' as any, isWinner, roundsPlayed, [], {
+          sips: sipsDrunk,
+          chugs: gropiDrunk,
+        });
+
         if (isWinner) {
           recordGameStats({
             mode: 'crash',
@@ -372,15 +481,48 @@ export const CrashGame: React.FC<CrashGameProps> = ({
         }
       }
     }
-  }, [roomState?.status, roomState?.winnerId, localPlayer.id, localPlayer.name, me?.totalGuriAcumulate, me?.totalGroapaAcumulate, opponent?.isBot, unlockAchievement, recordGameStats]);
+  }, [roomState?.status, roomState?.winnerId, roomState?.currentRound?.roundNumber, localPlayer.id, localPlayer.name, me?.totalGuriAcumulate, me?.totalGroapaAcumulate, opponent?.isBot, unlockAchievement, recordGameStats, awardMatchXp]);
 
   // Manual & Auto Cashout Handler
   const handleCashout = async (multOverride?: number, isAutoSource?: boolean) => {
-    if (!me || me.cashedOutAt != null) return;
-    if (roomState?.currentRound.phase !== 'flying') return;
+    if (!me || me.cashedOutAt != null || optimisticCashout != null) return;
+    if (isLocalCrashed || hasTriggeredCrashRef.current || roomState?.currentRound.phase !== 'flying') return;
 
-    const lockedMult = multOverride || currentMultiplier;
+    // Check actual server flight elapsed time & multiplier
+    const startTime = roomState.currentRound.roundStartTimestamp || getSyncedServerNow();
+    const flightElapsedSec = Math.max(0, (getSyncedServerNow() - startTime) / 1000);
+    const calculatedMult = calculateMultiplier(flightElapsedSec);
+    const targetCrash = roomState.currentRound.crashPoint;
+
+    // If already at or past crash point, it's a crash, not a cashout!
+    if (calculatedMult >= targetCrash || currentMultiplier >= targetCrash) {
+      setIsLocalCrashed(true);
+      if (!hasTriggeredCrashRef.current) {
+        hasTriggeredCrashRef.current = true;
+        soundEffects.playDragonCrash();
+        crashDragon(roomCode);
+      }
+      return;
+    }
+
+    const maxAllowedMult = Number((targetCrash - 0.01).toFixed(2));
+    const lockedMult = Math.min(
+      multOverride || currentMultiplier,
+      calculatedMult,
+      maxAllowedMult
+    );
+
+    if (lockedMult < 1.00) return;
+
+    setOptimisticCashout(lockedMult);
     soundEffects.playCashOut();
+
+    // Daily Quest Tracking
+    trackQuestEvent({ type: 'crash_cashout', multiplier: lockedMult });
+    trackQuestEvent({ type: 'crash_round_survived' });
+    if (roomState?.settings?.stakeMode === 'high_mult' || roomState?.currentRound?.stakeType === 'high_mult') {
+      trackQuestEvent({ type: 'crash_high_mult_played' });
+    }
 
     // Check achievement for high multiplier tiers
     if (lockedMult >= 50.00) {
@@ -405,7 +547,11 @@ export const CrashGame: React.FC<CrashGameProps> = ({
       unlockAchievement('crash_quick_escape', localPlayer.name);
     }
 
-    await playerCashOut(roomCode, localPlayer.id, lockedMult);
+    try {
+      await playerCashOut(roomCode, localPlayer.id, lockedMult);
+    } catch (err) {
+      console.error('Error on player cashout:', err);
+    }
   };
 
   const handleToggleAutoCashout = async () => {
@@ -496,6 +642,14 @@ export const CrashGame: React.FC<CrashGameProps> = ({
               : 'Match sips threshold: '}
             <span className="text-red-400 font-bold text-base">
               {roomState.settings.sipsThreshold} {language === 'ro' ? 'guri' : 'sips'}
+            </span>
+            <span className="mx-2 text-stone-600">•</span>
+            <span className="text-amber-300 font-semibold">
+              {roomState.settings.stakeMode === 'high_mult'
+                ? (language === 'ro' ? '🚀 Multiplicatoare Mari' : '🚀 High Multipliers')
+                : roomState.settings.stakeMode === 'guri'
+                ? (language === 'ro' ? '🍺 Doar Guri' : '🍺 Only Sips')
+                : (language === 'ro' ? '⚡ Balansat' : '⚡ Balanced')}
             </span>
           </p>
           <p className="text-[11px] text-amber-300/80 font-barlow italic">
@@ -644,11 +798,12 @@ export const CrashGame: React.FC<CrashGameProps> = ({
   // --- 2. GAMEPLAY VIEW ---
   const currentRound = roomState.currentRound;
   const isPrep = currentRound.phase === 'prep';
-  const isFlying = currentRound.phase === 'flying';
-  const isCrashed = currentRound.phase === 'crashed';
+  const isCrashed = currentRound.phase === 'crashed' || isLocalCrashed;
+  const isFlying = currentRound.phase === 'flying' && !isLocalCrashed;
   const isResolved = currentRound.phase === 'resolved';
   const isGroapaRound = currentRound.stakeType === 'groapa' || currentRound.isGroapaRound;
   const isGroapaMode = roomState.settings?.stakeMode === 'groapa';
+  const isHighMultMode = roomState.settings?.stakeMode === 'high_mult';
   const groapaThreshold = roomState.settings?.groapaThreshold || 3;
   const threshold = roomState.settings?.sipsThreshold || 30;
 
@@ -657,7 +812,7 @@ export const CrashGame: React.FC<CrashGameProps> = ({
       {/* Top Header: Room, Threshold goal, Round # */}
       <div className="flex items-center justify-between bg-stone-900/80 border border-amber-500/30 rounded-2xl p-3 shadow-lg">
         <div className="flex items-center gap-2">
-          <span className="text-xl">{isGroapaRound ? '🕳️' : '🐉'}</span>
+          <span className="text-xl">{isGroapaRound ? '🕳️' : isHighMultMode ? '🚀' : '🐉'}</span>
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-sm sm:text-base font-black text-amber-400 font-cinzel">
@@ -668,6 +823,11 @@ export const CrashGame: React.FC<CrashGameProps> = ({
                   🕳️ GROAPĂ
                 </span>
               )}
+              {isHighMultMode && (
+                <span className="bg-amber-950/90 border border-amber-400/80 text-yellow-300 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow-[0_0_8px_rgba(245,158,11,0.25)]">
+                  🚀 {language === 'ro' ? 'MULTIPLICATOARE MARI' : 'HIGH MULTIPLIERS'}
+                </span>
+              )}
             </div>
             <span className="text-[10px] text-stone-400 font-mono">
               Chilie: <strong className="text-amber-300">{roomCode}</strong>
@@ -676,14 +836,17 @@ export const CrashGame: React.FC<CrashGameProps> = ({
         </div>
 
         {/* Threshold bar */}
-        <div className="text-right">
-          <div className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
-            {isGroapaMode
-              ? `${language === 'ro' ? 'Prag Înfrângere' : 'Defeat Limit'}: ${groapaThreshold} 🕳️`
-              : `${language === 'ro' ? 'Prag Înfrângere' : 'Defeat Limit'}: ${threshold} 🍺`}
-          </div>
-          <div className="text-[10px] text-stone-400">
-            {language === 'ro' ? 'Primul care atinge pragul pierde' : 'First to reach limit loses'}
+        <div className="flex items-center gap-3">
+          <NetworkConnectionBadge />
+          <div className="text-right">
+            <div className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
+              {isGroapaMode
+                ? `${language === 'ro' ? 'Prag Înfrângere' : 'Defeat Limit'}: ${groapaThreshold} 🕳️`
+                : `${language === 'ro' ? 'Prag Înfrângere' : 'Defeat Limit'}: ${threshold} 🍺`}
+            </div>
+            <div className="text-[10px] text-stone-400">
+              {language === 'ro' ? 'Primul care atinge pragul pierde' : 'First to reach limit loses'}
+            </div>
           </div>
         </div>
 
@@ -773,6 +936,18 @@ export const CrashGame: React.FC<CrashGameProps> = ({
           );
         })}
       </div>
+
+      {/* Live Net Profit/Loss & Session Performance Tracker */}
+      <CrashSessionTracker
+        records={sessionRecords}
+        currentRoundNumber={currentRound.roundNumber}
+        language={language}
+        totalGuriAcumulate={me?.totalGuriAcumulate || 0}
+        totalGroapaAcumulate={me?.totalGroapaAcumulate || 0}
+        sipsThreshold={threshold}
+        groapaThreshold={groapaThreshold}
+        isGroapaMode={isGroapaMode}
+      />
 
       {/* Past Rounds History Strip */}
       <div className="bg-[#120c07]/90 border border-amber-900/40 rounded-2xl px-3 py-2 shadow-inner flex items-center gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-amber-900/60">
@@ -911,15 +1086,15 @@ export const CrashGame: React.FC<CrashGameProps> = ({
       <div className="bg-stone-900/90 border-2 border-amber-500/40 rounded-3xl p-4 shadow-2xl space-y-3">
         {/* Large CASH OUT Button */}
         <div>
-          {me?.cashedOutAt != null ? (
-            <div className="w-full py-4 bg-emerald-950/80 border-2 border-emerald-500 text-emerald-300 font-black text-lg sm:text-xl rounded-2xl text-center shadow-lg">
-              ✅ {language === 'ro' ? 'AI DAT CASH OUT LA' : 'CASHED OUT AT'} x{me.cashedOutAt.toFixed(2)}
-              {!isGroapaRound && ` (+${me.score} ${language === 'ro' ? 'guri' : 'sips'})`}
+          {(me?.cashedOutAt != null || optimisticCashout != null) ? (
+            <div className="w-full py-4 bg-emerald-950/80 border-2 border-emerald-500 text-emerald-300 font-black text-lg sm:text-xl rounded-2xl text-center shadow-lg animate-pulse">
+              ✅ {language === 'ro' ? 'AI DAT CASH OUT LA' : 'CASHED OUT AT'} x{(me?.cashedOutAt ?? optimisticCashout ?? 1).toFixed(2)}
+              {!isGroapaRound && ` (+${me?.score || Number(((currentRound?.betValue || 5) * (me?.cashedOutAt ?? optimisticCashout ?? 1)).toFixed(1))} ${language === 'ro' ? 'guri' : 'sips'})`}
             </div>
           ) : isFlying ? (
             <button
               onClick={() => handleCashout()}
-              className="w-full py-5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-stone-950 font-black text-xl sm:text-2xl tracking-wider rounded-2xl shadow-[0_0_30px_rgba(255,215,0,0.6)] border-2 border-white font-cinzel active:scale-95 transition-transform"
+              className="w-full py-5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-stone-950 font-black text-xl sm:text-2xl tracking-wider rounded-2xl shadow-[0_0_30px_rgba(255,215,0,0.6)] border-2 border-white font-cinzel active:scale-95 transition-transform cursor-pointer"
             >
               {isGroapaRound
                 ? `💰 CASH OUT (x${currentMultiplier.toFixed(2)})`
@@ -1364,6 +1539,13 @@ export const CrashGame: React.FC<CrashGameProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Tavern Quick Emotes & Sound FX Overlay */}
+      <TavernEmotesOverlay
+        lastEmote={roomState?.lastEmote}
+        onSendEmote={(emote) => sendCrashEmote(roomCode, emote)}
+        localPlayer={localPlayer}
+      />
     </div>
   );
 };

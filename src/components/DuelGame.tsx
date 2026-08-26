@@ -10,11 +10,13 @@ import { getSyncedServerNow, syncServerClock } from '../lib/duelFirestoreService
 import { HeadToHeadTracker } from './HeadToHeadTracker';
 import { recordHeadToHeadMatch } from '../lib/headToHeadService';
 import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
+import { NetworkConnectionBadge } from './NetworkConnectionBadge';
+import { TavernEmotesOverlay } from './TavernEmotesOverlay';
 
 interface DuelGameProps {
   socket: UseDuelSocketReturn;
   localPlayer: { id: string; name: string; avatarIcon: string; color: string };
-  onEndGame: (finalPlayers: Player[]) => void;
+  onEndGame: (finalPlayers: Player[], turnsPlayed?: number) => void;
   onOpenRules: () => void;
   onLeave: () => void;
 }
@@ -26,7 +28,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
   onOpenRules,
   onLeave,
 }) => {
-  const { t, language, updateProfileStats, checkAchievement } = useApp();
+  const { t, language, theme, diceSkin, updateProfileStats, checkAchievement, trackQuestEvent } = useApp();
   const {
     room,
     playerId,
@@ -238,6 +240,11 @@ export const DuelGame: React.FC<DuelGameProps> = ({
       const isBotMatch = isGuestBot || isHostBot;
       const isCompletedMatch = room.status === 'finished' && (room.currentRound || 0) >= 2;
 
+      const isMyWin = winner !== 'Egalitate' && (playerId === host.id ? host.name === winner : guest?.name === winner);
+      trackQuestEvent({ type: 'game_completed', mode: 'duel', isWinner: isMyWin });
+      trackQuestEvent({ type: 'theme_played', theme });
+      trackQuestEvent({ type: 'dice_skin_played', diceSkin });
+
       // Leaderboards & persistent rivalry: ONLY for completed matches between real humans (NOT bots, NOT unfinished)
       if (!isBotMatch && isCompletedMatch) {
         // Record head-to-head match stats
@@ -276,7 +283,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
         }
       }
 
-      onEndGame([player1, player2]);
+      onEndGame([player1, player2], room.currentRound || 0);
     }
   }, [room?.status, onEndGame, updateProfileStats]);
 
@@ -563,8 +570,8 @@ export const DuelGame: React.FC<DuelGameProps> = ({
 
           {/* Center Round & Connection Badge */}
           <div className="flex flex-col items-center">
-            <div className="flex items-center gap-1 text-[10px] font-cinzel text-gray-400 uppercase">
-              <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+            <div className="flex items-center gap-1.5 text-[10px] font-cinzel text-gray-400 uppercase">
+              <NetworkConnectionBadge isConnected={isConnected} />
               <span>{language === 'ro' ? `Runda ${room.currentRound}` : `Round ${room.currentRound}`}</span>
             </div>
             <div className={`px-2 py-0.5 rounded-full text-[11px] font-cinzel font-black tracking-wide border shadow mt-0.5 ${
@@ -944,6 +951,13 @@ export const DuelGame: React.FC<DuelGameProps> = ({
           </div>
         </div>
       )}
+
+      {/* Tavern Emotes Quick Reactions & Sounds */}
+      <TavernEmotesOverlay
+        lastEmote={room?.lastEmote}
+        onSendEmote={socket.sendEmote}
+        localPlayer={localPlayer}
+      />
     </div>
   );
 };

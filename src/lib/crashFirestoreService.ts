@@ -15,6 +15,8 @@ import {
   CrashPlayerState,
   CrashRoomState,
   CrashRound,
+  CrashStakeMode,
+  TavernEmoteMessage,
 } from '../types';
 import { getSyncedServerNow, syncServerClock } from './duelFirestoreService';
 
@@ -57,10 +59,35 @@ export function calculateElapsedForMultiplier(multiplier: number): number {
 }
 
 /**
- * Generates crash point according to specification:
- * crashPoint = min(100, floor((1 / (1 - random())) * 100) / 100)
+ * Generates crash point according to game mode.
+ * - Standard/Dynamic/Guri: standard crash distribution with occasional highs.
+ * - High Multipliers (high_mult): higher chance for multipliers > 5x, up to x100 (which remains rare),
+ *   while still including small multipliers (e.g. x2.7, x1.2, x5.8, x10.2, x9.2, x1.8).
  */
-export function generateCrashPoint(): number {
+export function generateCrashPoint(mode?: CrashStakeMode): number {
+  if (mode === 'high_mult') {
+    const roll = Math.random();
+    let val: number;
+    if (roll < 0.30) {
+      // Small multiplier (1.10 - 2.99) ~30% chance
+      val = 1.10 + Math.random() * 1.89;
+    } else if (roll < 0.55) {
+      // Medium multiplier (3.00 - 5.99) ~25% chance
+      val = 3.00 + Math.random() * 2.99;
+    } else if (roll < 0.85) {
+      // High multiplier (6.00 - 15.00) ~30% chance
+      val = 6.00 + Math.random() * 9.00;
+    } else if (roll < 0.96) {
+      // Very High multiplier (15.01 - 40.00) ~11% chance
+      val = 15.01 + Math.random() * 24.99;
+    } else {
+      // Rare peak up to 100 (40.01 - 100.00) ~4% chance
+      val = 40.01 + Math.random() * 59.99;
+    }
+    return Math.min(100.00, Math.max(1.00, Number(val.toFixed(2))));
+  }
+
+  // Standard crash point generation:
   const r = Math.random();
   // Safe guard: if r >= 0.99, max out at 100
   if (r >= 0.99) return 100.00;
@@ -83,29 +110,51 @@ export function generateRoundBetValue(): number {
 
 /**
  * Generates round stake and type (guri vs groapa) based on match settings and thresholds
+ * Rules:
+ * - 'high_mult' mode: Pure guri rounds (1-5 sips) with high multipliers
+ * - 'groapa' mode: 100% Groapă (legacy support)
+ * - 'dynamic' (balansat) or when playing on >= 50 sips: 10% chance for a Groapă round (maximum 1 groapă per match)
+ * - 'guri' mode under 50 sips: pure guri rounds (1-5 sips)
  */
 export function generateRoundStake(
   settings?: CrashMatchSettings,
-  roundNumber: number = 1
+  roundNumber: number = 1,
+  groapaCountSoFar: number = 0
 ): { stakeType: 'guri' | 'groapa'; betValue: number } {
-  const mode = settings?.stakeMode || 'guri';
-  const threshold = settings?.sipsThreshold || 30;
+  const mode = settings?.stakeMode || 'dynamic';
+  const threshold = settings?.sipsThreshold || 50;
 
-  // Pure Groapă match mode
+  // Multiplicatoare Mari mode
+  if (mode === 'high_mult') {
+    return {
+      stakeType: 'guri',
+      betValue: generateRoundBetValue(),
+    };
+  }
+
+  // Pure Groapă match mode (legacy)
   if (mode === 'groapa') {
     return { stakeType: 'groapa', betValue: 1 };
   }
 
-  // Dynamic mode OR game threshold is over 50 sips -> balance chances for guri / groapă
-  if (mode === 'dynamic' || threshold > 50) {
-    // 30% chance of a GROAPĂ round, or guaranteed every 4th round
-    const isGroapa = Math.random() < 0.30 || roundNumber % 4 === 0;
+  // Pure Guri mode ONLY if threshold < 50 and mode explicitly set to 'guri'
+  if (mode === 'guri' && threshold < 50) {
+    return {
+      stakeType: 'guri',
+      betValue: generateRoundBetValue(),
+    };
+  }
+
+  // Balanced ('dynamic') mode OR any match played on >= 50 sips:
+  // 10% chance for a Groapă round (up to max 1 groapă in the entire match)
+  if (groapaCountSoFar < 1) {
+    const isGroapa = Math.random() < 0.10;
     if (isGroapa) {
       return { stakeType: 'groapa', betValue: 1 };
     }
   }
 
-  // Default standard guri round
+  // Default standard guri round (1 - 5 sips)
   return {
     stakeType: 'guri',
     betValue: generateRoundBetValue(),
@@ -115,7 +164,19 @@ export function generateRoundStake(
 /**
  * Generates human-like target multiplier for the Bot
  */
-export function generateBotTargetMultiplier(botStyle?: CrashBotStyle): number {
+export function generateBotTargetMultiplier(botStyle?: CrashBotStyle, mode?: CrashStakeMode): number {
+  if (mode === 'high_mult') {
+    if (botStyle === 'prudent') {
+      // 1.80x to 4.50x
+      const target = 1.80 + Math.random() * 2.70;
+      return Number(target.toFixed(2));
+    } else if (botStyle === 'risky') {
+      // 3.50x to 12.00x
+      const target = 3.50 + Math.random() * 8.50;
+      return Number(target.toFixed(2));
+    }
+  }
+
   if (botStyle === 'prudent') {
     // 1.20x to 2.00x
     const target = 1.20 + Math.random() * 0.80;
@@ -184,7 +245,7 @@ export async function createCrashRoom(
       botStyle,
       connected: true,
       autoCashoutEnabled: true,
-      autoCashoutTarget: generateBotTargetMultiplier(botStyle),
+      autoCashoutTarget: generateBotTargetMultiplier(botStyle, settings.stakeMode),
       cashedOutAt: null,
       score: 0,
       roundSipsToDrink: 0,
@@ -201,7 +262,7 @@ export async function createCrashRoom(
     phase: 'prep',
     stakeType: initialStake.stakeType,
     betValue: initialStake.betValue,
-    crashPoint: generateCrashPoint(),
+    crashPoint: generateCrashPoint(settings.stakeMode),
     roundStartTimestamp: Date.now(),
     isGroapaRound: initialStake.stakeType === 'groapa',
   };
@@ -212,7 +273,7 @@ export async function createCrashRoom(
     players: initialPlayers,
     settings: {
       sipsThreshold: settings.sipsThreshold || 30,
-      stakeMode: settings.stakeMode || 'guri',
+      stakeMode: settings.stakeMode || 'dynamic',
       groapaThreshold: settings.groapaThreshold || 3,
     },
     status: autoAddBot ? 'in_game' : 'lobby',
@@ -378,7 +439,8 @@ export async function removeCrashPlayer(code: string, playerId: string): Promise
  */
 export function subscribeToCrashRoom(
   code: string,
-  callback: (room: CrashRoomState | null) => void
+  callback: (room: CrashRoomState | null) => void,
+  onError?: (error: any) => void
 ): () => void {
   const cleanCode = code.trim().toUpperCase();
   const roomRef = doc(db, 'crash_rooms', cleanCode);
@@ -394,6 +456,9 @@ export function subscribeToCrashRoom(
     },
     error => {
       console.warn('Crash room snapshot error:', error);
+      if (onError) {
+        onError(error);
+      }
       handleFirestoreError(error, OperationType.GET, `crash_rooms/${cleanCode}`);
     }
   );
@@ -416,7 +481,7 @@ export async function startCrashMatch(code: string): Promise<void> {
     if (p.isBot) {
       return {
         ...p,
-        autoCashoutTarget: generateBotTargetMultiplier(p.botStyle),
+        autoCashoutTarget: generateBotTargetMultiplier(p.botStyle, data.settings?.stakeMode),
       };
     }
     return p;
@@ -428,7 +493,7 @@ export async function startCrashMatch(code: string): Promise<void> {
     phase: 'prep',
     stakeType: firstStake.stakeType,
     betValue: firstStake.betValue,
-    crashPoint: generateCrashPoint(),
+    crashPoint: generateCrashPoint(data.settings?.stakeMode),
     roundStartTimestamp: getSyncedServerNow(),
     isGroapaRound: firstStake.stakeType === 'groapa',
   };
@@ -488,9 +553,21 @@ export async function playerCashOut(
         return { success: false, multiplier: 0, score: 0 };
       }
 
-      // Check if multiplier exceeded crash point
-      const safeMultiplier = Math.min(cashedMultiplier, room.currentRound.crashPoint);
-      if (safeMultiplier > room.currentRound.crashPoint) {
+      // Check if multiplier reached or exceeded crash point (strict cashout before crash rule)
+      if (cashedMultiplier >= room.currentRound.crashPoint) {
+        return { success: false, multiplier: 0, score: 0 };
+      }
+
+      // Also verify server elapsed flight time
+      const now = getSyncedServerNow();
+      const flightElapsedSec = Math.max(0, (now - room.currentRound.roundStartTimestamp) / 1000);
+      const serverCurrentMult = calculateMultiplier(flightElapsedSec);
+      if (serverCurrentMult >= room.currentRound.crashPoint) {
+        return { success: false, multiplier: 0, score: 0 };
+      }
+
+      const safeMultiplier = Math.min(cashedMultiplier, serverCurrentMult, Number((room.currentRound.crashPoint - 0.01).toFixed(2)));
+      if (safeMultiplier < 1.00) {
         return { success: false, multiplier: 0, score: 0 };
       }
 
@@ -900,8 +977,11 @@ export async function startNextCrashRound(code: string): Promise<void> {
   if (room.status === 'finished') return;
 
   const nextRoundNumber = (room.currentRound.roundNumber || 1) + 1;
-  const nextStake = generateRoundStake(room.settings, nextRoundNumber);
-  const newCrashPoint = generateCrashPoint();
+  const pastGropiCount = (room.history || []).filter(h => h.stakeType === 'groapa').length;
+  const currentIsGroapa = (room.currentRound?.stakeType === 'groapa' || room.currentRound?.isGroapaRound) ? 1 : 0;
+  const totalGropiSoFar = pastGropiCount + currentIsGroapa;
+  const nextStake = generateRoundStake(room.settings, nextRoundNumber, totalGropiSoFar);
+  const newCrashPoint = generateCrashPoint(room.settings?.stakeMode);
 
   const resetPlayers = room.players.map(p => {
     return {
@@ -913,7 +993,7 @@ export async function startNextCrashRound(code: string): Promise<void> {
       chickenStreak: (p.chickenStreak && p.chickenStreak >= 3) ? 0 : (p.chickenStreak || 0),
       isReadyNextRound: p.isBot ? true : false,
       autoCashoutTarget: p.isBot
-        ? generateBotTargetMultiplier(p.botStyle)
+        ? generateBotTargetMultiplier(p.botStyle, room.settings?.stakeMode)
         : p.autoCashoutTarget || 2.00,
     };
   });
@@ -1029,5 +1109,21 @@ export async function leaveCrashRoom(
     }
   } catch (err) {
     console.warn('Error leaving crash room:', err);
+  }
+}
+
+/**
+ * Broadcasts an instant Tavern Emote reaction across Crash room.
+ */
+export async function sendCrashEmote(code: string, emote: TavernEmoteMessage): Promise<void> {
+  const cleanCode = code.trim().toUpperCase();
+  const roomRef = doc(db, 'crash_rooms', cleanCode);
+  try {
+    await updateDoc(roomRef, {
+      lastEmote: emote,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn('[Crash] Error sending emote:', err);
   }
 }

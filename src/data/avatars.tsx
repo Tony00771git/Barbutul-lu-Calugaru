@@ -438,6 +438,154 @@ export const MEDIEVAL_AVATARS: MedievalAvatar[] = [
       </svg>
     ),
   },
+  // ===================== CHEST COSMETIC AVATARS =====================
+  {
+    id: 'tavern_scout',
+    nameRo: 'Cercetașul Tavernei',
+    nameEn: 'Tavern Scout',
+    descRo: 'Vânător vigilent cu tunică de camuflaj și privire ageră',
+    descEn: 'Vigilant woodsman in green tunic with a sharp gaze',
+    bgColor: '#1a2e1f',
+    borderColor: '#4b69ff',
+    emojiFallback: '🏹',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#142918" />
+        <circle cx="50" cy="50" r="44" stroke="#4b69ff" strokeWidth="2" strokeDasharray="3 2" />
+        <path d="M25 92 C25 68 35 55 45 52 L55 52 C65 55 75 68 75 92 Z" fill="#1e3a24" />
+        <path d="M32 38 C32 18 40 14 50 14 C60 14 68 18 68 38 C68 54 60 62 50 62 C40 62 32 54 32 38 Z" fill="#14532d" />
+        <ellipse cx="50" cy="42" rx="14" ry="15" fill="#fed7aa" />
+        <path d="M38 38 Q44 35 47 38" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
+        <path d="M53 38 Q56 35 62 38" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
+        <circle cx="43" cy="43" r="2.5" fill="#1c1917" />
+        <circle cx="57" cy="43" r="2.5" fill="#1c1917" />
+        <path d="M46 51 Q50 54 54 51" stroke="#b45309" strokeWidth="2" strokeLinecap="round" />
+        <path d="M30 22 L50 8 L70 22 Z" fill="#15803d" />
+        <path d="M68 12 L78 8 L74 20 Z" fill="#4ade80" />
+      </svg>
+    ),
+  },
+  {
+    id: 'monk_novice',
+    nameRo: 'Novicele Mănăstirii',
+    nameEn: 'Monastery Novice',
+    descRo: 'Ucenic călugăr zelos la primele sale căni de vin',
+    descEn: 'Eager novice monk having his first taste of sacred wine',
+    bgColor: '#2a1f14',
+    borderColor: '#4b69ff',
+    emojiFallback: '📜',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#2a1f14" />
+        <circle cx="50" cy="50" r="44" stroke="#4b69ff" strokeWidth="2" />
+        <path d="M26 92 C26 70 36 56 50 56 C64 56 74 70 74 92 Z" fill="#78350f" />
+        <ellipse cx="50" cy="40" rx="16" ry="17" fill="#fcd34d" />
+        <circle cx="50" cy="24" r="6" fill="#fef08a" />
+        <circle cx="43" cy="40" r="3" fill="#1c1917" />
+        <circle cx="57" cy="40" r="3" fill="#1c1917" />
+        <path d="M44 48 Q50 54 56 48" stroke="#b45309" strokeWidth="2.5" strokeLinecap="round" />
+        <ellipse cx="38" cy="44" rx="3.5" ry="2.5" fill="#f87171" opacity="0.8" />
+        <ellipse cx="62" cy="44" rx="3.5" ry="2.5" fill="#f87171" opacity="0.8" />
+      </svg>
+    ),
+  },
+  {
+    id: 'templar_inquisitor',
+    nameRo: 'Inchizitorul Templier',
+    nameEn: 'Templar Inquisitor',
+    descRo: 'Armură argintie cu cruce violetă și privire de oțel',
+    descEn: 'Silver mail with purple cross and steely disciplinary stare',
+    bgColor: '#1e142e',
+    borderColor: '#8847ff',
+    emojiFallback: '⚔️',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#1e142e" />
+        <circle cx="50" cy="50" r="44" stroke="#8847ff" strokeWidth="2.5" />
+        <path d="M24 92 L30 54 L70 54 L76 92 Z" fill="#64748b" stroke="#94a3b8" strokeWidth="1.5" />
+        <path d="M30 36 C30 18 38 12 50 12 C62 12 70 18 70 36 C70 56 62 62 50 62 C38 62 30 56 30 36 Z" fill="#cbd5e1" stroke="#8847ff" strokeWidth="2" />
+        <line x1="50" y1="20" x2="50" y2="52" stroke="#8847ff" strokeWidth="4" />
+        <line x1="38" y1="32" x2="62" y2="32" stroke="#8847ff" strokeWidth="4" />
+        <rect x="40" y="38" width="8" height="3" fill="#0f172a" />
+        <rect x="52" y="38" width="8" height="3" fill="#0f172a" />
+      </svg>
+    ),
+  },
+  {
+    id: 'archmage_astral',
+    nameRo: 'Arhimagul Astral',
+    nameEn: 'Astral Archmage',
+    descRo: 'Stăpân al magiei cosmice în pelerină fosforescentă',
+    descEn: 'Master of celestial mysteries draped in glowing arcane robes',
+    bgColor: '#2a0833',
+    borderColor: '#d32ce6',
+    emojiFallback: '🧙‍♂️',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#2a0833" />
+        <circle cx="50" cy="50" r="44" stroke="#d32ce6" strokeWidth="2.5" />
+        <path d="M22 92 C22 68 34 52 50 52 C66 52 78 68 78 92 Z" fill="#581c87" />
+        <path d="M34 18 L50 2 L66 18 L50 14 Z" fill="#d32ce6" />
+        <ellipse cx="50" cy="38" rx="14" ry="15" fill="#fce7f3" />
+        <circle cx="44" cy="36" r="3" fill="#c026d3" />
+        <circle cx="56" cy="36" r="3" fill="#c026d3" />
+        <path d="M42 46 C46 54 54 54 58 46 C54 50 46 50 42 46 Z" fill="#f43f5e" />
+        <circle cx="50" cy="22" r="3" fill="#f0abfc" />
+      </svg>
+    ),
+  },
+  {
+    id: 'dragon_abbot',
+    nameRo: 'Starețul Călăreț de Dragoni',
+    nameEn: 'Dragon-Rider Abbot',
+    descRo: 'Mitropolitul legendar cu coroană de flăcări și potir divin',
+    descEn: 'Legendary primate wielding the crimson wyrm with a sacred chalice',
+    bgColor: '#330808',
+    borderColor: '#eb4b4b',
+    emojiFallback: '👑',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#330808" />
+        <circle cx="50" cy="50" r="44" stroke="#eb4b4b" strokeWidth="3" />
+        {/* Dragon Horns & Robe */}
+        <path d="M28 20 C18 10 16 30 26 34 Z" fill="#dc2626" />
+        <path d="M72 20 C82 10 84 30 74 34 Z" fill="#dc2626" />
+        <path d="M22 92 C22 64 34 52 50 52 C66 52 78 64 78 92 Z" fill="#7f1d1d" stroke="#ef4444" strokeWidth="2" />
+        <ellipse cx="50" cy="40" rx="16" ry="17" fill="#fecaca" />
+        {/* Crown */}
+        <path d="M36 24 L42 16 L50 22 L58 16 L64 24 Z" fill="#f59e0b" stroke="#ffd700" strokeWidth="1.5" />
+        <circle cx="43" cy="38" r="3" fill="#991b1b" />
+        <circle cx="57" cy="38" r="3" fill="#991b1b" />
+        <path d="M42 48 Q50 56 58 48" stroke="#7f1d1d" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'immortal_archimandrite',
+    nameRo: 'Arhimandritul Nemuritor',
+    nameEn: 'Immortal Archimandrite',
+    descRo: 'Coroană de aur, aureolă strălucitoare și cel mai mare butoi divin',
+    descEn: 'Blinding halo of pure gold, heavenly crown and divine chalice',
+    bgColor: '#362203',
+    borderColor: '#ffd700',
+    emojiFallback: '🏆',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#2d1c03" />
+        <circle cx="50" cy="50" r="44" stroke="#ffd700" strokeWidth="3.5" />
+        {/* Glowing Sun Aura */}
+        <circle cx="50" cy="38" r="28" fill="#ffd700" opacity="0.25" />
+        <path d="M20 92 C20 62 34 50 50 50 C66 50 80 62 80 92 Z" fill="#b45309" stroke="#ffd700" strokeWidth="2.5" />
+        <ellipse cx="50" cy="38" rx="16" ry="17" fill="#fef08a" />
+        {/* Golden Mitre / Imperial Crown */}
+        <path d="M34 22 L50 6 L66 22 Z" fill="#ffd700" stroke="#f59e0b" strokeWidth="2" />
+        <circle cx="50" cy="14" r="3" fill="#ffffff" />
+        <circle cx="43" cy="36" r="3" fill="#78350f" />
+        <circle cx="57" cy="36" r="3" fill="#78350f" />
+        <path d="M44 46 Q50 54 56 46" stroke="#b45309" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    ),
+  },
 ];
 
 export const getAvatarById = (idOrEmoji?: string): MedievalAvatar => {

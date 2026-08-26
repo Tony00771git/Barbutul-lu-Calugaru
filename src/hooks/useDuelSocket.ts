@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { DuelRoomState, DuelSubmode, DuelDifficulty, DuelPlayerInfo } from '../types';
+import { DuelRoomState, DuelSubmode, DuelDifficulty, DuelPlayerInfo, TavernEmoteMessage } from '../types';
 import {
   createDuelRoom,
   joinDuelRoom,
@@ -10,11 +10,14 @@ import {
   startDuelDrinkTimer,
   nextDuelRound,
   endDuelGame,
+  sendDuelEmote,
   subscribeToDuelRoom,
   syncServerClock,
   getSyncedServerNow,
 } from '../lib/duelFirestoreService';
 import { getDuelQuestionPool } from '../data/duelQuestions';
+import { saveActiveSession, clearActiveSession, getActiveSession } from '../lib/sessionManager';
+import { reconnectionService } from '../lib/reconnectionService';
 
 export interface UseDuelSocketReturn {
   room: DuelRoomState | null;
@@ -35,6 +38,7 @@ export interface UseDuelSocketReturn {
   submitAnswer: (optionIndex: number) => void;
   nextRound: () => void;
   startDrinkTimer: () => void;
+  sendEmote: (emote: TavernEmoteMessage) => Promise<void>;
   endGame: () => void;
   clearError: () => void;
   disconnect: () => void;
@@ -72,35 +76,61 @@ export function useDuelSocket(): UseDuelSocketReturn {
 
   // Start listening to a Firestore room document
   const startListening = useCallback(
-    (roomCode: string) => {
-      stopListening();
-      setIsConnecting(true);
-      setErrorMessage(null);
-      activeRoomCodeRef.current = roomCode;
+    (roomCode: string): Promise<boolean> => {
+      return new Promise((resolve) => {
+        stopListening();
+        setIsConnecting(true);
+        setErrorMessage(null);
+        activeRoomCodeRef.current = roomCode;
 
-      const unsub = subscribeToDuelRoom(
-        roomCode,
-        (updatedRoom) => {
-          setIsConnecting(false);
-          if (updatedRoom) {
-            setRoom(updatedRoom);
-            setIsConnected(true);
-          } else {
+        let hasResolved = false;
+        const unsub = subscribeToDuelRoom(
+          roomCode,
+          (updatedRoom) => {
+            setIsConnecting(false);
+            if (updatedRoom) {
+              setRoom(updatedRoom);
+              setIsConnected(true);
+              reconnectionService.notifyConnected('duel', updatedRoom.code);
+              if (!hasResolved) {
+                hasResolved = true;
+                resolve(true);
+              }
+            } else {
+              setIsConnected(false);
+              reconnectionService.notifyDisconnected('duel', 'Camera a fost închisă.');
+              if (!hasResolved) {
+                hasResolved = true;
+                resolve(false);
+              }
+            }
+          },
+          (error) => {
+            setIsConnecting(false);
             setIsConnected(false);
-            setErrorMessage('Camera a fost închisă sau nu mai există.');
+            reconnectionService.notifyDisconnected('duel', error.message || 'Eroare Firestore');
+            if (!hasResolved) {
+              hasResolved = true;
+              resolve(false);
+            }
           }
-        },
-        (error) => {
-          setIsConnecting(false);
-          setIsConnected(false);
-          setErrorMessage(error.message || 'Eroare la conectarea la camera Firestore.');
-        }
-      );
+        );
 
-      unsubscribeRef.current = unsub;
+        unsubscribeRef.current = unsub;
+      });
     },
     [stopListening]
   );
+
+  // Register reconnection handler with the global reconnection service
+  useEffect(() => {
+    const unregister = reconnectionService.registerHandler('duel', async (session) => {
+      console.log('[Duel] AutoReconnectionHandler triggered for session:', session.roomCode);
+      const ok = await startListening(session.roomCode);
+      return ok;
+    });
+    return unregister;
+  }, [startListening]);
 
   // Resume subscription on page refresh if saved in sessionStorage
   useEffect(() => {
@@ -237,6 +267,7 @@ export function useDuelSocket(): UseDuelSocketReturn {
 
         const newCode = await createDuelRoom(hostPlayer, submode, difficulty, targetPoints);
         sessionStorage.setItem('duel_room_code', newCode);
+        saveActiveSession('duel', newCode, hostPlayer, true, { submode, difficulty, targetPoints });
         startListening(newCode);
       } catch (err: any) {
         setIsConnecting(false);
@@ -258,6 +289,7 @@ export function useDuelSocket(): UseDuelSocketReturn {
         setPlayerId(guestPlayer.id);
         sessionStorage.setItem('duel_player_id', guestPlayer.id);
         sessionStorage.setItem('duel_room_code', formattedCode);
+        saveActiveSession('duel', formattedCode, guestPlayer, false);
 
         await joinDuelRoom(formattedCode, guestPlayer);
         startListening(formattedCode);
@@ -326,6 +358,18 @@ export function useDuelSocket(): UseDuelSocketReturn {
     }
   }, [room, playerId]);
 
+  const sendEmote = useCallback(
+    async (emote: TavernEmoteMessage) => {
+      if (!room) return;
+      try {
+        await sendDuelEmote(room.code, emote);
+      } catch (err: any) {
+        console.warn('[Duel] Send emote error:', err);
+      }
+    },
+    [room]
+  );
+
   const endGame = useCallback(async () => {
     if (!room) return;
     try {
@@ -344,6 +388,7 @@ export function useDuelSocket(): UseDuelSocketReturn {
     activeRoomCodeRef.current = null;
     sessionStorage.removeItem('duel_room_code');
     sessionStorage.removeItem('duel_player_id');
+    clearActiveSession();
     setRoom(null);
     setIsConnected(false);
     setIsConnecting(false);
@@ -370,6 +415,7 @@ export function useDuelSocket(): UseDuelSocketReturn {
     submitAnswer,
     nextRound,
     startDrinkTimer,
+    sendEmote,
     endGame,
     clearError,
     disconnect,

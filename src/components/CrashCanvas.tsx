@@ -30,13 +30,16 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
   players,
   localPlayerId,
 }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const particlesRef = useRef<Particle[]>([]);
   const flameTimeRef = useRef<number>(0);
 
-  // Dynamic falling crash animation state
+  // Dynamic falling crash & stock plummet animation state
   const crashPhysicsRef = useRef<{
     initialized: boolean;
+    peakX: number;
+    peakY: number;
     x: number;
     y: number;
     vx: number;
@@ -45,8 +48,11 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
     rotSpeed: number;
     landed: boolean;
     shockwave: number;
+    shakeIntensity: number;
   }>({
     initialized: false,
+    peakX: 0,
+    peakY: 0,
     x: 0,
     y: 0,
     vx: 0,
@@ -55,9 +61,10 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
     rotSpeed: 0,
     landed: false,
     shockwave: 0,
+    shakeIntensity: 0,
   });
 
-  // Store latest props in ref so RAF loop never gets recreated/stacked
+  // Store latest props in ref so RAF loop runs at full native refresh rate without re-mounting
   const propsRef = useRef({
     currentMultiplier,
     crashPoint,
@@ -82,8 +89,56 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
       crashPhysicsRef.current.initialized = false;
       crashPhysicsRef.current.landed = false;
       crashPhysicsRef.current.shockwave = 0;
+      crashPhysicsRef.current.shakeIntensity = 0;
     }
   }, [currentMultiplier, crashPoint, isCrashed, isFlying, players, localPlayerId]);
+
+  // Handle Dynamic Sizing and Device Pixel Ratio for Retina Crispness
+  useEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    let resizeRafId: number | null = null;
+
+    const updateSize = () => {
+      const container = containerRef.current;
+      const canvas = canvasRef.current;
+      if (!container || !canvas) return;
+
+      const w = container.clientWidth || 700;
+      const h = container.clientHeight || 380;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      const targetW = Math.max(100, Math.floor(w * dpr));
+      const targetH = Math.max(100, Math.floor(h * dpr));
+
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+    };
+
+    updateSize();
+
+    const ro = new ResizeObserver(() => {
+      if (resizeRafId !== null) {
+        cancelAnimationFrame(resizeRafId);
+      }
+      resizeRafId = window.requestAnimationFrame(() => {
+        updateSize();
+        resizeRafId = null;
+      });
+    });
+    ro.observe(container);
+
+    return () => {
+      if (resizeRafId !== null) {
+        cancelAnimationFrame(resizeRafId);
+      }
+      ro.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -99,16 +154,32 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
 
       const {
         currentMultiplier: mult,
-        crashPoint: cPoint,
         isCrashed: crashed,
         isFlying: flying,
         players: curPlayers,
+        crashPoint: targetCrashPoint,
+        localPlayerId: myId,
       } = propsRef.current;
 
       const safeMult = isFinite(mult) && mult >= 1 ? mult : 1.0;
-      const width = canvas.width;
-      const height = canvas.height;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const width = canvas.width / dpr;
+      const height = canvas.height / dpr;
       flameTimeRef.current += 0.05;
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
+      // 0. Screen shake on ground impact
+      const phys = crashPhysicsRef.current;
+      if (phys.shakeIntensity > 0.1) {
+        const shakeX = (Math.random() - 0.5) * phys.shakeIntensity;
+        const shakeY = (Math.random() - 0.5) * phys.shakeIntensity;
+        ctx.translate(shakeX, shakeY);
+        phys.shakeIntensity *= 0.84;
+      } else {
+        phys.shakeIntensity = 0;
+      }
 
       const bgIntensity = Math.min(1, Math.max(0, (safeMult - 1) / 10));
 
@@ -117,9 +188,9 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
 
       const grad = ctx.createLinearGradient(0, height, width, 0);
       if (crashed) {
-        grad.addColorStop(0, 'rgba(40, 10, 10, 0.95)');
-        grad.addColorStop(0.5, 'rgba(90, 20, 15, 0.95)');
-        grad.addColorStop(1, 'rgba(180, 40, 20, 0.95)');
+        grad.addColorStop(0, 'rgba(38, 10, 10, 0.96)');
+        grad.addColorStop(0.4, 'rgba(75, 15, 12, 0.96)');
+        grad.addColorStop(1, 'rgba(140, 25, 15, 0.96)');
       } else {
         const r1 = Math.floor(15 + bgIntensity * 85);
         const g1 = Math.floor(18 + bgIntensity * 20);
@@ -139,8 +210,8 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, width, height);
 
-      // 2. Draw subtle grid lines
-      ctx.strokeStyle = 'rgba(255, 215, 0, 0.07)';
+      // 2. Draw subtle grid lines & price axes
+      ctx.strokeStyle = crashed ? 'rgba(255, 60, 40, 0.12)' : 'rgba(255, 215, 0, 0.07)';
       ctx.lineWidth = 1;
       const gridSpacingY = height / 6;
       for (let y = height - gridSpacingY; y > 0; y -= gridSpacingY) {
@@ -170,7 +241,7 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
 
       const currentCoord = getCoord(safeMult);
 
-      // 3. Draw curve glow & line
+      // 3. Draw ascending curve & golden glow
       if (safeMult > 1.01 || flying || crashed) {
         ctx.save();
         ctx.beginPath();
@@ -183,19 +254,19 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
           ctx.lineTo(c.x, c.y);
         }
 
-        // Fill area under curve
+        // Fill area under ascending curve
         ctx.lineTo(currentCoord.x, startY);
         ctx.closePath();
         const areaGrad = ctx.createLinearGradient(0, startY, 0, currentCoord.y);
         areaGrad.addColorStop(0, 'rgba(232, 200, 74, 0.02)');
         areaGrad.addColorStop(
           1,
-          crashed ? 'rgba(220, 60, 40, 0.25)' : 'rgba(255, 170, 0, 0.22)'
+          crashed ? 'rgba(220, 50, 30, 0.18)' : 'rgba(255, 170, 0, 0.22)'
         );
         ctx.fillStyle = areaGrad;
         ctx.fill();
 
-        // Stroke line with fiery glow
+        // Stroke ascending line
         ctx.beginPath();
         ctx.moveTo(startX, startY);
         for (let i = 1; i <= steps; i++) {
@@ -205,24 +276,171 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
         }
 
         ctx.lineWidth = 4;
-        ctx.strokeStyle = crashed ? '#e53e3e' : '#ffd700';
-        ctx.shadowColor = crashed ? 'rgba(255, 50, 0, 0.8)' : 'rgba(255, 200, 0, 0.9)';
+        ctx.strokeStyle = crashed ? '#ff4d4d' : '#ffd700';
+        ctx.shadowColor = crashed ? 'rgba(255, 40, 20, 0.8)' : 'rgba(255, 200, 0, 0.9)';
         ctx.shadowBlur = 14;
         ctx.stroke();
         ctx.restore();
       }
 
+      // Initialize crash physics on first frame of crash
+      if (crashed) {
+        if (!phys.initialized) {
+          phys.initialized = true;
+          phys.peakX = currentCoord.x;
+          phys.peakY = currentCoord.y;
+          phys.x = currentCoord.x;
+          phys.y = currentCoord.y;
+          phys.vx = 1.2 + Math.random() * 0.8;
+          phys.vy = 2.2; // Immediate nose-dive plunge downward
+          phys.rotation = 0.85; // Steep downward dive angle (like a plunging stock)
+          phys.rotSpeed = 0.04;
+          phys.landed = false;
+          phys.shockwave = 0;
+          phys.shakeIntensity = 0;
+
+          // Initial burst explosion at peak
+          for (let k = 0; k < 30; k++) {
+            const burstAngle = Math.random() * Math.PI * 2;
+            const burstSpeed = 2 + Math.random() * 6;
+            particlesRef.current.push({
+              x: phys.peakX,
+              y: phys.peakY,
+              vx: Math.cos(burstAngle) * burstSpeed,
+              vy: Math.sin(burstAngle) * burstSpeed,
+              radius: 2 + Math.random() * 4,
+              color: Math.random() > 0.4 ? '#ff3b30' : '#ffcc00',
+              alpha: 1.0,
+              life: 0,
+              maxLife: 25 + Math.random() * 15,
+            });
+          }
+        }
+
+        // Apply downward gravity plunge if in flight/fall
+        if (!phys.landed) {
+          phys.vy += 0.65; // Strong gravity acceleration
+          phys.x += phys.vx;
+          phys.y += phys.vy;
+          phys.rotation = Math.min(1.4, phys.rotation + 0.03); // Tilt further downward into dive
+
+          // Trailing black smoke and burning sparks behind the falling dragon
+          if (particlesRef.current.length < 90) {
+            particlesRef.current.push({
+              x: phys.x - Math.cos(phys.rotation) * 16 + (Math.random() - 0.5) * 6,
+              y: phys.y - Math.sin(phys.rotation) * 16 + (Math.random() - 0.5) * 6,
+              vx: -phys.vx * 0.4 + (Math.random() - 0.5) * 2,
+              vy: -2 + (Math.random() - 0.5) * 2,
+              radius: 3 + Math.random() * 4,
+              color: Math.random() > 0.5 ? 'rgba(255, 60, 20, 0.9)' : 'rgba(30, 20, 20, 0.8)',
+              alpha: 1.0,
+              life: 0,
+              maxLife: 20 + Math.random() * 10,
+            });
+          }
+
+          // Floor / ground impact check
+          if (phys.y >= startY) {
+            phys.y = startY;
+            phys.landed = true;
+            phys.rotSpeed = 0;
+            phys.rotation = 0;
+            phys.shockwave = 1;
+            phys.shakeIntensity = 8.5; // Trigger camera shake on impact
+
+            // Fiery ground impact explosion: burst of fiery sparks & rising smoke
+            for (let k = 0; k < 45; k++) {
+              const impactAngle = Math.PI + (Math.random() - 0.5) * 1.8; // Fan upwards
+              const impactSpeed = 2 + Math.random() * 7;
+              const isEmber = Math.random() > 0.35;
+              particlesRef.current.push({
+                x: phys.x + (Math.random() - 0.5) * 10,
+                y: startY,
+                vx: Math.cos(impactAngle) * impactSpeed,
+                vy: Math.sin(impactAngle) * impactSpeed,
+                radius: isEmber ? 2.5 + Math.random() * 3.5 : 4 + Math.random() * 5,
+                color: isEmber
+                  ? (Math.random() > 0.5 ? '#ffea00' : '#ff4400')
+                  : 'rgba(50, 30, 30, 0.85)',
+                alpha: 1.0,
+                life: 0,
+                maxLife: 30 + Math.random() * 20,
+              });
+            }
+          }
+        }
+
+        // Draw Stock Market Crash Plummet Line (Red Drop Trace 📉)
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(phys.peakX, phys.peakY);
+        ctx.lineTo(phys.x, phys.y);
+        ctx.lineWidth = 3.5;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = '#ff2a2a';
+        ctx.shadowColor = 'rgba(255, 0, 0, 0.9)';
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset line dash
+
+        // Red danger drop shadow fill under plummet
+        ctx.beginPath();
+        ctx.moveTo(phys.peakX, phys.peakY);
+        ctx.lineTo(phys.x, phys.y);
+        ctx.lineTo(phys.x, startY);
+        ctx.lineTo(phys.peakX, startY);
+        ctx.closePath();
+        const dropGrad = ctx.createLinearGradient(0, phys.peakY, 0, startY);
+        dropGrad.addColorStop(0, 'rgba(255, 30, 20, 0.35)');
+        dropGrad.addColorStop(1, 'rgba(180, 0, 0, 0.05)');
+        ctx.fillStyle = dropGrad;
+        ctx.fill();
+
+        // Draw Peak Crash Node & Badge
+        ctx.beginPath();
+        ctx.arc(phys.peakX, phys.peakY, 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff2222';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const crashBadge = `💥 CRASH x${(targetCrashPoint || safeMult).toFixed(2)}`;
+        ctx.font = 'bold 11px "Cinzel", serif, sans-serif';
+        const badgeW = ctx.measureText(crashBadge).width;
+        const badgeX = Math.min(width - badgeW - 15, Math.max(10, phys.peakX - badgeW / 2));
+        const badgeY = phys.peakY - 14;
+
+        ctx.fillStyle = 'rgba(180, 15, 15, 0.92)';
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(badgeX - 6, badgeY - 12, badgeW + 12, 18, 6);
+        } else {
+          ctx.rect(badgeX - 6, badgeY - 12, badgeW + 12, 18);
+        }
+        ctx.fill();
+        ctx.strokeStyle = '#ff4d4d';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.fillText(crashBadge, badgeX, badgeY + 1);
+        ctx.restore();
+      }
+
       // 4. Draw cashout markers for players
-      // Privacy rule: During active flight, only show marker for localPlayerId!
       if (curPlayers && curPlayers.length > 0) {
         curPlayers.forEach(p => {
-          const isMe = p.id === propsRef.current.localPlayerId;
-          // Hide opponent cashout during flight to keep secrecy
+          const isMe = p.id === myId;
+          // Hide opponent cashout during active flight to keep secrecy
           if (!crashed && flying && !isMe) {
             return;
           }
 
-          if (p.cashedOutAt && p.cashedOutAt <= safeMult) {
+          if (p.cashedOutAt && p.cashedOutAt <= (crashed ? targetCrashPoint || safeMult : safeMult)) {
             const markCoord = getCoord(p.cashedOutAt);
             ctx.save();
             ctx.beginPath();
@@ -242,7 +460,7 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
             const pillX = Math.min(width - textW - 20, Math.max(10, markCoord.x - textW / 2));
             const pillY = markCoord.y - 18;
 
-            ctx.fillStyle = 'rgba(20, 20, 25, 0.88)';
+            ctx.fillStyle = 'rgba(20, 20, 25, 0.9)';
             ctx.beginPath();
             if (typeof ctx.roundRect === 'function') {
               ctx.roundRect(pillX - 6, pillY - 12, textW + 12, 18, 6);
@@ -251,196 +469,147 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
             }
             ctx.fill();
             ctx.strokeStyle = p.color || '#50e3c2';
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = 1;
             ctx.stroke();
 
-            ctx.fillStyle = '#ffd700';
-            ctx.fillText(label, pillX, pillY);
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'left';
+            ctx.fillText(label, pillX, pillY + 1);
             ctx.restore();
           }
         });
       }
 
-      // 5. Particles spawn & update (Smoke, embers & flames)
+      // 5. Emit fiery exhaust particles during flight
       if (flying && !crashed) {
-        for (let i = 0; i < 2; i++) {
-          particlesRef.current.push({
-            x: currentCoord.x - 8 + (Math.random() * 10 - 5),
-            y: currentCoord.y + 4 + (Math.random() * 10 - 5),
-            vx: -1.5 - Math.random() * 2,
-            vy: 0.5 + Math.random() * 2,
-            radius: Math.random() * 4 + 2,
-            color: Math.random() > 0.4 ? '#ff7700' : Math.random() > 0.5 ? '#ffd700' : '#ff2200',
-            alpha: 0.9,
-            life: 0,
-            maxLife: 20 + Math.random() * 20,
-          });
+        const pCount = safeMult > 5 ? 3 : 2;
+        for (let i = 0; i < pCount; i++) {
+          if (particlesRef.current.length < 80) {
+            const angle = Math.PI * 0.85 + (Math.random() - 0.5) * 0.7;
+            const speed = 2 + Math.random() * (safeMult > 5 ? 5 : 3);
+            const isSpark = Math.random() > 0.6;
+            particlesRef.current.push({
+              x: currentCoord.x - 12,
+              y: currentCoord.y + 4,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              radius: isSpark ? 1.5 + Math.random() * 2 : 3 + Math.random() * 4,
+              color: isSpark
+                ? 'rgba(255, 240, 150, 0.95)'
+                : Math.random() > 0.4
+                ? 'rgba(255, 120, 20, 0.85)'
+                : 'rgba(235, 40, 20, 0.75)',
+              alpha: 1.0,
+              life: 0,
+              maxLife: 20 + Math.random() * 15,
+            });
+          }
         }
       }
 
-      // Draw & update particles
-      particlesRef.current = particlesRef.current.filter(p => {
-        p.life++;
+      // 6. Draw & update particles
+      for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+        const p = particlesRef.current[i];
         p.x += p.vx;
         p.y += p.vy;
+        p.life++;
         p.alpha = Math.max(0, 1 - p.life / p.maxLife);
-        p.radius *= 0.97;
+
+        if (p.life >= p.maxLife || p.alpha <= 0) {
+          particlesRef.current.splice(i, 1);
+          continue;
+        }
 
         ctx.save();
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, Math.max(0.5, p.radius), 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
         ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
         ctx.shadowColor = p.color;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 7. Ground Impact Shockwaves & Scorch Mark
+      if (crashed && phys.landed) {
+        // Scorch Crater Mark
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(phys.x, startY + 4, 36, 9, 0, 0, Math.PI * 2);
+        const craterGrad = ctx.createRadialGradient(phys.x, startY + 4, 2, phys.x, startY + 4, 36);
+        craterGrad.addColorStop(0, 'rgba(20, 10, 10, 0.9)');
+        craterGrad.addColorStop(0.7, 'rgba(80, 20, 10, 0.5)');
+        craterGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = craterGrad;
         ctx.fill();
         ctx.restore();
 
-        return p.life < p.maxLife;
-      });
+        // Expanding Fiery Shockwave Ring
+        if (phys.shockwave > 0 && phys.shockwave < 60) {
+          phys.shockwave += 2.8;
+          ctx.save();
+          ctx.beginPath();
+          ctx.ellipse(phys.x, startY, phys.shockwave * 2.2, phys.shockwave * 0.7, 0, 0, Math.PI * 2);
+          const alphaWave = Math.max(0, 1 - phys.shockwave / 60);
+          ctx.strokeStyle = `rgba(255, 80, 20, ${alphaWave})`;
+          ctx.lineWidth = 3.5;
+          ctx.shadowColor = '#ff3b30';
+          ctx.shadowBlur = 12;
+          ctx.stroke();
 
-      // 6. Draw Dragon Icon / Sprite & Falling Crash Physics Animation
-      const wingFlap = Math.sin(flameTimeRef.current * 8) * 6;
-      const groundY = height - 42;
+          // Inner shockwave
+          ctx.beginPath();
+          ctx.ellipse(phys.x, startY, phys.shockwave * 1.4, phys.shockwave * 0.45, 0, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255, 220, 80, ${alphaWave * 0.8})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // 8. Render Dragon Character
+      const wingFlap = Math.sin(flameTimeRef.current * 12) * 6;
 
       if (crashed) {
-        // Initialize physics on first frame of crash
-        if (!crashPhysicsRef.current.initialized) {
-          crashPhysicsRef.current = {
-            initialized: true,
-            x: currentCoord.x,
-            y: currentCoord.y,
-            vx: 1.8,
-            vy: -3.5, // Initial blast recoil upward
-            rotation: 0.2,
-            rotSpeed: 0.15,
-            landed: false,
-            shockwave: 0,
-          };
-
-          // Initial explosion burst at crash point
-          for (let i = 0; i < 30; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const speed = Math.random() * 5 + 2;
-            particlesRef.current.push({
-              x: currentCoord.x,
-              y: currentCoord.y,
-              vx: Math.cos(angle) * speed,
-              vy: Math.sin(angle) * speed,
-              radius: Math.random() * 6 + 3,
-              color: Math.random() > 0.5 ? '#ff1100' : '#ffaa00',
-              alpha: 1,
-              life: 0,
-              maxLife: 35 + Math.random() * 20,
-            });
-          }
-        }
-
-        const phys = crashPhysicsRef.current;
-
-        if (!phys.landed) {
-          // Physics step
-          phys.x += phys.vx;
-          phys.y += phys.vy;
-          phys.vy += 0.28; // Gravity pulling dragon down
-          phys.rotation += phys.rotSpeed;
-
-          // Spawn heavy smoke and flame trail while falling
-          for (let i = 0; i < 3; i++) {
-            particlesRef.current.push({
-              x: phys.x + (Math.random() * 12 - 6),
-              y: phys.y + (Math.random() * 12 - 6),
-              vx: -phys.vx * 0.4 + (Math.random() * 2 - 1),
-              vy: -1 + (Math.random() * 2 - 1),
-              radius: Math.random() * 5 + 3,
-              color: Math.random() > 0.5 ? '#333333' : Math.random() > 0.5 ? '#ff4400' : '#ff9900',
-              alpha: 0.9,
-              life: 0,
-              maxLife: 30,
-            });
-          }
-
-          // Check if dragon hit the ground
-          if (phys.y >= groundY) {
-            phys.y = groundY;
-            phys.landed = true;
-            phys.shockwave = 1;
-
-            // Ground impact explosion
-            for (let i = 0; i < 25; i++) {
-              const angle = -Math.PI * Math.random(); // upward semicircle burst
-              const speed = Math.random() * 6 + 1.5;
-              particlesRef.current.push({
-                x: phys.x,
-                y: groundY,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                radius: Math.random() * 5 + 2,
-                color: Math.random() > 0.5 ? '#ff3300' : '#ffd700',
-                alpha: 1,
-                life: 0,
-                maxLife: 35,
-              });
-            }
-          }
-        } else {
-          // Landed state: expand shockwave ring on the ground
-          if (phys.shockwave > 0 && phys.shockwave < 60) {
-            phys.shockwave += 2.2;
-            ctx.save();
-            ctx.beginPath();
-            ctx.ellipse(phys.x, groundY, phys.shockwave, phys.shockwave * 0.35, 0, 0, Math.PI * 2);
-            ctx.strokeStyle = `rgba(255, 70, 20, ${Math.max(0, 1 - phys.shockwave / 60)})`;
-            ctx.lineWidth = 3;
-            ctx.shadowColor = '#ff2200';
-            ctx.shadowBlur = 12;
-            ctx.stroke();
-            ctx.restore();
-          }
-
-          // Smoke continuously rising from downed dragon
-          if (Math.random() < 0.4) {
-            particlesRef.current.push({
-              x: phys.x + (Math.random() * 16 - 8),
-              y: groundY - 10,
-              vx: (Math.random() - 0.5) * 0.8,
-              vy: -1.2 - Math.random() * 0.8,
-              radius: Math.random() * 5 + 3,
-              color: '#444444',
-              alpha: 0.7,
-              life: 0,
-              maxLife: 40,
-            });
-          }
-        }
-
-        // Draw falling or crashed dragon
+        // Fallen / Plummeting Dragon
         ctx.save();
         ctx.translate(phys.x, phys.y);
         ctx.rotate(phys.rotation);
 
         if (!phys.landed) {
-          // Falling dragon with motion glow
-          ctx.font = '36px serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.shadowColor = 'rgba(255, 50, 0, 0.95)';
-          ctx.shadowBlur = 18;
-          ctx.fillText('🐉', 0, 0);
-          ctx.font = '22px serif';
-          ctx.fillText('🔥', -12, -8);
-        } else {
-          // Downed dragon on ground
-          ctx.font = '34px serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.shadowColor = 'rgba(255, 50, 0, 0.9)';
+          // Fiery dive aura
+          const diveGlow = ctx.createRadialGradient(0, 0, 4, 0, 0, 36);
+          diveGlow.addColorStop(0, 'rgba(255, 80, 20, 0.9)');
+          diveGlow.addColorStop(0.6, 'rgba(180, 30, 10, 0.4)');
+          diveGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = diveGlow;
+          ctx.beginPath();
+          ctx.arc(0, 0, 36, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.font = '36px serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(255, 30, 0, 0.9)';
+        ctx.shadowBlur = 22;
+        ctx.fillText('🐉', 0, 0);
+
+        if (phys.landed) {
+          // Impact explosion burst symbol & dizzy stars
+          ctx.font = '30px serif';
           ctx.shadowBlur = 15;
-          ctx.fillText('🐉', 0, 0);
-          ctx.font = '24px serif';
-          ctx.fillText('💥', 0, -12);
+          ctx.shadowColor = '#ffcc00';
+          ctx.fillText('💥', 0, -14);
+
+          const dizzyAngle = flameTimeRef.current * 4;
+          const starX = Math.cos(dizzyAngle) * 14;
+          const starY = -28 + Math.sin(dizzyAngle) * 4;
           ctx.font = '16px serif';
-          ctx.fillText('💫', 12, -24);
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#ffffaa';
+          ctx.fillText('💫', starX, starY);
         }
         ctx.restore();
 
@@ -471,6 +640,7 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
         ctx.restore();
       }
 
+      ctx.restore();
       animFrameId = requestAnimationFrame(render);
     };
 
@@ -483,12 +653,13 @@ export const CrashCanvas: React.FC<CrashCanvasProps> = ({
   }, []); // Run single continuous loop on mount
 
   return (
-    <div className="relative w-full h-full min-h-[260px] sm:min-h-[320px] rounded-2xl overflow-hidden border border-[#ffd700]/30 shadow-2xl bg-[#0e1018]">
+    <div
+      ref={containerRef}
+      className="relative w-full h-[280px] xs:h-[320px] sm:h-[380px] md:h-[420px] rounded-2xl overflow-hidden border border-[#ffd700]/30 shadow-2xl bg-[#0e1018]"
+    >
       <canvas
         ref={canvasRef}
-        width={700}
-        height={380}
-        className="w-full h-full object-cover block"
+        className="absolute inset-0 w-full h-full block"
       />
     </div>
   );

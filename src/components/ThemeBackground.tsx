@@ -27,6 +27,11 @@ const THEME_FALLBACK_PHOTOS: Record<ThemeId, string[]> = {
     'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1920&auto=format&fit=crop',
     '/backgrounds/dungeon.png',
   ],
+  crypt: [
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1920&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=1920&auto=format&fit=crop',
+    '/backgrounds/crypt.png',
+  ],
 };
 
 export const ThemeBackground: React.FC<ThemeBackgroundProps> = ({ theme }) => {
@@ -449,6 +454,45 @@ export const ThemeBackground: React.FC<ThemeBackgroundProps> = ({ theme }) => {
 
           {/* Vignette Overlay */}
           <div className="absolute inset-0 bg-gradient-to-b from-[#050302]/85 via-[#070504]/70 to-[#050302]/90" />
+        </div>
+      )}
+
+      {/* 5. CRYPT THEME VECTOR ARTWORK */}
+      {theme === 'crypt' && !userCustomImage && currentAttemptIndex >= candidateList.length && (
+        <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none">
+          <svg className="w-full h-full object-cover" viewBox="0 0 1080 1920" preserveAspectRatio="xMidYMid slice">
+            <defs>
+              <linearGradient id="cryptBg" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#030706" />
+                <stop offset="50%" stopColor="#06120e" />
+                <stop offset="100%" stopColor="#020504" />
+              </linearGradient>
+              <radialGradient id="cryptGhostGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.45" />
+                <stop offset="50%" stopColor="#059669" stopOpacity="0.15" />
+                <stop offset="100%" stopColor="#047857" stopOpacity="0" />
+              </radialGradient>
+            </defs>
+
+            <rect width="1080" height="1920" fill="url(#cryptBg)" />
+            {/* Spectral Mist Glow */}
+            <circle cx="540" cy="960" r="480" fill="url(#cryptGhostGlow)" />
+            <circle cx="200" cy="600" r="280" fill="url(#cryptGhostGlow)" />
+            <circle cx="880" cy="1300" r="320" fill="url(#cryptGhostGlow)" />
+
+            {/* Gothic Crypt Arch Pillars */}
+            <path d="M 120 1920 L 120 700 Q 540 400 960 700 L 960 1920 Z" fill="#040907" stroke="#064e3b" strokeWidth="8" />
+            <path d="M 220 1920 L 220 850 Q 540 600 860 850 L 860 1920 Z" fill="#020504" stroke="#047857" strokeWidth="6" />
+
+            {/* Ancient Crypt Sarcophagus Stone */}
+            <rect x="340" y="1300" width="400" height="280" rx="16" fill="#061a14" stroke="#10b981" strokeWidth="4" />
+            <line x1="340" y1="1380" x2="740" y2="1380" stroke="#047857" strokeWidth="4" />
+            <text x="540" y="1450" fill="#34d399" fontSize="28" fontWeight="bold" textAnchor="middle" opacity="0.6">✝ R.I.P. ✝</text>
+            <text x="540" y="1490" fill="#6ee7b7" fontSize="18" textAnchor="middle" opacity="0.5">Aici Odihnește Setilă</text>
+          </svg>
+
+          {/* Vignette Overlay */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#020504]/90 via-[#040e0a]/75 to-[#020504]/95" />
         </div>
       )}
     </div>

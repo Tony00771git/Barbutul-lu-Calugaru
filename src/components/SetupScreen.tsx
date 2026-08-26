@@ -68,6 +68,7 @@ interface SetupScreenProps {
   onOpenRules: () => void;
   onOpenCloudModal?: () => void;
   onOpenCoinsModal?: () => void;
+  onOpenDailyQuests?: () => void;
 }
 
 const PLAYER_COLORS = [
@@ -100,8 +101,9 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   onOpenRules,
   onOpenCloudModal,
   onOpenCoinsModal,
+  onOpenDailyQuests,
 }) => {
-  const { t, profiles, addProfile, autoSaveNewProfiles, language } = useApp();
+  const { t, profiles, addProfile, autoSaveNewProfiles, language, activeDailyQuests, dailyQuestPool } = useApp();
 
   // Screen View Switcher: 'play' (Game setup + profiles) vs 'leaderboard' vs 'friends'
   const [mainTab, setMainTab] = useState<'play' | 'leaderboard' | 'friends'>('play');
@@ -162,7 +164,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   // Crash mode state
   const [crashRole, setCrashRole] = useState<'bot' | 'host' | 'join'>('bot');
   const [crashBotStyle, setCrashBotStyle] = useState<CrashBotStyle>('prudent');
-  const [crashStakeMode, setCrashStakeMode] = useState<'dynamic' | 'guri' | 'groapa'>('dynamic');
+  const [crashStakeMode, setCrashStakeMode] = useState<'dynamic' | 'guri' | 'high_mult'>('dynamic');
   const [crashGroapaThreshold, setCrashGroapaThreshold] = useState<number>(3);
   const [crashSipsThreshold, setCrashSipsThreshold] = useState<number>(55);
   const [customCrashThresholdInput, setCustomCrashThresholdInput] = useState<string>('55');
@@ -737,87 +739,75 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
 
                         <button
                           type="button"
-                          onClick={() => setCrashStakeMode('groapa')}
+                          onClick={() => setCrashStakeMode('high_mult')}
                           className={`py-1 px-1 rounded-lg border text-center text-[10px] font-bold transition-all ${
-                            crashStakeMode === 'groapa'
-                              ? 'bg-red-950/80 border-red-500 text-red-300 ring-1 ring-red-500/50'
+                            crashStakeMode === 'high_mult'
+                              ? 'bg-amber-900/90 border-amber-400 text-yellow-300 ring-1 ring-amber-400/60 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
                               : 'bg-[#150f09] border-stone-800 text-stone-400 hover:text-stone-200'
                           }`}
                         >
-                          <span className="block text-xs">🕳️</span>
-                          <span className="leading-tight block font-cinzel">Doar Groapă</span>
-                          <span className="text-[8px] text-red-400 font-mono block">1v1 Chug Death</span>
+                          <span className="block text-xs">🚀</span>
+                          <span className="leading-tight block font-cinzel">{language === 'ro' ? 'Mult. Mari' : 'High Mult.'}</span>
+                          <span className="text-[8px] text-yellow-400/90 font-mono block">&gt;5x până la x100</span>
                         </button>
                       </div>
                     </div>
 
-                    {/* Groapă Threshold if only Groapa */}
-                    {crashStakeMode === 'groapa' ? (
-                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-800">
-                        <span className="text-xs font-cinzel text-red-400 font-bold">🕳️ Prag Înfrângere (Gropi):</span>
+                    {/* SIPS THRESHOLD SETTING */}
+                    <div className="space-y-1 pt-1 border-t border-stone-800">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-cinzel text-red-400 font-bold">🏁 Prag Final (Guri):</span>
                         <div className="flex items-center gap-1">
-                          {[2, 3, 5].map((g) => (
+                          {[30, 50, 60, 100].map((threshold) => (
                             <button
-                              key={g}
-                              type="button"
-                              onClick={() => setCrashGroapaThreshold(g)}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
-                                crashGroapaThreshold === g
-                                  ? 'bg-red-900 border border-red-400 text-white font-black shadow-md'
-                                  : 'bg-[#1c150e] text-gray-300 hover:bg-[#2a2014]'
-                              }`}
-                            >
-                              {g} {language === 'ro' ? 'gropi' : 'pits'}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      /* SIPS THRESHOLD SETTING */
-                      <div className="space-y-1 pt-1 border-t border-stone-800">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-cinzel text-red-400 font-bold">🏁 Prag Final (Guri):</span>
-                          <div className="flex items-center gap-1">
-                            {[30, 50, 60, 100].map((threshold) => (
-                              <button
-                                key={threshold}
-                                type="button"
-                                onClick={() => {
-                                  setIsCustomCrashThreshold(false);
-                                  setCrashSipsThreshold(threshold);
-                                  setCustomCrashThresholdInput(threshold.toString());
-                                }}
-                                className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
-                                  !isCustomCrashThreshold && crashSipsThreshold === threshold
-                                    ? 'bg-red-900 border border-red-400 text-white font-black shadow-md'
-                                    : 'bg-[#1c150e] text-gray-300 hover:bg-[#2a2014]'
-                                }`}
-                              >
-                                {threshold}
-                              </button>
-                            ))}
-                            <button
+                              key={threshold}
                               type="button"
                               onClick={() => {
-                                setIsCustomCrashThreshold(true);
-                                setCustomCrashThresholdInput(crashSipsThreshold.toString());
+                                setIsCustomCrashThreshold(false);
+                                setCrashSipsThreshold(threshold);
+                                setCustomCrashThresholdInput(threshold.toString());
                               }}
-                              className={`px-2 py-1 rounded-lg text-xs font-cinzel font-bold transition-all ${
-                                isCustomCrashThreshold
+                              className={`px-2 py-1 rounded-lg text-xs font-mono font-bold transition-all ${
+                                !isCustomCrashThreshold && crashSipsThreshold === threshold
                                   ? 'bg-red-900 border border-red-400 text-white font-black shadow-md'
                                   : 'bg-[#1c150e] text-gray-300 hover:bg-[#2a2014]'
                               }`}
                             >
-                              Manual
+                              {threshold}
                             </button>
-                          </div>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCustomCrashThreshold(true);
+                              setCustomCrashThresholdInput(crashSipsThreshold.toString());
+                            }}
+                            className={`px-2 py-1 rounded-lg text-xs font-cinzel font-bold transition-all ${
+                              isCustomCrashThreshold
+                                ? 'bg-red-900 border border-red-400 text-white font-black shadow-md'
+                                : 'bg-[#1c150e] text-gray-300 hover:bg-[#2a2014]'
+                            }`}
+                          >
+                            Manual
+                          </button>
                         </div>
+                      </div>
 
-                        {crashSipsThreshold > 50 && crashStakeMode === 'dynamic' && (
-                          <p className="text-[10px] text-amber-400/90 font-medium bg-amber-950/40 p-1 rounded border border-amber-500/30">
-                            ✨ Jocul are &gt;50 de guri: rundele de <strong>GROAPĂ 🕳️</strong> sunt activate și balansate!
-                          </p>
-                        )}
+                      {crashStakeMode === 'high_mult' && (
+                        <p className="text-[10px] text-yellow-300 font-medium bg-amber-950/60 p-2 rounded-lg border border-amber-500/40">
+                          {language === 'ro'
+                            ? '🚀 Mod Multiplicatoare Mari: Șanse mărite la zboruri lungi (>5x până la x100), cu o alternanță dinamică de multiplicatori (ex: x2.7, x1.2, x5.8, x10.2, x9.2, x1.8)!'
+                            : '🚀 High Multipliers Mode: Increased chance for long flights (>5x up to x100), with dynamic mixed rounds (e.g. x2.7, x1.2, x5.8, x10.2, x9.2, x1.8)!'}
+                        </p>
+                      )}
+
+                      {crashStakeMode === 'dynamic' && (
+                        <p className="text-[10px] text-amber-400/90 font-medium bg-amber-950/40 p-1.5 rounded-lg border border-amber-500/30">
+                          {language === 'ro'
+                            ? '✨ Pe modul balansat / 50+ guri: 10% șanse pentru o rundă de GROAPĂ 🕳️ (maxim 1 pe meci)!'
+                            : '✨ On balanced / 50+ sips: 10% chance for a GROAPĂ round 🕳️ (max 1 per match)!'}
+                        </p>
+                      )}
 
                         {isCustomCrashThreshold && (
                           <div className="pt-1 animate-fade-in">
@@ -841,7 +831,6 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                           </div>
                         )}
                       </div>
-                    )}
                   </div>
                 )}
 
@@ -1512,6 +1501,37 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
               >
                 {language === 'ro' ? 'Profilurile Tale' : 'Your Profiles'}
               </button>
+
+              {/* DAILY QUESTS BUTTON / BANNER */}
+              {onOpenDailyQuests && (
+                <button
+                  type="button"
+                  onClick={onOpenDailyQuests}
+                  className="w-full py-2.5 sm:py-3 rounded-xl font-cinzel font-bold text-xs sm:text-sm transition-all active:scale-98 shadow-lg uppercase tracking-wider flex items-center justify-between px-3.5 bg-gradient-to-r from-amber-950/90 via-[#3a200a] to-[#261509]/90 border border-amber-400/80 text-yellow-300 hover:border-yellow-300 hover:brightness-110 group"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-base sm:text-lg group-hover:scale-110 transition-transform">🎯</span>
+                    <div className="text-left">
+                      <div className="text-xs sm:text-sm font-bold text-yellow-300">
+                        {language === 'ro' ? 'Misiuni Zilnice Călugărești' : 'Daily Monastic Quests'}
+                      </div>
+                      <div className="text-[10px] text-amber-200/60 font-barlow">
+                        {language === 'ro' ? '3 sarcini zilnice • Recompense în Bănuți' : '3 daily tasks • Drunken Coins rewards'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                      activeDailyQuests.some(q => q.completed && !q.claimed) || (!dailyQuestPool.bonusClaimed && activeDailyQuests.filter(q => q.completed).length === 3)
+                        ? 'bg-yellow-400 text-black border-yellow-300 animate-pulse font-black'
+                        : 'bg-black/60 text-amber-300 border-amber-500/40'
+                    }`}>
+                      {activeDailyQuests.filter(q => q.completed).length}/3
+                    </span>
+                    <span className="text-xs text-amber-400">➔</span>
+                  </div>
+                </button>
+              )}
 
               {/* TAVERN FRIENDS & DIRECT 1v1 INVITES BUTTON */}
               <button

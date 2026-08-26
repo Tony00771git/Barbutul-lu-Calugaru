@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { CasinoBet, CasinoRoomState } from '../types';
+import { CasinoBet, CasinoRoomState, TavernEmoteMessage } from '../types';
 import {
   createCasinoRoom,
   joinCasinoRoom,
@@ -13,8 +13,11 @@ import {
   nextCasinoRound,
   endCasinoGame,
   subscribeToCasinoRoom,
+  sendCasinoEmote,
 } from '../lib/casinoFirestoreService';
 import { syncServerClock } from '../lib/duelFirestoreService';
+import { saveActiveSession, clearActiveSession, getActiveSession } from '../lib/sessionManager';
+import { reconnectionService } from '../lib/reconnectionService';
 
 export interface UseCasinoSocketReturn {
   room: CasinoRoomState | null;
@@ -37,6 +40,7 @@ export interface UseCasinoSocketReturn {
   lockBets: () => void;
   nextRound: () => void;
   endGame: () => void;
+  sendEmote: (emote: TavernEmoteMessage) => void;
   clearError: () => void;
   disconnect: () => void;
 }
@@ -71,35 +75,61 @@ export function useCasinoSocket(): UseCasinoSocketReturn {
   }, []);
 
   const startListening = useCallback(
-    (roomCode: string) => {
-      stopListening();
-      setIsConnecting(true);
-      setErrorMessage(null);
-      activeRoomCodeRef.current = roomCode;
+    (roomCode: string): Promise<boolean> => {
+      return new Promise((resolve) => {
+        stopListening();
+        setIsConnecting(true);
+        setErrorMessage(null);
+        activeRoomCodeRef.current = roomCode;
 
-      const unsub = subscribeToCasinoRoom(
-        roomCode,
-        (updatedRoom) => {
-          setIsConnecting(false);
-          if (updatedRoom) {
-            setRoom(updatedRoom);
-            setIsConnected(true);
-          } else {
+        let hasResolved = false;
+        const unsub = subscribeToCasinoRoom(
+          roomCode,
+          (updatedRoom) => {
+            setIsConnecting(false);
+            if (updatedRoom) {
+              setRoom(updatedRoom);
+              setIsConnected(true);
+              reconnectionService.notifyConnected('casino', updatedRoom.code);
+              if (!hasResolved) {
+                hasResolved = true;
+                resolve(true);
+              }
+            } else {
+              setIsConnected(false);
+              reconnectionService.notifyDisconnected('casino', 'Camera de cazino a fost închisă.');
+              if (!hasResolved) {
+                hasResolved = true;
+                resolve(false);
+              }
+            }
+          },
+          (error) => {
+            setIsConnecting(false);
             setIsConnected(false);
-            setErrorMessage('Camera de cazino a fost închisă sau nu există.');
+            reconnectionService.notifyDisconnected('casino', error?.message || 'Eroare la conectare.');
+            if (!hasResolved) {
+              hasResolved = true;
+              resolve(false);
+            }
           }
-        },
-        (error) => {
-          setIsConnecting(false);
-          setIsConnected(false);
-          setErrorMessage(error?.message || 'Eroare la conectarea la camera de Cazino.');
-        }
-      );
+        );
 
-      unsubscribeRef.current = unsub;
+        unsubscribeRef.current = unsub;
+      });
     },
     [stopListening]
   );
+
+  // Register reconnection handler with global reconnection service
+  useEffect(() => {
+    const unregister = reconnectionService.registerHandler('casino', async (session) => {
+      console.log('[Casino] AutoReconnectionHandler triggered for session:', session.roomCode);
+      const ok = await startListening(session.roomCode);
+      return ok;
+    });
+    return unregister;
+  }, [startListening]);
 
   // Resume subscription on page refresh
   useEffect(() => {
@@ -304,6 +334,16 @@ export function useCasinoSocket(): UseCasinoSocketReturn {
     });
   }, [room]);
 
+  const sendEmote = useCallback(
+    (emote: TavernEmoteMessage) => {
+      if (!room) return;
+      sendCasinoEmote(room.code, emote).catch((err) => {
+        console.warn('Error sending casino emote:', err);
+      });
+    },
+    [room]
+  );
+
   const clearError = useCallback(() => {
     setErrorMessage(null);
   }, []);
@@ -312,6 +352,7 @@ export function useCasinoSocket(): UseCasinoSocketReturn {
     stopListening();
     sessionStorage.removeItem('casino_room_code');
     sessionStorage.removeItem('casino_player_id');
+    clearActiveSession();
     setRoom(null);
     setPlayerId(null);
     setIsConnected(false);
@@ -335,6 +376,7 @@ export function useCasinoSocket(): UseCasinoSocketReturn {
     lockBets,
     nextRound,
     endGame,
+    sendEmote,
     clearError,
     disconnect,
   };

@@ -15,6 +15,7 @@ import {
   CasinoPlayer,
   CasinoRoomState,
   CasinoRound,
+  TavernEmoteMessage,
 } from '../types';
 import { generateRoomCode, getSyncedServerNow } from './duelFirestoreService';
 
@@ -974,5 +975,22 @@ export async function endCasinoGame(roomCode: string): Promise<void> {
     }));
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `${CASINO_COLLECTION}/${cleanCode}`);
+  }
+}
+
+/**
+ * Broadcasts an instant Tavern Emote reaction across Casino room.
+ */
+export async function sendCasinoEmote(roomCode: string, emote: TavernEmoteMessage): Promise<void> {
+  const cleanCode = roomCode.trim().toUpperCase();
+  const roomRef = doc(db, CASINO_COLLECTION, cleanCode);
+
+  try {
+    await updateDoc(roomRef, cleanFirestoreData({
+      lastEmote: emote,
+      updatedAt: serverTimestamp(),
+    }));
+  } catch (error) {
+    console.warn('[Casino] Error sending emote:', error);
   }
 }

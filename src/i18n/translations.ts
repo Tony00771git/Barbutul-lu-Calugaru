@@ -258,6 +258,7 @@ export const translations = {
     themeCellar: "Pivnița de Bere 🪵",
     themeGreatHall: "Sala Mare a Mănăstirii 🏰",
     themeDungeon: "Temnița Mănăstirii ⛓️",
+    themeCrypt: "Cripta Fantomelor 👻",
     uploadCustomBg: "Încarcă imagine proprie",
     resetCustomBg: "Resetează la fundalul standard",
     customBgActive: "Imagine proprie activă",
@@ -265,6 +266,9 @@ export const translations = {
     diceGold: "Aur Lucios 🥇",
     diceBone: "Os 🦴",
     diceWood: "Lemn 🪵",
+    diceRuby: "Rubin Sângeriu 💎",
+    diceIce: "Gheață Eternă ❄️",
+    diceObsidian: "Obsidian & Rune 🔮",
     languageTitle: "🌐 Limbă / Language",
 
     // Common
@@ -533,6 +537,7 @@ export const translations = {
     themeCellar: "Brewery Cellar 🪵",
     themeGreatHall: "Monastery Great Hall 🏰",
     themeDungeon: "Monastery Dungeon ⛓️",
+    themeCrypt: "Phantom Crypt 👻",
     uploadCustomBg: "Upload custom image",
     resetCustomBg: "Reset to default background",
     customBgActive: "Custom image active",
@@ -540,6 +545,9 @@ export const translations = {
     diceGold: "Shiny Gold 🥇",
     diceBone: "Bone 🦴",
     diceWood: "Wood 🪵",
+    diceRuby: "Crimson Ruby 💎",
+    diceIce: "Glacial Ice ❄️",
+    diceObsidian: "Obsidian & Runes 🔮",
     languageTitle: "🌐 Language / Limbă",
 
     // Common
