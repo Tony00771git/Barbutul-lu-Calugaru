@@ -125,7 +125,10 @@ service cloud.firestore {
         data.fromName is string && data.fromName.size() >= 1 && data.fromName.size() <= 100 &&
         data.status in ['pending', 'accepted', 'declined'] &&
         (!('fromAvatar' in data) || (data.fromAvatar is string && data.fromAvatar.size() <= 50000)) &&
-        (!('fromShortId' in data) || (data.fromShortId is string && data.fromShortId.size() <= 20));
+        (!('fromShortId' in data) || (data.fromShortId is string && data.fromShortId.size() <= 20)) &&
+        (!('toName' in data) || (data.toName is string && data.toName.size() <= 100)) &&
+        (!('toAvatar' in data) || (data.toAvatar is string && data.toAvatar.size() <= 50000)) &&
+        (!('toShortId' in data) || (data.toShortId is string && data.toShortId.size() <= 20));
     }
 
     // Game Invite Validation (1v1 Duel, Pineapple, Crash)

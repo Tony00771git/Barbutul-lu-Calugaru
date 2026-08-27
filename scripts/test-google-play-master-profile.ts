@@ -448,6 +448,161 @@ assert(
 );
 
 // ---------------------------------------------------------
+// TEST GROUP 5: Bidirectional Friend Sync & Mutual Acceptance
+// ---------------------------------------------------------
+console.log('\n--- TEST GROUP 5: Bidirectional Friend Sync & Mutual Acceptance ---');
+
+interface MockFriendDoc {
+  friendUid: string;
+  displayName: string;
+  avatarIcon: string;
+  shortId: string;
+  addedAt: number;
+}
+
+interface MockFriendRequestDoc {
+  id: string;
+  fromUid: string;
+  fromName: string;
+  fromAvatar?: string;
+  fromShortId?: string;
+  toUid: string;
+  toName?: string;
+  toAvatar?: string;
+  toShortId?: string;
+  status: 'pending' | 'accepted' | 'declined';
+  updatedAt: number;
+}
+
+// User A sends request to User B
+const userA = { uid: 'user_A_111', displayName: 'Călugărul Andrei', avatarIcon: 'monk_drunk', shortId: 'ANDREI99' };
+const userB = { uid: 'user_B_222', displayName: 'Fratele Radu', avatarIcon: 'monk_wise', shortId: 'RADU88' };
+
+const initialFriendRequest: MockFriendRequestDoc = {
+  id: `req_${userA.uid}_${userB.uid}`,
+  fromUid: userA.uid,
+  fromName: userA.displayName,
+  fromAvatar: userA.avatarIcon,
+  fromShortId: userA.shortId,
+  toUid: userB.uid,
+  toName: userB.displayName,
+  toAvatar: userB.avatarIcon,
+  toShortId: userB.shortId,
+  status: 'pending',
+  updatedAt: Date.now(),
+};
+
+assert(initialFriendRequest.status === 'pending', 'Friend request is initialized with pending status');
+assert(initialFriendRequest.toUid === userB.uid, 'Friend request targets User B');
+assert(initialFriendRequest.toName === userB.displayName, 'Friend request preserves recipient name');
+
+// User B accepts request
+const userB_FriendsCollection: Record<string, MockFriendDoc> = {};
+const userA_FriendsCollection: Record<string, MockFriendDoc> = {};
+
+// When User B accepts:
+initialFriendRequest.status = 'accepted';
+initialFriendRequest.toName = userB.displayName;
+initialFriendRequest.toAvatar = userB.avatarIcon;
+initialFriendRequest.toShortId = userB.shortId;
+initialFriendRequest.updatedAt = Date.now();
+
+// 1. User B writes to own collection: users/B/friends/A
+userB_FriendsCollection[userA.uid] = {
+  friendUid: userA.uid,
+  displayName: initialFriendRequest.fromName,
+  avatarIcon: initialFriendRequest.fromAvatar || 'monk_drunk',
+  shortId: initialFriendRequest.fromShortId || '',
+  addedAt: Date.now(),
+};
+
+assert(Boolean(userB_FriendsCollection[userA.uid]), 'User B has User A in their friends list');
+assert(userB_FriendsCollection[userA.uid].displayName === 'Călugărul Andrei', 'User B stores correct friend name for User A');
+
+// 2. User A's real-time outgoing accepted listener triggers
+function simulateUserA_OutgoingSync(req: MockFriendRequestDoc, userAFriends: Record<string, MockFriendDoc>) {
+  if (req.fromUid === userA.uid && req.status === 'accepted') {
+    if (!userAFriends[req.toUid]) {
+      userAFriends[req.toUid] = {
+        friendUid: req.toUid,
+        displayName: req.toName || 'Călugăr Pelerin',
+        avatarIcon: req.toAvatar || 'monk_drunk',
+        shortId: req.toShortId || '',
+        addedAt: Date.now(),
+      };
+    }
+  }
+}
+
+simulateUserA_OutgoingSync(initialFriendRequest, userA_FriendsCollection);
+
+assert(Boolean(userA_FriendsCollection[userB.uid]), 'User A now has User B in their friends list automatically');
+assert(userA_FriendsCollection[userB.uid].displayName === 'Fratele Radu', 'User A has correct friend profile details for User B');
+assert(userA_FriendsCollection[userB.uid].shortId === 'RADU88', 'User A has correct shortId for User B');
+
+// Verify mutual friendship
+assert(
+  Boolean(userA_FriendsCollection[userB.uid] && userB_FriendsCollection[userA.uid]),
+  'Friendship is strictly mutual and synchronized for both sender and receiver'
+);
+
+// ---------------------------------------------------------
+// TEST GROUP 6: Friends Active Room & Lobby vs In-Game Join Filtering
+// ---------------------------------------------------------
+console.log('\n--- TEST GROUP 6: Friends Active Room & Lobby Join Filtering ---');
+
+interface MockFriendUI {
+  friendUid: string;
+  displayName: string;
+  activeRoom?: {
+    mode: 'crash' | 'duel' | 'pineapple' | 'casino';
+    roomCode: string;
+    status: 'lobby' | 'in_game';
+  } | null;
+}
+
+const mockFriends: MockFriendUI[] = [
+  {
+    friendUid: 'friend_lobby',
+    displayName: 'Fratele Grigore',
+    activeRoom: {
+      mode: 'duel',
+      roomCode: 'DUEL1',
+      status: 'lobby',
+    },
+  },
+  {
+    friendUid: 'friend_ingame',
+    displayName: 'Fratele Arsenie',
+    activeRoom: {
+      mode: 'pineapple',
+      roomCode: 'PINE2',
+      status: 'in_game',
+    },
+  },
+  {
+    friendUid: 'friend_offline',
+    displayName: 'Fratele Vasile',
+    activeRoom: null,
+  },
+];
+
+// Helper determining if Join button is displayed in Friends list or Open Lobbies banner
+function canJoinFriendRoom(friend: MockFriendUI): boolean {
+  return Boolean(friend.activeRoom && friend.activeRoom.roomCode && friend.activeRoom.status === 'lobby');
+}
+
+// Banner filter (should ONLY show open waiting lobbies)
+const openLobbies = mockFriends.filter(canJoinFriendRoom);
+
+assert(openLobbies.length === 1, 'Banner only shows friends in waiting lobby state');
+assert(openLobbies[0].friendUid === 'friend_lobby', 'Friend in lobby is correctly identified for joining');
+
+// Verify In-Game friend does NOT have join/spectate button
+assert(!canJoinFriendRoom(mockFriends[1]), 'Friend currently in_game cannot be joined/spectated');
+assert(!canJoinFriendRoom(mockFriends[2]), 'Offline friend without active room cannot be joined');
+
+// ---------------------------------------------------------
 // TEST SUMMARY
 // ---------------------------------------------------------
 console.log('\n======================================================');

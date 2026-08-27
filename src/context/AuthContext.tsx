@@ -14,6 +14,7 @@ import {
   CloudUserProfile,
 } from '../lib/firestoreService';
 import { Profile } from '../types';
+import { syncAcceptedFriendships } from '../lib/friendsService';
 
 interface AuthContextType {
   user: User | null;
@@ -140,6 +141,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => unsubscribe();
   }, []);
+
+  // Background real-time listener to keep outgoing accepted friend requests synced in users/{uid}/friends
+  useEffect(() => {
+    if (!user) return;
+    const unsub = syncAcceptedFriendships(user.uid);
+    return () => unsub();
+  }, [user]);
 
   const signInWithGoogle = async () => {
     setIsSigningIn(true);

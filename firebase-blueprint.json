@@ -492,8 +492,11 @@
         "fromUid": { "type": "string", "maxLength": 128 },
         "fromName": { "type": "string", "minLength": 1, "maxLength": 100 },
         "fromAvatar": { "type": "string", "maxLength": 50000 },
-        "fromShortId": { "type": "string", "maxLength": 16 },
+        "fromShortId": { "type": "string", "maxLength": 20 },
         "toUid": { "type": "string", "maxLength": 128 },
+        "toName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "toAvatar": { "type": "string", "maxLength": 50000 },
+        "toShortId": { "type": "string", "maxLength": 20 },
         "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }

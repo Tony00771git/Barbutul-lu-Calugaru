@@ -921,25 +921,25 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
             )}
           </div>
 
-          {/* ACTIVE ROOMS FROM FRIENDS BANNER / SECTION */}
-          {friends.some((f) => f.activeRoom && f.activeRoom.roomCode) && (
+          {/* ACTIVE ROOMS FROM FRIENDS BANNER / SECTION (ONLY OPEN LOBBIES) */}
+          {friends.some((f) => f.activeRoom && f.activeRoom.roomCode && f.activeRoom.status === 'lobby') && (
             <div className="w-full bg-gradient-to-r from-[#201309] via-[#2a170b] to-[#201309] border-2 border-[#ffd700] rounded-2xl p-3.5 space-y-2.5 shadow-xl gold-glow animate-fade-in">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-xl animate-bounce">🚀</span>
                   <h3 className="font-cinzel font-black text-xs sm:text-sm text-[#ffd700] uppercase tracking-wider">
-                    {language === 'ro' ? 'Camere Deschise de Prieteni' : 'Friends in Open Rooms'}
+                    {language === 'ro' ? 'Lobby-uri Deschise de Prieteni' : 'Friends in Open Lobbies'}
                   </h3>
                 </div>
                 <span className="px-2 py-0.5 rounded-full bg-green-950/80 border border-green-500/50 text-[10px] font-cinzel text-green-400 font-bold flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                  {language === 'ro' ? 'LIVE' : 'LIVE'}
+                  {language === 'ro' ? 'LOBBY' : 'LOBBY'}
                 </span>
               </div>
 
               <div className="space-y-2">
                 {friends
-                  .filter((f) => f.activeRoom && f.activeRoom.roomCode)
+                  .filter((f) => f.activeRoom && f.activeRoom.roomCode && f.activeRoom.status === 'lobby')
                   .map((friend) => {
                     const room = friend.activeRoom!;
                     const modeIcon =
@@ -977,11 +977,11 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
                               <span>{modeIcon}</span>
                               <span className="font-bold">{modeName}</span>
                               <span className="text-gray-400">
-                                • {room.status === 'in_game' ? (language === 'ro' ? 'În Meci' : 'In Game') : 'Lobby'}
+                                • {language === 'ro' ? 'În Lobby (În Așteptare)' : 'In Lobby (Waiting)'}
                               </span>
                               {room.playerCount !== undefined && (
                                 <span className="text-gray-400">
-                                  ({room.playerCount}/{room.maxPlayers || 6})
+                                  ({room.playerCount}/{room.maxPlayers || 2})
                                 </span>
                               )}
                             </div>
@@ -994,7 +994,7 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
                           className="py-1.5 px-3.5 rounded-xl bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-black font-cinzel font-black text-xs hover:brightness-110 active:scale-95 shadow-md flex items-center gap-1.5 transition-all flex-shrink-0"
                         >
                           <span>🚀</span>
-                          <span>{language === 'ro' ? 'Intră în Cameră' : 'Join Room'}</span>
+                          <span>{language === 'ro' ? 'Intră în Lobby' : 'Join Lobby'}</span>
                         </button>
                       </div>
                     );
@@ -1027,78 +1027,102 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
               </div>
             ) : (
               <div className="space-y-2">
-                {friends.map((friend) => (
-                  <div
-                    key={friend.friendUid}
-                    className={`p-3 rounded-xl bg-[#110c07] border transition-all flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 shadow ${
-                      friend.activeRoom?.roomCode
-                        ? 'border-amber-500/70 bg-gradient-to-r from-[#181008] to-[#120c06]'
-                        : 'border-[#2d1e12] hover:border-[#ffd700]/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-[#1a120b] border border-[#e8c84a]/60 flex items-center justify-center overflow-hidden flex-shrink-0">
-                        <AvatarDisplay avatarId={friend.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-cinzel font-bold text-xs sm:text-sm text-[#f0ebe0] truncate flex items-center gap-1.5">
-                          <span>{friend.displayName}</span>
-                          {friend.activeRoom?.roomCode && (
-                            <span className="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse" title="Online in Room" />
-                          )}
-                        </div>
-                        <div className="text-[10px] text-amber-400/90 font-barlow flex items-center gap-1.5 flex-wrap">
-                          {friend.shortId && <span className="font-mono">{friend.shortId}</span>}
-                          {friend.currentTitle_ro && (
-                            <span className="text-gray-400 truncate">• {friend.currentTitle_ro}</span>
-                          )}
-                          {friend.activeRoom?.roomCode && (
-                            <span className="text-green-400 font-bold bg-green-950/60 px-1.5 py-0.2 rounded border border-green-700/50">
-                              {friend.activeRoom.mode === 'crash'
-                                ? '🐉 Crash'
-                                : friend.activeRoom.mode === 'duel'
-                                ? '⚔️ Duel'
-                                : friend.activeRoom.mode === 'pineapple'
-                                ? '🍍 Pineapple'
-                                : '🎰 Cazino'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                {friends.map((friend) => {
+                  const isLobby = Boolean(friend.activeRoom?.roomCode && friend.activeRoom.status === 'lobby');
+                  const isInGame = Boolean(friend.activeRoom?.roomCode && friend.activeRoom.status === 'in_game');
 
-                    <div className="flex items-center gap-1.5 flex-shrink-0 w-full sm:w-auto justify-end">
-                      {friend.activeRoom && friend.activeRoom.roomCode ? (
+                  return (
+                    <div
+                      key={friend.friendUid}
+                      className={`p-3 rounded-xl bg-[#110c07] border transition-all flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 shadow ${
+                        isLobby
+                          ? 'border-amber-500/70 bg-gradient-to-r from-[#181008] to-[#120c06]'
+                          : isInGame
+                          ? 'border-[#3a2817] bg-[#120b06]'
+                          : 'border-[#2d1e12] hover:border-[#ffd700]/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-[#1a120b] border border-[#e8c84a]/60 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          <AvatarDisplay avatarId={friend.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-cinzel font-bold text-xs sm:text-sm text-[#f0ebe0] truncate flex items-center gap-1.5">
+                            <span>{friend.displayName}</span>
+                            {isLobby && (
+                              <span className="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse" title="Lobby Deschis" />
+                            )}
+                            {isInGame && (
+                              <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" title="În Meci" />
+                            )}
+                          </div>
+                          <div className="text-[10px] text-amber-400/90 font-barlow flex items-center gap-1.5 flex-wrap">
+                            {friend.shortId && <span className="font-mono">{friend.shortId}</span>}
+                            {friend.currentTitle_ro && (
+                              <span className="text-gray-400 truncate">• {friend.currentTitle_ro}</span>
+                            )}
+                            {isLobby && (
+                              <span className="text-green-400 font-bold bg-green-950/60 px-1.5 py-0.2 rounded border border-green-700/50">
+                                {friend.activeRoom?.mode === 'crash'
+                                  ? '🐉 Crash'
+                                  : friend.activeRoom?.mode === 'duel'
+                                  ? '⚔️ Duel'
+                                  : friend.activeRoom?.mode === 'pineapple'
+                                  ? '🍍 Pineapple'
+                                  : '🎰 Cazino'}
+                                {' • Lobby'}
+                              </span>
+                            )}
+                            {isInGame && (
+                              <span className="text-amber-300 font-semibold bg-amber-950/50 px-1.5 py-0.2 rounded border border-amber-700/40">
+                                {friend.activeRoom?.mode === 'crash'
+                                  ? '🐉 Crash'
+                                  : friend.activeRoom?.mode === 'duel'
+                                  ? '⚔️ Duel'
+                                  : friend.activeRoom?.mode === 'pineapple'
+                                  ? '🍍 Pineapple'
+                                  : '🎰 Cazino'}
+                                {language === 'ro' ? ' • În Meci' : ' • In Match'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-shrink-0 w-full sm:w-auto justify-end">
+                        {/* Only show Join button if friend is in a waiting LOBBY, NOT when match already started */}
+                        {isLobby && friend.activeRoom?.roomCode ? (
+                          <button
+                            type="button"
+                            onClick={() => onLaunchGameFromInvite(friend.activeRoom!.mode, 'join', friend.activeRoom!.roomCode)}
+                            className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-black font-cinzel font-black text-xs hover:brightness-110 active:scale-95 shadow flex items-center gap-1 transition-all"
+                          >
+                            <span>🚀</span>
+                            <span>{language === 'ro' ? 'Intră în Lobby' : 'Join Lobby'}</span>
+                          </button>
+                        ) : null}
+
                         <button
                           type="button"
-                          onClick={() => onLaunchGameFromInvite(friend.activeRoom!.mode, 'join', friend.activeRoom!.roomCode)}
-                          className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-[#22c55e] to-[#16a34a] text-black font-cinzel font-black text-xs hover:brightness-110 active:scale-95 shadow flex items-center gap-1 transition-all"
+                          onClick={() => setSelectedFriendToInvite(friend)}
+                          className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-[#ffd700] to-[#f7c844] text-black font-cinzel font-black text-xs hover:brightness-110 active:scale-95 shadow flex items-center gap-1 transition-all"
                         >
-                          <span>🚀</span>
-                          <span>{language === 'ro' ? 'Intră în Cameră' : 'Join Room'}</span>
+                          <span>⚔️</span>
+                          <span>{language === 'ro' ? 'Invită' : 'Invite'}</span>
                         </button>
-                      ) : null}
 
-                      <button
-                        type="button"
-                        onClick={() => setSelectedFriendToInvite(friend)}
-                        className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-[#ffd700] to-[#f7c844] text-black font-cinzel font-black text-xs hover:brightness-110 active:scale-95 shadow flex items-center gap-1 transition-all"
-                      >
-                        <span>⚔️</span>
-                        <span>{language === 'ro' ? 'Invită' : 'Invite'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFriend(friend.friendUid)}
-                        className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-950/30 transition-all"
-                        title={language === 'ro' ? 'Șterge prieten' : 'Remove friend'}
-                      >
-                        🗑️
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFriend(friend.friendUid)}
+                          className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-950/30 transition-all"
+                          title={language === 'ro' ? 'Șterge prieten' : 'Remove friend'}
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

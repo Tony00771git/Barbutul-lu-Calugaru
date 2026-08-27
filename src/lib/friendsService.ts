@@ -391,6 +391,9 @@ export async function sendFriendRequest(
       fromAvatar: sender.avatarIcon || 'monk_drunk',
       fromShortId: sender.shortId || generateShortId(sender.uid),
       toUid: target.uid,
+      toName: target.displayName || 'Călugăr Pelerin',
+      toAvatar: target.avatarIcon || 'monk_drunk',
+      toShortId: target.shortId || generateShortId(target.uid),
       status: 'pending',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -406,6 +409,8 @@ export async function sendFriendRequest(
 
 /**
  * Accepts a friend request and saves the friend in the user's private subcollection.
+ * Also updates the friend_requests document with the receiver's information so the sender's client
+ * can immediately and automatically add the receiver to their friends list in real time.
  */
 export async function acceptFriendRequest(
   request: FriendRequest,
@@ -423,15 +428,22 @@ export async function acceptFriendRequest(
   }
 
   try {
-    // 1. Mark request as accepted
+    const receiverDisplayName = myProfile.displayName || auth.currentUser.displayName || 'Călugăr Pelerin';
+    const receiverAvatar = myProfile.avatarIcon || 'monk_drunk';
+    const receiverShortId = myProfile.shortId || generateShortId(myProfile.uid);
+
+    // 1. Mark request as accepted and attach receiver profile info for sender's sync
     if (request.id) {
       await updateDoc(doc(db, 'friend_requests', request.id), {
         status: 'accepted',
+        toName: receiverDisplayName,
+        toAvatar: receiverAvatar,
+        toShortId: receiverShortId,
         updatedAt: serverTimestamp(),
       });
     }
 
-    // 2. Add to current user's friends subcollection
+    // 2. Add to current user's (receiver) friends subcollection
     const friendDocRef = doc(db, 'users', myProfile.uid, 'friends', request.fromUid);
     const friendData: FriendEntry = {
       friendUid: request.fromUid,
@@ -468,13 +480,26 @@ export async function declineFriendRequest(requestId: string): Promise<boolean> 
 }
 
 /**
- * Removes a friend from the user's subcollection.
+ * Removes a friend from the user's subcollection and cleans up any friend request records.
  */
 export async function removeFriend(myUid: string, friendUid: string): Promise<boolean> {
   if (!auth.currentUser || auth.currentUser.uid !== myUid) return false;
   const path = `users/${myUid}/friends/${friendUid}`;
   try {
+    // 1. Delete from my friends subcollection
     await deleteDoc(doc(db, 'users', myUid, 'friends', friendUid));
+
+    // 2. Delete any friend requests between the two to prevent auto-recreation
+    const reqId1 = `req_${myUid.substring(0, 20)}_${friendUid.substring(0, 20)}`;
+    const reqId2 = `req_${friendUid.substring(0, 20)}_${myUid.substring(0, 20)}`;
+
+    try {
+      await deleteDoc(doc(db, 'friend_requests', reqId1));
+    } catch {}
+    try {
+      await deleteDoc(doc(db, 'friend_requests', reqId2));
+    } catch {}
+
     return true;
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
@@ -484,6 +509,8 @@ export async function removeFriend(myUid: string, friendUid: string): Promise<bo
 
 /**
  * Subscribes to the user's friends subcollection and merges live active room data.
+ * Also automatically watches outgoing friend requests accepted by friends and synchronizes
+ * them into the user's friends subcollection so both users are instantly friends in real time.
  */
 export function subscribeToFriends(
   myUid: string,
@@ -512,6 +539,7 @@ export function subscribeToFriends(
     onUpdate(combined);
   };
 
+  // 1. Main listener for user's confirmed friends
   const unsubMain = onSnapshot(
     colRef,
     (snapshot) => {
@@ -571,8 +599,65 @@ export function subscribeToFriends(
     }
   );
 
+  // 2. Real-time auto-sync for outgoing friend requests accepted by the other player
+  const outgoingAcceptedQuery = query(
+    collection(db, 'friend_requests'),
+    where('fromUid', '==', myUid),
+    where('status', '==', 'accepted')
+  );
+
+  const unsubOutgoingAccepted = onSnapshot(
+    outgoingAcceptedQuery,
+    (snapshot) => {
+      snapshot.forEach(async (docSnap) => {
+        const reqData = docSnap.data() as FriendRequest;
+        if (!reqData.toUid) return;
+
+        // Check if we already have this friend in currentBaseFriends to avoid unnecessary writes
+        const alreadyHasFriend = currentBaseFriends.some((f) => f.friendUid === reqData.toUid);
+        if (!alreadyHasFriend) {
+          try {
+            const targetDocRef = doc(db, 'users', myUid, 'friends', reqData.toUid);
+            let friendDisplayName = reqData.toName || 'Călugăr Pelerin';
+            let friendAvatar = reqData.toAvatar || 'monk_drunk';
+            let friendShortId = reqData.toShortId || '';
+
+            // If any details are missing from the request doc, fetch public profile
+            if (!reqData.toName || !reqData.toShortId) {
+              try {
+                const pubSnap = await getDoc(doc(db, 'public_profiles', reqData.toShortId || generateShortId(reqData.toUid)));
+                if (pubSnap.exists()) {
+                  const pub = pubSnap.data() as UserFriendProfile;
+                  friendDisplayName = pub.displayName || friendDisplayName;
+                  friendAvatar = pub.avatarIcon || friendAvatar;
+                  friendShortId = pub.shortId || friendShortId;
+                }
+              } catch {}
+            }
+
+            const targetFriendData: FriendEntry = {
+              friendUid: reqData.toUid,
+              displayName: friendDisplayName,
+              avatarIcon: friendAvatar,
+              shortId: friendShortId,
+              addedAt: serverTimestamp(),
+            };
+
+            await setDoc(targetDocRef, targetFriendData, { merge: true });
+          } catch (syncErr) {
+            console.warn('Error auto-syncing accepted friend for sender:', syncErr);
+          }
+        }
+      });
+    },
+    (err) => {
+      console.warn('Outgoing accepted friend requests listener error:', err);
+    }
+  );
+
   return () => {
     unsubMain();
+    unsubOutgoingAccepted();
     Object.values(profileUnsubs).forEach((u) => u());
   };
 }
@@ -636,6 +721,68 @@ export function subscribeToSentFriendRequests(
     (err) => {
       console.warn('Sent friend requests subscription error:', err);
       if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * Global background sync helper to ensure any accepted friend requests
+ * sent by the user are immediately synced to users/{myUid}/friends.
+ */
+export function syncAcceptedFriendships(myUid: string): () => void {
+  if (!myUid) return () => {};
+
+  const outgoingAcceptedQuery = query(
+    collection(db, 'friend_requests'),
+    where('fromUid', '==', myUid),
+    where('status', '==', 'accepted')
+  );
+
+  return onSnapshot(
+    outgoingAcceptedQuery,
+    (snapshot) => {
+      snapshot.forEach(async (docSnap) => {
+        const reqData = docSnap.data() as FriendRequest;
+        if (!reqData.toUid) return;
+
+        try {
+          const targetDocRef = doc(db, 'users', myUid, 'friends', reqData.toUid);
+          const existingSnap = await getDoc(targetDocRef);
+
+          if (!existingSnap.exists()) {
+            let friendDisplayName = reqData.toName || 'Călugăr Pelerin';
+            let friendAvatar = reqData.toAvatar || 'monk_drunk';
+            let friendShortId = reqData.toShortId || '';
+
+            if (!reqData.toName || !reqData.toShortId) {
+              try {
+                const pubSnap = await getDoc(doc(db, 'public_profiles', reqData.toShortId || generateShortId(reqData.toUid)));
+                if (pubSnap.exists()) {
+                  const pub = pubSnap.data() as UserFriendProfile;
+                  friendDisplayName = pub.displayName || friendDisplayName;
+                  friendAvatar = pub.avatarIcon || friendAvatar;
+                  friendShortId = pub.shortId || friendShortId;
+                }
+              } catch {}
+            }
+
+            const targetFriendData: FriendEntry = {
+              friendUid: reqData.toUid,
+              displayName: friendDisplayName,
+              avatarIcon: friendAvatar,
+              shortId: friendShortId,
+              addedAt: serverTimestamp(),
+            };
+
+            await setDoc(targetDocRef, targetFriendData, { merge: true });
+          }
+        } catch (syncErr) {
+          console.warn('Background sync error for accepted friend:', syncErr);
+        }
+      });
+    },
+    (err) => {
+      console.warn('Background sync listener error:', err);
     }
   );
 }

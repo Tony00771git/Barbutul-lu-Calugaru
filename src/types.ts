@@ -483,6 +483,9 @@ export interface FriendRequest {
   fromAvatar?: string;
   fromShortId?: string;
   toUid: string;
+  toName?: string;
+  toAvatar?: string;
+  toShortId?: string;
   status: 'pending' | 'accepted' | 'declined';
   createdAt?: any;
   updatedAt?: any;
