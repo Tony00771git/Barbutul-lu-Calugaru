@@ -1,6 +1,15 @@
 export type GameMode = 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'crash';
 export type Language = 'ro' | 'en';
-export type ThemeId = 'tavern' | 'cellar' | 'great_hall' | 'dungeon' | 'crypt';
+export type ThemeId =
+  | 'tavern'
+  | 'cellar'
+  | 'great_hall'
+  | 'dungeon'
+  | 'crypt'
+  | 'dragon_lair'
+  | 'celestial_observatory'
+  | 'enchanted_forest'
+  | 'royal_treasury';
 export type DiceSkin =
   | 'gold'
   | 'bone'
@@ -12,7 +21,16 @@ export type DiceSkin =
   | 'crimson_dragon'
   | 'celestial_gold'
   | 'spectral_jade'
-  | 'tavern_oak';
+  | 'tavern_oak'
+  | 'void_cosmic'
+  | 'emerald_hydra'
+  | 'infernal_ember'
+  | 'copper'
+  | 'granite'
+  | 'emerald_jade'
+  | 'plasma_pink'
+  | 'bloodfire'
+  | 'imperial_gold';
 export type Difficulty = 'weak' | 'medium' | 'extreme' | 'nightmare';
 export type DuelSubmode = 'general' | 'football';
 export type DuelDifficulty = 'easy' | 'medium' | 'hard';

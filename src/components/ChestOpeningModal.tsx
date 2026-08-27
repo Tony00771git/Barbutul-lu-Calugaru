@@ -14,12 +14,14 @@ import {
 } from '../data/chestsCatalog';
 import { useApp } from '../context/AppContext';
 import { soundEffects } from '../lib/soundFx';
-import { Sparkles, X, FastForward, RotateCcw, Check, ArrowDown, Gift } from 'lucide-react';
+import { DieFace } from './Dice';
+import { Sparkles, X, FastForward, RotateCcw, Check, ArrowDown, Gift, ArrowLeft, ShoppingBag } from 'lucide-react';
 
 interface ChestOpeningModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialChestId?: string;
+  onBackToStore?: () => void;
 }
 
 const CARD_WIDTH = 140; // Card width in px
@@ -33,6 +35,7 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
   isOpen,
   onClose,
   initialChestId,
+  onBackToStore,
 }) => {
   const {
     drunkenCoins,
@@ -46,6 +49,14 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
   } = useApp();
 
   const isRo = language === 'ro';
+
+  const handleBackToStore = () => {
+    if (onBackToStore) {
+      onBackToStore();
+    } else {
+      onClose();
+    }
+  };
 
   const [selectedChest, setSelectedChest] = useState<ChestDef>(() => {
     if (initialChestId) {
@@ -248,17 +259,31 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
         className="relative w-full max-w-4xl bg-gradient-to-b from-[#1c1208] via-[#120b05] to-[#080402] border-2 border-[#ffd700] rounded-3xl p-4 sm:p-6 shadow-[0_0_80px_rgba(255,215,0,0.35)] text-[#f0ebe0] max-h-[96vh] flex flex-col overflow-hidden"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#ffd700]/30 pb-3">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">{selectedChest.icon}</span>
-            <div>
-              <h2 className="text-lg sm:text-xl font-cinzel font-black text-[#ffd700] tracking-wider flex items-center gap-2">
+        <div className="flex items-center justify-between border-b border-[#ffd700]/30 pb-3 gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            {/* Prominent Back to Store Button in Header */}
+            {phase !== 'spinning' && (
+              <button
+                type="button"
+                onClick={handleBackToStore}
+                className="px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#2c1708] to-[#1a0f05] hover:from-[#3e220d] hover:to-[#261508] border border-[#ffd700]/60 hover:border-[#ffd700] text-amber-300 hover:text-white font-cinzel font-bold text-xs transition-all flex items-center gap-1.5 shadow-md active:scale-95 flex-shrink-0"
+                title={isRo ? 'Înapoi la Magazin / Bazar' : 'Back to Store / Bazaar'}
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">{isRo ? '← Înapoi la Magazin' : '← Back to Store'}</span>
+                <span className="sm:hidden">{isRo ? 'Magazin' : 'Store'}</span>
+              </button>
+            )}
+
+            <span className="text-2xl sm:text-3xl flex-shrink-0">{selectedChest.icon}</span>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-xl font-cinzel font-black text-[#ffd700] tracking-wider flex items-center gap-2 truncate">
                 <span>{isRo ? selectedChest.nameRo : selectedChest.nameEn}</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono border border-amber-500/40">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono border border-amber-500/40 flex-shrink-0">
                   {selectedChest.cost} 🍺🪙
                 </span>
               </h2>
-              <p className="text-xs text-gray-400 font-barlow">
+              <p className="text-xs text-gray-400 font-barlow hidden sm:block truncate">
                 {isRo
                   ? 'Deschidere stil CS cu rarități, animație de ruletă și cosmetice exclusive'
                   : 'CS-style case opening with exact rarities, roulette animation & exclusive cosmetics'}
@@ -266,17 +291,28 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {/* Quick Top-up Button */}
+            <button
+              onClick={() => addDrunkenCoins(999999)}
+              className="bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-600 hover:brightness-125 active:scale-95 text-black font-cinzel font-black text-[10px] sm:text-xs px-2.5 py-1 rounded-xl border border-yellow-200 shadow-[0_0_12px_rgba(234,179,8,0.4)] transition-all flex items-center gap-1 cursor-pointer"
+              title={isRo ? '+999,999 🍺🪙 Bani Infiniți' : '+999,999 🍺🪙 Infinite Coins'}
+            >
+              <span>⚡</span>
+              <span>+999k 🪙</span>
+            </button>
+
             {/* Treasury Balance */}
-            <div className="bg-[#0b0704] border border-[#ffd700]/40 px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-inner">
+            <div className="bg-[#0b0704] border border-[#ffd700]/40 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-2 shadow-inner">
               <span className="text-sm">🍺🪙</span>
-              <span className="font-mono font-black text-sm text-[#ffd700]">{drunkenCoins}</span>
+              <span className="font-mono font-black text-xs sm:text-sm text-[#ffd700]">{drunkenCoins.toLocaleString()}</span>
             </div>
 
             {phase !== 'spinning' && (
               <button
                 onClick={onClose}
                 className="w-8 h-8 rounded-full bg-[#20140a] hover:bg-[#361e0e] border border-stone-700 text-gray-400 hover:text-white flex items-center justify-center transition-all"
+                title={isRo ? 'Închide' : 'Close'}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -372,18 +408,24 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
 
                     {/* Center Artwork / Preview */}
                     <div className="flex-1 flex items-center justify-center my-1">
-                      <div
-                        style={{
-                          background: item.previewGradient
-                            ? undefined
-                            : `radial-gradient(circle, ${rarity.color}33 0%, transparent 70%)`,
-                        }}
-                        className={`w-14 h-14 rounded-xl flex items-center justify-center text-3xl shadow-md border border-white/10 ${
-                          item.previewGradient ? `bg-gradient-to-br ${item.previewGradient}` : ''
-                        }`}
-                      >
-                        <span>{item.icon}</span>
-                      </div>
+                      {item.type === 'diceSkin' && item.diceSkinKey ? (
+                        <div className="transform scale-95 hover:scale-105 transition-transform">
+                          <DieFace value={6} skin={item.diceSkinKey} size="sm" />
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            background: item.previewGradient
+                              ? undefined
+                              : `radial-gradient(circle, ${rarity.color}33 0%, transparent 70%)`,
+                          }}
+                          className={`w-14 h-14 rounded-xl flex items-center justify-center text-3xl shadow-md border border-white/10 ${
+                            item.previewGradient ? `bg-gradient-to-br ${item.previewGradient}` : ''
+                          }`}
+                        >
+                          <span>{item.icon}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Item Name */}
@@ -436,7 +478,7 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
               />
 
               {/* Rarity & Item Name Header */}
-              <div className="relative z-10 space-y-1">
+              <div className="relative z-10 space-y-1.5">
                 <div
                   style={{ color: currentRarityMeta.color }}
                   className="text-xs font-cinzel font-black tracking-widest uppercase flex items-center justify-center gap-1.5"
@@ -445,6 +487,20 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
                   <span>{isRo ? currentRarityMeta.nameRo : currentRarityMeta.nameEn}</span>
                   <Sparkles className="w-4 h-4" />
                 </div>
+
+                {/* Winning Item Visual Preview */}
+                <div className="flex justify-center py-1">
+                  {openResult.winningItem.type === 'diceSkin' && openResult.winningItem.diceSkinKey ? (
+                    <div className="transform scale-110 drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)]">
+                      <DieFace value={6} skin={openResult.winningItem.diceSkinKey} size="md" />
+                    </div>
+                  ) : (
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-black/60 border border-[#ffd700]/50 flex items-center justify-center text-4xl shadow-xl">
+                      {openResult.winningItem.icon}
+                    </div>
+                  )}
+                </div>
+
                 <h3 className="text-xl sm:text-2xl font-cinzel font-black text-white">
                   {openResult.winningItem.name}
                 </h3>
@@ -509,6 +565,14 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
                 >
                   {isRo ? 'Vezi cufere' : 'Browse chests'}
                 </button>
+
+                <button
+                  onClick={handleBackToStore}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-900/80 to-[#2c1708] hover:from-amber-800 hover:to-[#3e220d] border border-[#ffd700]/70 text-[#ffd700] hover:text-white font-cinzel font-bold text-xs uppercase transition-all flex items-center gap-1.5 shadow-md"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span>{isRo ? 'Înapoi la Magazin' : 'Back to Store'}</span>
+                </button>
               </div>
             </motion.div>
           )}
@@ -538,18 +602,29 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
               ))}
             </div>
 
-            {/* Big Open Button */}
-            <button
-              onClick={handleStartOpen}
-              className="w-full sm:w-auto px-8 py-3 rounded-2xl bg-gradient-to-r from-[#ffd700] via-[#f59e0b] to-[#ffd700] text-black font-cinzel font-black text-sm uppercase tracking-wider shadow-[0_0_30px_rgba(255,215,0,0.5)] hover:brightness-110 active:scale-98 transition-all flex items-center justify-center gap-2"
-            >
-              <Gift className="w-5 h-5" />
-              <span>
-                {isRo
-                  ? `Deschide Cufărul (${selectedChest.cost} 🍺🪙)`
-                  : `Open Chest (${selectedChest.cost} 🍺🪙)`}
-              </span>
-            </button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={handleBackToStore}
+                className="px-4 py-3 rounded-2xl bg-[#1c1208] hover:bg-[#2c1b0c] border border-amber-500/50 hover:border-amber-400 text-amber-300 hover:text-white font-cinzel font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 shadow-md flex-shrink-0"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>{isRo ? 'Înapoi la Magazin' : 'Back to Store'}</span>
+              </button>
+
+              {/* Big Open Button */}
+              <button
+                onClick={handleStartOpen}
+                className="flex-1 sm:flex-initial px-8 py-3 rounded-2xl bg-gradient-to-r from-[#ffd700] via-[#f59e0b] to-[#ffd700] text-black font-cinzel font-black text-sm uppercase tracking-wider shadow-[0_0_30px_rgba(255,215,0,0.5)] hover:brightness-110 active:scale-98 transition-all flex items-center justify-center gap-2"
+              >
+                <Gift className="w-5 h-5" />
+                <span>
+                  {isRo
+                    ? `Deschide Cufărul (${selectedChest.cost} 🍺🪙)`
+                    : `Open Chest (${selectedChest.cost} 🍺🪙)`}
+                </span>
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -3,6 +3,7 @@ import { MEDIEVAL_AVATARS, MedievalAvatar } from '../data/avatars';
 import { useApp } from '../context/AppContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { processImageFile } from '../utils/imageUtils';
+import { ArrowLeft } from 'lucide-react';
 
 interface AvatarModalProps {
   isOpen: boolean;
@@ -119,14 +120,24 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
         className="bg-gradient-to-b from-[#1b1510] via-[#120e0a] to-[#0c0906] border-2 border-[#e8c84a] rounded-3xl p-4 sm:p-5 max-w-xl w-full max-h-[92vh] flex flex-col shadow-[0_0_40px_rgba(232,200,74,0.25)] space-y-3 relative"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-2.5">
-          <div className="flex items-center gap-2.5">
-            <span className="text-2xl sm:text-3xl">🎭</span>
-            <div>
-              <h2 className="text-lg sm:text-xl font-cinzel font-black text-[#ffd700] gold-text-glow leading-tight">
+        <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-2.5 gap-2">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-[#2c1708] to-[#1a0f05] hover:from-[#3e220d] hover:to-[#261508] border border-[#ffd700]/60 hover:border-[#ffd700] text-amber-300 hover:text-white font-cinzel font-bold text-xs transition-all flex items-center gap-1 shadow-md active:scale-95 cursor-pointer flex-shrink-0"
+              title={language === 'ro' ? '← Înapoi' : '← Back'}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>{language === 'ro' ? 'Înapoi' : 'Back'}</span>
+            </button>
+
+            <span className="text-2xl sm:text-3xl flex-shrink-0">🎭</span>
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-xl font-cinzel font-black text-[#ffd700] gold-text-glow leading-tight truncate">
                 {language === 'ro' ? 'AVATAR & POZĂ PROFIL' : 'AVATAR & PROFILE PHOTO'}
               </h2>
-              <p className="text-[11px] font-barlow text-gray-400">
+              <p className="text-[11px] font-barlow text-gray-400 truncate hidden sm:block">
                 {playerName
                   ? `${language === 'ro' ? 'Alege înfățișarea pentru' : 'Choose look for'} "${playerName}"`
                   : language === 'ro'
@@ -138,7 +149,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
           <button
             id="close-avatar-modal-btn"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#2a1d12] border border-[#e8c84a]/50 text-gray-300 hover:text-white flex items-center justify-center font-bold text-lg hover:border-[#ffd700] transition-colors"
+            className="w-8 h-8 rounded-full bg-[#2a1d12] border border-[#e8c84a]/50 text-gray-300 hover:text-white flex items-center justify-center font-bold text-lg hover:border-[#ffd700] transition-colors flex-shrink-0"
           >
             ✕
           </button>

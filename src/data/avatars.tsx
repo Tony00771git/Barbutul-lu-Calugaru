@@ -586,6 +586,159 @@ export const MEDIEVAL_AVATARS: MedievalAvatar[] = [
       </svg>
     ),
   },
+  {
+    id: 'valkyrie_shieldmaiden',
+    nameRo: 'Războinica Valkyrie',
+    nameEn: 'Valkyrie Shieldmaiden',
+    descRo: 'Coif cu aripi de argint, plete blonde împletite și privire de gheață',
+    descEn: 'Silver winged helm, golden braids and fierce glacial gaze',
+    bgColor: '#0c1a2e',
+    borderColor: '#38bdf8',
+    emojiFallback: '🛡️',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#091424" />
+        <circle cx="50" cy="50" r="44" stroke="#38bdf8" strokeWidth="2.5" />
+        {/* Winged Helm Details */}
+        <path d="M20 32 C12 18 20 8 32 18 L34 32 Z" fill="#e0f2fe" stroke="#38bdf8" strokeWidth="1.5" />
+        <path d="M80 32 C88 18 80 8 68 18 L66 32 Z" fill="#e0f2fe" stroke="#38bdf8" strokeWidth="1.5" />
+        {/* Fur Shoulders & Steel Armor */}
+        <path d="M22 92 C22 68 34 54 50 54 C66 54 78 68 78 92 Z" fill="#1e293b" />
+        <path d="M30 60 C38 52 62 52 70 60 L68 72 L32 72 Z" fill="#cbd5e1" stroke="#38bdf8" strokeWidth="1.5" />
+        {/* Face */}
+        <ellipse cx="50" cy="38" rx="14" ry="16" fill="#fed7aa" />
+        {/* Braided Golden Hair */}
+        <path d="M32 38 C30 55 34 75 32 88" stroke="#fbbf24" strokeWidth="4.5" strokeLinecap="round" />
+        <path d="M68 38 C70 55 66 75 68 88" stroke="#fbbf24" strokeWidth="4.5" strokeLinecap="round" />
+        {/* Silver Circlet on Forehead */}
+        <path d="M34 28 Q50 22 66 28 L66 32 Q50 26 34 32 Z" fill="#94a3b8" stroke="#e2e8f0" strokeWidth="1" />
+        <circle cx="50" cy="26" r="3" fill="#38bdf8" />
+        {/* Icy Blue Eyes */}
+        <circle cx="43" cy="38" r="2.5" fill="#0284c7" />
+        <circle cx="57" cy="38" r="2.5" fill="#0284c7" />
+        <path d="M44 48 Q50 52 56 48" stroke="#9a3412" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'alchemist_plague',
+    nameRo: 'Alchimistul Ciumei & Elixirului',
+    nameEn: 'Plague & Ale Alchemist',
+    descRo: 'Mască de piele cu cioc de pasăre, ochelari de alamă și fiolă verde',
+    descEn: 'Leather beaked doctor mask with brass goggles and glowing green vial',
+    bgColor: '#071f14',
+    borderColor: '#10b981',
+    emojiFallback: '🧪',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#04130c" />
+        <circle cx="50" cy="50" r="44" stroke="#10b981" strokeWidth="2.5" />
+        {/* Wide Leather Hat */}
+        <ellipse cx="50" cy="22" rx="34" ry="7" fill="#1c1917" stroke="#44403c" strokeWidth="2" />
+        <path d="M32 22 L36 10 L64 10 L68 22 Z" fill="#292524" />
+        {/* Dark Robe */}
+        <path d="M22 92 C22 66 34 54 50 54 C66 54 78 66 78 92 Z" fill="#1c1917" />
+        {/* Leather Beak Mask */}
+        <path d="M36 32 C36 45 42 62 50 68 C58 62 64 45 64 32 Z" fill="#44403c" stroke="#292524" strokeWidth="2" />
+        {/* Brass Goggles */}
+        <circle cx="42" cy="34" r="7" fill="#059669" stroke="#d97706" strokeWidth="2.5" />
+        <circle cx="58" cy="34" r="7" fill="#059669" stroke="#d97706" strokeWidth="2.5" />
+        <line x1="49" y1="34" x2="51" y2="34" stroke="#d97706" strokeWidth="3" />
+        {/* Glowing Alchemy Flask held */}
+        <path d="M68 64 L76 64 L82 82 L62 82 Z" fill="#10b981" stroke="#34d399" strokeWidth="1.5" />
+        <circle cx="72" cy="74" r="3" fill="#ecfdf5" opacity="0.9" />
+      </svg>
+    ),
+  },
+  {
+    id: 'drunken_jester',
+    nameRo: 'Bufonul Regal Însetat',
+    nameEn: 'Thirsty Royal Jester',
+    descRo: 'Căciulă cu doi ciucuri și clopoței, zâmbet poznaș și halbă de vin',
+    descEn: 'Two-pronged jester cap with brass bells, sneaky grin and wine pitcher',
+    bgColor: '#2a1103',
+    borderColor: '#f59e0b',
+    emojiFallback: '🃏',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#1f0c02" />
+        <circle cx="50" cy="50" r="44" stroke="#f59e0b" strokeWidth="2.5" />
+        {/* Motley Jester Horns */}
+        <path d="M34 26 C20 16 12 28 18 36 C24 38 34 32 34 26 Z" fill="#dc2626" />
+        <path d="M66 26 C80 16 88 28 82 36 C76 38 66 32 66 26 Z" fill="#eab308" />
+        <circle cx="18" cy="36" r="4" fill="#ffd700" stroke="#b45309" strokeWidth="1" />
+        <circle cx="82" cy="36" r="4" fill="#ffd700" stroke="#b45309" strokeWidth="1" />
+        {/* Collar with Bells */}
+        <path d="M22 92 C22 66 34 52 50 52 C66 52 78 66 78 92 Z" fill="#7f1d1d" />
+        <path d="M32 54 L40 66 L50 54 L60 66 L68 54" stroke="#eab308" strokeWidth="3" fill="none" />
+        {/* Face with Cheeky Smirk */}
+        <ellipse cx="50" cy="38" rx="14" ry="15" fill="#fde047" opacity="0.9" />
+        <circle cx="44" cy="36" r="2.5" fill="#1e1b4b" />
+        <circle cx="56" cy="36" r="2.5" fill="#1e1b4b" />
+        <path d="M42 46 Q50 56 60 44" stroke="#991b1b" strokeWidth="3" strokeLinecap="round" fill="#b91c1c" />
+      </svg>
+    ),
+  },
+  {
+    id: 'shadow_assassin',
+    nameRo: 'Asasinul Umbrelor',
+    nameEn: 'Shadow Assassin',
+    descRo: 'Glugă neagră din mătase de noapte, ochi violeți și pumnale ascunse',
+    descEn: 'Night-silk dark hood, glowing violet phantom eyes and hidden daggers',
+    bgColor: '#170524',
+    borderColor: '#c084fc',
+    emojiFallback: '🗡️',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#0f0318" />
+        <circle cx="50" cy="50" r="44" stroke="#a855f7" strokeWidth="2.5" />
+        {/* Shadow Cowl / Hood */}
+        <path d="M22 92 C22 66 34 50 50 50 C66 50 78 66 78 92 Z" fill="#1e1b4b" />
+        <path d="M28 42 C28 14 42 8 50 8 C58 8 72 14 72 42 C72 58 60 64 50 66 C40 64 28 58 28 42 Z" fill="#0f172a" stroke="#581c87" strokeWidth="2" />
+        {/* Face Shrouded in Darkness */}
+        <ellipse cx="50" cy="38" rx="14" ry="16" fill="#020617" />
+        {/* Glowing Violet Eyes */}
+        <ellipse cx="43" cy="36" rx="3.5" ry="2" fill="#c084fc" />
+        <ellipse cx="57" cy="36" rx="3.5" ry="2" fill="#c084fc" />
+        <circle cx="43" cy="36" r="1" fill="#ffffff" />
+        <circle cx="57" cy="36" r="1" fill="#ffffff" />
+        {/* Silver Throwing Dagger */}
+        <line x1="26" y1="84" x2="38" y2="68" stroke="#e2e8f0" strokeWidth="3" strokeLinecap="round" />
+        <polygon points="38,68 34,64 42,66" fill="#a855f7" />
+      </svg>
+    ),
+  },
+  {
+    id: 'high_paladin',
+    nameRo: 'Marele Cavaler Paladin',
+    nameEn: 'High Solar Paladin',
+    descRo: 'Armură completă din aur solar, blazon de leu și aură de lumină',
+    descEn: 'Full radiant sun plate armor, noble lion heraldry and divine solar crest',
+    bgColor: '#2b1c03',
+    borderColor: '#ffd700',
+    emojiFallback: '⚔️',
+    renderSvg: (className = 'w-full h-full') => (
+      <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#1c1202" />
+        <circle cx="50" cy="50" r="44" stroke="#ffd700" strokeWidth="3" />
+        {/* Solar Halo Rays */}
+        <circle cx="50" cy="36" r="26" stroke="#fbbf24" strokeWidth="1.5" strokeDasharray="4 4" />
+        {/* Gilded Plate Armor Shoulders */}
+        <path d="M20 92 C20 64 34 52 50 52 C66 52 80 64 80 92 Z" fill="#78350f" stroke="#ffd700" strokeWidth="2" />
+        <path d="M26 62 C34 54 66 54 74 62 L70 82 L30 82 Z" fill="#d97706" stroke="#fef08a" strokeWidth="1.5" />
+        {/* Great Knight Helm */}
+        <path d="M32 24 C32 14 42 10 50 10 C58 10 68 14 68 24 L68 48 C68 56 60 62 50 62 C40 62 32 56 32 48 Z" fill="#b45309" stroke="#ffd700" strokeWidth="2.5" />
+        {/* Cross Visor */}
+        <line x1="38" y1="36" x2="62" y2="36" stroke="#1c1917" strokeWidth="4" strokeLinecap="round" />
+        <line x1="50" y1="28" x2="50" y2="48" stroke="#1c1917" strokeWidth="4" strokeLinecap="round" />
+        {/* Glowing Golden Eyes behind visor */}
+        <circle cx="44" cy="36" r="1.5" fill="#fef08a" />
+        <circle cx="56" cy="36" r="1.5" fill="#fef08a" />
+        {/* Golden Sun Crest on Top */}
+        <circle cx="50" cy="8" r="4" fill="#ffd700" />
+      </svg>
+    ),
+  },
 ];
 
 export const getAvatarById = (idOrEmoji?: string): MedievalAvatar => {

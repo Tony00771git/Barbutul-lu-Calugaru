@@ -718,8 +718,19 @@ export async function endPineappleMatch(
 export async function sendPineappleEmote(code: string, emote: TavernEmoteMessage): Promise<void> {
   const roomRef = doc(db, 'pineapple_rooms', code.trim().toUpperCase());
   try {
+    const cleanEmote = {
+      id: emote.id || `em_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      senderId: emote.senderId || 'player',
+      senderName: emote.senderName || 'Călugăr',
+      senderAvatar: emote.senderAvatar || '🍺',
+      emoteKey: emote.emoteKey,
+      textRo: emote.textRo || '',
+      textEn: emote.textEn || '',
+      icon: emote.icon || '🍺',
+      timestamp: emote.timestamp || Date.now(),
+    };
     await updateDoc(roomRef, {
-      lastEmote: emote,
+      lastEmote: cleanEmote,
       updatedAt: serverTimestamp(),
     });
   } catch (e) {

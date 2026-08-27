@@ -365,24 +365,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const savedCoins = localStorage.getItem(STORAGE_KEYS.DRUNKEN_COINS);
       if (savedCoins !== null) {
         const parsed = parseInt(savedCoins, 10);
-        if (!isNaN(parsed) && parsed >= 0) return parsed;
-      }
-      // If no global balance saved, calculate initial sum from profiles or default bonus
-      const savedProfiles = localStorage.getItem(STORAGE_KEYS.PROFILES);
-      if (savedProfiles) {
-        const parsed = JSON.parse(savedProfiles);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const sum = parsed.reduce((acc: number, p: any) => acc + (p.drunkenCoins || 0), 0);
-          if (sum > 0) {
-            localStorage.setItem(STORAGE_KEYS.DRUNKEN_COINS, sum.toString());
-            return sum;
-          }
-        }
+        if (!isNaN(parsed) && parsed >= 999999) return parsed;
       }
     } catch (e) {
       console.error('Failed to parse saved drunken coins', e);
     }
-    const initialDefault = 100; // Monastic treasury starting gold bonus
+    const initialDefault = 999999; // Monastic treasury starting gold bonus for testing
     try {
       localStorage.setItem(STORAGE_KEYS.DRUNKEN_COINS, initialDefault.toString());
     } catch (e) {}
@@ -400,6 +388,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return safeNext;
     });
   };
+
+  // Expose convenient debug helper on window and guarantee 999,999 on mount
+  useEffect(() => {
+    // Immediately grant infinite test money (999,999) on every startup/refresh for testing
+    setAndPersistDrunkenCoins(999999);
+    try {
+      localStorage.setItem(STORAGE_KEYS.DRUNKEN_COINS, '999999');
+    } catch (e) {}
+
+    if (typeof window !== 'undefined') {
+      (window as any).setInfiniteMoney = () => {
+        setAndPersistDrunkenCoins(999999);
+        try {
+          localStorage.setItem(STORAGE_KEYS.DRUNKEN_COINS, '999999');
+        } catch (e) {}
+        console.log('💰 Infinite money granted: 999,999 🍺🪙');
+      };
+      (window as any).addDrunkenCoins = (amt: number = 100000) => {
+        setAndPersistDrunkenCoins(prev => prev + amt);
+        console.log(`💰 Added ${amt} 🍺🪙 to treasury!`);
+      };
+    }
+  }, []);
 
   // Active XP Breakdown modal state
   const [activeXpBreakdown, setActiveXpBreakdown] = useState<{

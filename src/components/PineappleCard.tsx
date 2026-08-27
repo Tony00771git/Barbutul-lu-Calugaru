@@ -39,6 +39,7 @@ export const PineappleCard: React.FC<PineappleCardProps> = ({
 }) => {
   const isRed = card.suit === 'h' || card.suit === 'd';
   const suitSymbol = SUIT_SYMBOLS[card.suit] || '♠';
+  const displayRank = card.rank === 'T' ? '10' : card.rank;
 
   const sizeClasses = {
     sm: 'w-8 sm:w-9 h-11 sm:h-13 text-[10px] sm:text-xs rounded-md sm:rounded-lg p-0.5',
@@ -89,7 +90,7 @@ export const PineappleCard: React.FC<PineappleCardProps> = ({
       {/* Top Left Rank & Suit */}
       <div className={`flex flex-col items-center leading-none ${suitColor}`}>
         <span className="font-cinzel font-black tracking-tighter text-xs sm:text-sm">
-          {card.rank}
+          {displayRank}
         </span>
         <span className="text-[10px] sm:text-xs -mt-0.5">{suitSymbol}</span>
       </div>
@@ -121,7 +122,7 @@ export const PineappleCard: React.FC<PineappleCardProps> = ({
         className={`flex flex-col items-center leading-none ${suitColor} rotate-180 self-end`}
       >
         <span className="font-cinzel font-black tracking-tighter text-xs sm:text-sm">
-          {card.rank}
+          {displayRank}
         </span>
         <span className="text-[10px] sm:text-xs -mt-0.5">{suitSymbol}</span>
       </div>

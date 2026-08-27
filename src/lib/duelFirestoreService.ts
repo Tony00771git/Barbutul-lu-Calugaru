@@ -121,6 +121,7 @@ export function sanitizeDuelRoom(rawRoom: any): DuelRoomState | null {
     roundResult: rawRoom.roundResult || null,
     scores: rawRoom.scores || {},
     stake: rawRoom.stake || { type: 'sips', count: 2 },
+    lastEmote: rawRoom.lastEmote || null,
     currentQuestion: currentQ
       ? {
           id: currentQ.id,
@@ -590,8 +591,19 @@ export async function sendDuelEmote(roomCode: string, emote: TavernEmoteMessage)
 
   try {
     const roomRef = doc(db, 'duel_rooms', formattedCode);
+    const cleanEmote = {
+      id: emote.id || `em_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      senderId: emote.senderId || 'player',
+      senderName: emote.senderName || 'Călugăr',
+      senderAvatar: emote.senderAvatar || '🍺',
+      emoteKey: emote.emoteKey,
+      textRo: emote.textRo || '',
+      textEn: emote.textEn || '',
+      icon: emote.icon || '🍺',
+      timestamp: emote.timestamp || Date.now(),
+    };
     await updateDoc(roomRef, {
-      lastEmote: emote,
+      lastEmote: cleanEmote,
       updatedAt: Date.now(),
     });
   } catch (err) {

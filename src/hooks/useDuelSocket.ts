@@ -91,14 +91,20 @@ export function useDuelSocket(): UseDuelSocketReturn {
             if (updatedRoom) {
               setRoom(updatedRoom);
               setIsConnected(true);
-              reconnectionService.notifyConnected('duel', updatedRoom.code);
+              if (updatedRoom.status === 'finished') {
+                clearActiveSession();
+                reconnectionService.cancelAndExit();
+              } else {
+                reconnectionService.notifyConnected('duel', updatedRoom.code);
+              }
               if (!hasResolved) {
                 hasResolved = true;
                 resolve(true);
               }
             } else {
               setIsConnected(false);
-              reconnectionService.notifyDisconnected('duel', 'Camera a fost închisă.');
+              clearActiveSession();
+              reconnectionService.cancelAndExit();
               if (!hasResolved) {
                 hasResolved = true;
                 resolve(false);
@@ -108,7 +114,9 @@ export function useDuelSocket(): UseDuelSocketReturn {
           (error) => {
             setIsConnecting(false);
             setIsConnected(false);
-            reconnectionService.notifyDisconnected('duel', error.message || 'Eroare Firestore');
+            if (getActiveSession()) {
+              reconnectionService.notifyDisconnected('duel', error.message || 'Eroare Firestore');
+            }
             if (!hasResolved) {
               hasResolved = true;
               resolve(false);
@@ -389,6 +397,7 @@ export function useDuelSocket(): UseDuelSocketReturn {
     sessionStorage.removeItem('duel_room_code');
     sessionStorage.removeItem('duel_player_id');
     clearActiveSession();
+    reconnectionService.cancelAndExit();
     setRoom(null);
     setIsConnected(false);
     setIsConnecting(false);

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Profile } from '../types';
 import { AvatarDisplay } from './AvatarDisplay';
 import { ProfilesManagementModal } from './ProfilesManagementModal';
+import { calculateProgression } from '../lib/progression';
 
 interface ProfilesOverviewSectionProps {
   onOpenScoreModal?: () => void;
@@ -130,9 +131,20 @@ export const ProfilesOverviewSection: React.FC<ProfilesOverviewSectionProps> = (
                     <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} className="w-full h-full" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="font-cinzel font-bold text-[11px] text-[#f0ebe0] truncate">
-                      {p.name}
+                    <div className="font-cinzel font-bold text-[11px] text-[#f0ebe0] truncate flex items-center gap-1">
+                      <span className="truncate">{p.name}</span>
                     </div>
+                    {(() => {
+                      const prog = calculateProgression(p.totalXP || 0);
+                      const customEquipped = language === 'ro' ? p.currentTitle_ro : p.currentTitle_en;
+                      const titleToShow = customEquipped || (language === 'ro' ? prog.titleRo : prog.titleEn);
+                      return (
+                        <div className="text-[8px] font-cinzel text-[#ffd700] truncate flex items-center gap-0.5">
+                          <span>👑</span>
+                          <span className="truncate">{titleToShow}</span>
+                        </div>
+                      );
+                    })()}
                     <div className="text-[9px] font-mono text-[#e8c84a]">
                       {totalScore} <span className="text-[8px] text-gray-400 font-barlow">pct</span>
                     </div>

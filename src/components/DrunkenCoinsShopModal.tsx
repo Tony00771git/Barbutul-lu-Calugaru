@@ -5,12 +5,13 @@ import { CHESTS_CATALOG, RARITY_DEFINITIONS } from '../data/chestsCatalog';
 import { DiceSkin, ThemeId } from '../types';
 import { soundEffects } from '../lib/soundFx';
 import { ChestOpeningModal } from './ChestOpeningModal';
+import { DieFace } from './Dice';
 import { Sparkles, Gift } from 'lucide-react';
 
 interface DrunkenCoinsShopModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'chests' | 'dice' | 'themes' | 'perks' | 'titles' | 'emotes' | 'ideas';
+  initialTab?: 'chests' | 'dice' | 'themes' | 'perks' | 'titles' | 'emotes';
 }
 
 export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
@@ -20,6 +21,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
 }) => {
   const {
     drunkenCoins,
+    addDrunkenCoins,
     language,
     purchaseShopItem,
     isItemPurchased,
@@ -33,7 +35,9 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
 
   const isRo = language === 'ro';
 
-  const [activeTab, setActiveTab] = useState<'chests' | 'dice' | 'themes' | 'perks' | 'titles' | 'emotes' | 'ideas'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'chests' | 'dice' | 'themes' | 'perks' | 'titles' | 'emotes'>(
+    initialTab === ('ideas' as any) ? 'chests' : initialTab
+  );
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [openingChestId, setOpeningChestId] = useState<string | null>(null);
 
@@ -127,6 +131,20 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Infinite Test Coins Refill Button */}
+            <button
+              type="button"
+              onClick={() => {
+                addDrunkenCoins(999999);
+                showToast(isRo ? '💰 Tezaur reîncărcat cu +999,999 🍺🪙!' : '💰 Treasury refilled with +999,999 🍺🪙!', 'success');
+              }}
+              className="bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-600 hover:brightness-125 active:scale-95 text-black font-cinzel font-black text-[10px] sm:text-xs px-2.5 py-1 sm:py-1.5 rounded-xl border border-yellow-200 shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all flex items-center gap-1 cursor-pointer"
+              title={isRo ? 'Apasă pentru +999,999 🍺🪙 Bani Infiniți' : 'Click for +999,999 🍺🪙 Infinite Coins'}
+            >
+              <span>⚡</span>
+              <span>+999k 🪙</span>
+            </button>
+
             {/* Balance Pill */}
             <div className="bg-[#24170c] border border-[#ffd700] px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl flex items-center gap-1.5 shadow-md">
               <span className="text-[10px] sm:text-xs font-cinzel text-amber-300/80 hidden sm:inline">
@@ -241,18 +259,6 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
             <span>🍻</span>
             <span>{isRo ? 'Reacții & Emoticoane' : 'Tavern Emotes'}</span>
             <span className="text-[10px] opacity-75 font-normal">({ownedEmoteCount}/{emoteItems.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('ideas')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
-              activeTab === 'ideas'
-                ? 'bg-amber-600 text-white shadow-lg font-black'
-                : 'bg-[#18110a] border border-amber-800/40 text-amber-300 hover:text-amber-200'
-            }`}
-          >
-            <span>💡</span>
-            <span>{isRo ? 'Idei & Propuneri' : 'Roadmap & Ideas'}</span>
           </button>
         </div>
 
@@ -378,8 +384,14 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0 pr-2">
-                      <div className="w-10 h-10 rounded-xl bg-[#2a1e0f] border border-stone-700 flex items-center justify-center text-xl flex-shrink-0">
-                        {item.icon}
+                      <div className="flex-shrink-0">
+                        {item.diceSkinKey ? (
+                          <DieFace value={6} skin={item.diceSkinKey} size="sm" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-[#2a1e0f] border border-stone-700 flex items-center justify-center text-xl flex-shrink-0">
+                            {item.icon}
+                          </div>
+                        )}
                       </div>
                       <div className="min-w-0">
                         <div className="font-cinzel font-bold text-xs text-[#ffd700] truncate">
@@ -689,35 +701,6 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                   </div>
                 );
               })}
-            </div>
-          )}
-
-          {/* TAB 5: ROADMAP & IDEAS */}
-          {activeTab === 'ideas' && (
-            <div className="space-y-3">
-              <div className="p-4 bg-[#140e08] border border-amber-600/40 rounded-2xl space-y-2">
-                <h3 className="font-cinzel font-black text-sm text-[#ffd700] flex items-center gap-2">
-                  <span>💡</span> {isRo ? 'Ce urmează să poți cumpăra cu Bănuții Turmentați:' : 'Upcoming Drunken Coins Features:'}
-                </h3>
-                <ul className="space-y-2 text-xs text-stone-300 font-barlow">
-                  <li className="flex items-start gap-2">
-                    <span className="text-amber-400 font-bold">1. 🎭 Rame de Avatar & Accesorii Monastice:</span>
-                    <span>Aureole radiante, coifuri de cavaler, căni de bere aburinde pe avatar.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-amber-400 font-bold">2. 🔊 Pachete de Voci & Reacții Medievale:</span>
-                    <span>Strigăte audio în limba română la „Groapă”, „Rai 1-1” și dueluri câștigate.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-amber-400 font-bold">3. 🍻 Minijoc de Berărie (Tavern Idle Brewing):</span>
-                    <span>Investește bănuții în butoaie de bere care produc XP pasiv în timp!</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-amber-400 font-bold">4. 📜 Scenarii & Cărți de Taină Custom:</span>
-                    <span>Pachete suplimentare de întrebări de cultură generală și fotbal pentru Duel 1v1.</span>
-                  </li>
-                </ul>
-              </div>
             </div>
           )}
         </div>

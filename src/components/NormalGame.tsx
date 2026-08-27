@@ -8,6 +8,7 @@ import { TurnEndDrinkModal } from './Popups';
 import { ScoreModal } from './ScoreModal';
 import { AvatarDisplay } from './AvatarDisplay';
 import { HeadToHeadTracker } from './HeadToHeadTracker';
+import { calculateProgression } from '../lib/progression';
 
 interface NormalGameProps {
   initialPlayers: Player[];
@@ -32,7 +33,7 @@ export const NormalGame: React.FC<NormalGameProps> = ({
   onEndGame,
   onOpenRules,
 }) => {
-  const { t, diceSkin, theme, checkAchievement, trackQuestEvent } = useApp();
+  const { t, diceSkin, theme, checkAchievement, trackQuestEvent, profiles, language } = useApp();
 
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
   const [activePlayerIndex, setActivePlayerIndex] = useState<number>(0);
@@ -354,8 +355,25 @@ export const NormalGame: React.FC<NormalGameProps> = ({
           </div>
           <div>
             <div className="text-xs text-gray-400 font-cinzel">{t('turnOf')}</div>
-            <div className="text-base font-cinzel font-bold text-[#e8c84a] gold-text-glow">
-              {activePlayer.name}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-base font-cinzel font-bold text-[#e8c84a] gold-text-glow">
+                {activePlayer.name}
+              </span>
+              {(() => {
+                const matchedProf = profiles.find(
+                  (p) => p.name.trim().toLowerCase() === activePlayer.name.trim().toLowerCase()
+                );
+                if (!matchedProf) return null;
+                const prog = calculateProgression(matchedProf.totalXP || 0);
+                const customEquipped = language === 'ro' ? matchedProf.currentTitle_ro : matchedProf.currentTitle_en;
+                const titleToShow = customEquipped || (language === 'ro' ? prog.titleRo : prog.titleEn);
+                return (
+                  <span className="text-[10px] font-cinzel font-bold text-[#ffd700] flex items-center gap-1 bg-[#23170b] px-2 py-0.5 rounded-full border border-[#ffd700]/40 shadow">
+                    <span>👑</span>
+                    <span>{titleToShow}</span>
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>

@@ -32,17 +32,12 @@ export const TavernEmotesOverlay: React.FC<TavernEmotesOverlayProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [cooldown, setCooldown] = useState(false);
   const [floatingBubbles, setFloatingBubbles] = useState<ActiveFloatingBubble[]>([]);
+  const processedEmoteIds = useRef<Set<string>>(new Set());
   const lastProcessedEmoteTimestamp = useRef<number>(0);
 
-  // Process incoming emotes from other players or self
-  useEffect(() => {
-    if (!lastEmote || !lastEmote.timestamp) return;
-    if (lastEmote.timestamp <= lastProcessedEmoteTimestamp.current) return;
-
-    lastProcessedEmoteTimestamp.current = lastEmote.timestamp;
-
+  const displayEmoteBubble = (emote: TavernEmoteMessage) => {
     // Trigger matching sound effect
-    const matchedDef = TAVERN_EMOTES_LIST.find((e) => e.key === lastEmote.emoteKey);
+    const matchedDef = TAVERN_EMOTES_LIST.find((e) => e.key === emote.emoteKey);
     if (matchedDef) {
       soundEffects.playEmote(matchedDef.soundType);
     } else {
@@ -51,16 +46,32 @@ export const TavernEmotesOverlay: React.FC<TavernEmotesOverlayProps> = ({
 
     // Add floating visual bubble
     const newBubble: ActiveFloatingBubble = {
-      ...lastEmote,
-      instanceId: `bubble_${Date.now()}_${Math.random()}`,
+      ...emote,
+      instanceId: `bubble_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     };
 
-    setFloatingBubbles((prev) => [...prev.slice(-4), newBubble]);
+    setFloatingBubbles((prev) => [...prev.slice(-3), newBubble]);
 
-    // Auto-remove after 4 seconds
+    // Auto-remove after 4.2 seconds
     setTimeout(() => {
       setFloatingBubbles((prev) => prev.filter((b) => b.instanceId !== newBubble.instanceId));
     }, 4200);
+  };
+
+  // Process incoming emotes from opponents or room updates
+  useEffect(() => {
+    if (!lastEmote || !lastEmote.timestamp) return;
+
+    // Deduplicate by emote unique ID or timestamp
+    if (lastEmote.id && processedEmoteIds.current.has(lastEmote.id)) return;
+    if (lastEmote.timestamp <= lastProcessedEmoteTimestamp.current) return;
+
+    if (lastEmote.id) {
+      processedEmoteIds.current.add(lastEmote.id);
+    }
+    lastProcessedEmoteTimestamp.current = lastEmote.timestamp;
+
+    displayEmoteBubble(lastEmote);
   }, [lastEmote]);
 
   const handleSelectEmote = async (def: TavernEmoteDef) => {
@@ -82,13 +93,14 @@ export const TavernEmotesOverlay: React.FC<TavernEmotesOverlayProps> = ({
 
     if (cooldown) return;
     setCooldown(true);
-    setTimeout(() => setCooldown(false), 1800);
+    setTimeout(() => setCooldown(false), 1500);
 
+    const emoteId = `em_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const emoteMsg: TavernEmoteMessage = {
-      id: `em_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      senderId: localPlayer.id,
-      senderName: localPlayer.name,
-      senderAvatar: localPlayer.avatarIcon,
+      id: emoteId,
+      senderId: localPlayer.id || 'player',
+      senderName: localPlayer.name || (isRo ? 'Călugăr' : 'Monk'),
+      senderAvatar: localPlayer.avatarIcon || '🍺',
       emoteKey: def.key,
       textRo: def.nameRo,
       textEn: def.nameEn,
@@ -96,11 +108,17 @@ export const TavernEmotesOverlay: React.FC<TavernEmotesOverlayProps> = ({
       timestamp: Date.now(),
     };
 
+    // Optimistically record and display locally for instant feedback
+    processedEmoteIds.current.add(emoteId);
+    lastProcessedEmoteTimestamp.current = emoteMsg.timestamp;
+    displayEmoteBubble(emoteMsg);
+    setIsOpen(false);
+
+    // Broadcast across Firestore room to all opponents
     try {
       await onSendEmote(emoteMsg);
-      setIsOpen(false);
     } catch (err) {
-      console.warn('[Emotes] Error sending emote:', err);
+      console.warn('[Emotes] Error broadcasting emote to opponents:', err);
     }
   };
 

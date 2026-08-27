@@ -40,6 +40,7 @@ export const PineappleOpponentWidget: React.FC<PineappleOpponentWidgetProps> = (
 
     const isRed = card.suit === 'h' || card.suit === 'd';
     const suitSymbol = SUIT_SYMBOLS[card.suit] || '♠';
+    const displayRank = card.rank === 'T' ? '10' : card.rank;
 
     return (
       <div
@@ -47,9 +48,9 @@ export const PineappleOpponentWidget: React.FC<PineappleOpponentWidgetProps> = (
         className={`w-4 h-5 sm:w-5 sm:h-6 rounded bg-gradient-to-b from-[#fdfbf7] to-[#e6dcce] border border-[#5a4836] flex flex-col items-center justify-center leading-none shadow-sm ${
           isRed ? 'text-red-600' : 'text-stone-900'
         }`}
-        title={`${card.rank}${suitSymbol}`}
+        title={`${displayRank}${suitSymbol}`}
       >
-        <span className="font-cinzel font-black text-[8px] sm:text-[9px] -mb-0.5">{card.rank}</span>
+        <span className="font-cinzel font-black text-[8px] sm:text-[9px] -mb-0.5">{displayRank}</span>
         <span className="text-[7px] sm:text-[8px]">{suitSymbol}</span>
       </div>
     );

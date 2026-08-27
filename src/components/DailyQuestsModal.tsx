@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { DAILY_QUEST_DEFINITIONS, DailyQuestCategory } from '../data/dailyQuests';
+import { DailyQuestCategory } from '../data/dailyQuests';
 import { soundEffects } from '../lib/soundFx';
 
 interface DailyQuestsModalProps {
@@ -24,7 +24,6 @@ export const DailyQuestsModal: React.FC<DailyQuestsModalProps> = ({
     timeUntilQuestReset,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'today' | 'codex'>('today');
   const [claimCelebration, setClaimCelebration] = useState<string | null>(null);
 
   useEffect(() => {
@@ -109,7 +108,7 @@ export const DailyQuestsModal: React.FC<DailyQuestsModalProps> = ({
 
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-3xl max-h-[92vh] flex flex-col bg-gradient-to-b from-[#1c140d] via-[#150f09] to-[#0e0a06] border-2 border-[#e8c84a]/70 rounded-2xl sm:rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden"
+        className="w-full max-w-2xl max-h-[92vh] flex flex-col bg-gradient-to-b from-[#1c140d] via-[#150f09] to-[#0e0a06] border-2 border-[#e8c84a]/70 rounded-2xl sm:rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.9)] overflow-hidden"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-amber-900/40 bg-gradient-to-r from-[#2a1708] via-[#1a0f05] to-[#2a1708]">
@@ -163,247 +162,178 @@ export const DailyQuestsModal: React.FC<DailyQuestsModalProps> = ({
             </span>
           </div>
 
-          {/* Navigation Tabs */}
-          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-stone-800">
-            <button
-              onClick={() => setActiveTab('today')}
-              className={`px-3 py-1 rounded-lg text-xs font-cinzel font-bold transition-all ${
-                activeTab === 'today'
-                  ? 'bg-amber-900/80 text-yellow-300 border border-amber-500/50 shadow'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              🎯 {isRo ? 'Misiuni Astăzi' : 'Today Quests'} ({completedCount}/3)
-            </button>
-            <button
-              onClick={() => setActiveTab('codex')}
-              className={`px-3 py-1 rounded-lg text-xs font-cinzel font-bold transition-all ${
-                activeTab === 'codex'
-                  ? 'bg-amber-900/80 text-yellow-300 border border-amber-500/50 shadow'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              📜 {isRo ? 'Codex (36 Misiuni)' : 'Codex (36 Quests)'}
-            </button>
+          <div className="flex items-center gap-1.5 text-xs text-amber-300/80 font-cinzel font-bold">
+            <span>✨</span>
+            <span>{isRo ? '3 Misiuni Active Astăzi' : '3 Active Quests Today'}</span>
           </div>
         </div>
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-5 space-y-4 custom-scrollbar">
-          {activeTab === 'today' ? (
-            <>
-              {/* Grand Daily Completion Bonus Chest */}
-              <div
-                className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
-                  dailyQuestPool.bonusClaimed
-                    ? 'bg-stone-900/60 border-stone-800 opacity-75'
-                    : allCompleted
-                    ? 'bg-gradient-to-r from-amber-950 via-yellow-950 to-amber-950 border-2 border-yellow-400 shadow-[0_0_25px_rgba(234,179,8,0.3)]'
-                    : 'bg-stone-950/80 border-stone-800'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-12 h-12 rounded-2xl flex items-center justify-center text-3xl ${
-                        allCompleted && !dailyQuestPool.bonusClaimed
-                          ? 'bg-gradient-to-br from-yellow-400 to-amber-600 animate-pulse text-white shadow-lg'
-                          : 'bg-stone-900 text-stone-400 border border-stone-700'
-                      }`}
-                    >
-                      {dailyQuestPool.bonusClaimed ? '🏆' : '🎁'}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm sm:text-base font-black text-amber-300 font-cinzel">
-                          {isRo ? 'Cufărul Suprem al Zilei (+50 🍺🪙)' : 'Daily Master Chest (+50 🍺🪙)'}
-                        </h3>
-                        {dailyQuestPool.bonusClaimed && (
-                          <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
-                            {isRo ? 'REVENDICAT ✅' : 'CLAIMED ✅'}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-stone-400 font-barlow">
-                        {isRo
-                          ? 'Finalizează toate cele 3 misiuni zilnice pentru a debloca bonusul suprem de 50 de Bănuți!'
-                          : 'Complete all 3 daily quests to unlock the ultimate 50 Drunken Coins bonus!'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                    {!dailyQuestPool.bonusClaimed && (
-                      <button
-                        disabled={!canClaimBonus}
-                        onClick={handleClaimBonus}
-                        className={`px-4 py-2 rounded-xl font-cinzel font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md ${
-                          canClaimBonus
-                            ? 'bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 hover:brightness-125 text-black font-black active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.5)] cursor-pointer'
-                            : 'bg-stone-900 border border-stone-800 text-stone-500 cursor-not-allowed'
-                        }`}
-                      >
-                        <span>🎁</span>
-                        <span>{canClaimBonus ? (isRo ? 'Revendică +50 🪙' : 'Claim +50 🪙') : `${completedCount}/3 ${isRo ? 'Finalizate' : 'Completed'}`}</span>
-                      </button>
+          {/* Grand Daily Completion Bonus Chest */}
+          <div
+            className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
+              dailyQuestPool.bonusClaimed
+                ? 'bg-stone-900/60 border-stone-800 opacity-75'
+                : allCompleted
+                ? 'bg-gradient-to-r from-amber-950 via-yellow-950 to-amber-950 border-2 border-yellow-400 shadow-[0_0_25px_rgba(234,179,8,0.3)]'
+                : 'bg-stone-950/80 border-stone-800'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center text-3xl ${
+                    allCompleted && !dailyQuestPool.bonusClaimed
+                      ? 'bg-gradient-to-br from-yellow-400 to-amber-600 animate-pulse text-white shadow-lg'
+                      : 'bg-stone-900 text-stone-400 border border-stone-700'
+                  }`}
+                >
+                  {dailyQuestPool.bonusClaimed ? '🏆' : '🎁'}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm sm:text-base font-black text-amber-300 font-cinzel">
+                      {isRo ? 'Cufărul Suprem al Zilei (+50 🍺🪙)' : 'Daily Master Chest (+50 🍺🪙)'}
+                    </h3>
+                    {dailyQuestPool.bonusClaimed && (
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
+                        {isRo ? 'REVENDICAT ✅' : 'CLAIMED ✅'}
+                      </span>
                     )}
                   </div>
+                  <p className="text-xs text-stone-400 font-barlow">
+                    {isRo
+                      ? 'Finalizează toate cele 3 misiuni zilnice pentru a debloca bonusul suprem de 50 de Bănuți!'
+                      : 'Complete all 3 daily quests to unlock the ultimate 50 Drunken Coins bonus!'}
+                  </p>
                 </div>
               </div>
 
-              {/* 3 Active Daily Quests */}
-              <div className="space-y-3">
-                {activeDailyQuests.map((quest, idx) => {
-                  const catBadge = getCategoryBadge(quest.category);
-                  const diffBadge = getDifficultyBadge(quest.difficulty);
-                  const progressPct = Math.min(100, Math.round((quest.progress / quest.target) * 100));
-                  const canClaim = quest.completed && !quest.claimed;
-
-                  return (
-                    <div
-                      key={quest.id}
-                      className={`p-4 rounded-2xl border transition-all ${
-                        quest.claimed
-                          ? 'bg-[#120d08]/80 border-emerald-900/40 opacity-80'
-                          : quest.completed
-                          ? 'bg-gradient-to-r from-[#261608] via-[#1e1106] to-[#261608] border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]'
-                          : 'bg-[#150f09] border-stone-800 hover:border-stone-700'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3 flex-1">
-                          {/* Quest Icon */}
-                          <div
-                            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 border ${
-                              quest.claimed
-                                ? 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300'
-                                : quest.completed
-                                ? 'bg-amber-950 border-amber-400 text-yellow-300 shadow-md'
-                                : 'bg-stone-900 border-stone-800 text-stone-300'
-                            }`}
-                          >
-                            {quest.claimed ? '✅' : quest.icon}
-                          </div>
-
-                          {/* Quest Details */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${catBadge.color}`}>
-                                {catBadge.label}
-                              </span>
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${diffBadge.color}`}>
-                                {diffBadge.label}
-                              </span>
-                              <span className="text-xs font-mono font-bold text-[#ffd700] ml-auto">
-                                +{quest.coinReward} 🍺🪙
-                              </span>
-                            </div>
-
-                            <h4 className="text-sm sm:text-base font-bold text-amber-200 font-cinzel">
-                              {isRo ? quest.titleRo : quest.titleEn}
-                            </h4>
-                            <p className="text-xs text-stone-400 font-barlow mt-0.5">
-                              {isRo ? quest.descRo : quest.descEn}
-                            </p>
-
-                            {/* Progress Bar */}
-                            <div className="mt-3">
-                              <div className="flex items-center justify-between text-[11px] font-mono text-stone-400 mb-1">
-                                <span>{isRo ? 'Progres:' : 'Progress:'}</span>
-                                <span className="font-bold text-amber-300">
-                                  {quest.progress} / {quest.target} {isRo ? (quest.unitRo || '') : (quest.unitEn || '')} ({progressPct}%)
-                                </span>
-                              </div>
-
-                              <div className="w-full h-2.5 bg-black/60 rounded-full overflow-hidden border border-stone-800 p-0.5">
-                                <div
-                                  className={`h-full rounded-full transition-all duration-500 ${
-                                    quest.claimed
-                                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
-                                      : quest.completed
-                                      ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 animate-pulse'
-                                      : 'bg-gradient-to-r from-amber-700 to-amber-500'
-                                  }`}
-                                  style={{ width: `${progressPct}%` }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Action / Claim Button */}
-                        <div className="flex items-center self-center flex-shrink-0">
-                          {quest.claimed ? (
-                            <span className="px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-cinzel font-bold">
-                              {isRo ? 'Revendicat ✅' : 'Claimed ✅'}
-                            </span>
-                          ) : canClaim ? (
-                            <button
-                              onClick={() => handleClaim(quest.id, quest.coinReward)}
-                              className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 hover:brightness-125 text-black font-cinzel font-black text-xs sm:text-sm shadow-[0_0_15px_rgba(234,179,8,0.5)] active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 animate-bounce"
-                            >
-                              <span>🎁</span>
-                              <span>{isRo ? 'Revendică' : 'Claim'}</span>
-                            </button>
-                          ) : (
-                            <span className="px-3 py-1.5 rounded-xl bg-stone-900 border border-stone-800 text-stone-500 text-xs font-mono font-semibold">
-                              {quest.progress}/{quest.target}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            /* CODEX / ALL 36 QUESTS ARCHIVE */
-            <div className="space-y-3">
-              <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl text-xs text-amber-200">
-                📖 {isRo
-                  ? 'Acesta este Marele Codex Monahal ce conține toate cele 36 de Misiuni Posibile. În fiecare zi la 00:00 (Ora României), sistemul alege automat 3 misiuni randomizate și diversificate!'
-                  : 'This is the Grand Monastic Codex containing all 36 possible daily quests. Every day at 12:00 AM (Romania Time), 3 diverse randomized tasks are selected!'}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {DAILY_QUEST_DEFINITIONS.map((q) => {
-                  const catBadge = getCategoryBadge(q.category);
-                  const diffBadge = getDifficultyBadge(q.difficulty);
-
-                  return (
-                    <div
-                      key={q.id}
-                      className="p-3 bg-[#150f09] border border-stone-800 rounded-xl hover:border-amber-500/40 transition-all flex items-start gap-3"
-                    >
-                      <div className="w-10 h-10 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center text-xl flex-shrink-0">
-                        {q.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${catBadge.color}`}>
-                            {catBadge.label}
-                          </span>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${diffBadge.color}`}>
-                            {diffBadge.label}
-                          </span>
-                          <span className="text-[11px] font-mono font-bold text-yellow-300 ml-auto">
-                            +{q.coinReward} 🪙
-                          </span>
-                        </div>
-                        <h5 className="text-xs font-bold text-amber-200 font-cinzel truncate">
-                          {isRo ? q.titleRo : q.titleEn}
-                        </h5>
-                        <p className="text-[11px] text-stone-400 font-barlow mt-0.5 line-clamp-2">
-                          {isRo ? q.descRo : q.descEn}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                {!dailyQuestPool.bonusClaimed && (
+                  <button
+                    disabled={!canClaimBonus}
+                    onClick={handleClaimBonus}
+                    className={`px-4 py-2 rounded-xl font-cinzel font-bold text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-md ${
+                      canClaimBonus
+                        ? 'bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 hover:brightness-125 text-black font-black active:scale-95 shadow-[0_0_15px_rgba(234,179,8,0.5)] cursor-pointer'
+                        : 'bg-stone-900 border border-stone-800 text-stone-500 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>🎁</span>
+                    <span>{canClaimBonus ? (isRo ? 'Revendică +50 🪙' : 'Claim +50 🪙') : `${completedCount}/3 ${isRo ? 'Finalizate' : 'Completed'}`}</span>
+                  </button>
+                )}
               </div>
             </div>
-          )}
+          </div>
+
+          {/* 3 Active Daily Quests */}
+          <div className="space-y-3">
+            {activeDailyQuests.map((quest) => {
+              const catBadge = getCategoryBadge(quest.category);
+              const diffBadge = getDifficultyBadge(quest.difficulty);
+              const progressPct = Math.min(100, Math.round((quest.progress / quest.target) * 100));
+              const canClaim = quest.completed && !quest.claimed;
+
+              return (
+                <div
+                  key={quest.id}
+                  className={`p-4 rounded-2xl border transition-all ${
+                    quest.claimed
+                      ? 'bg-[#120d08]/80 border-emerald-900/40 opacity-80'
+                      : quest.completed
+                      ? 'bg-gradient-to-r from-[#261608] via-[#1e1106] to-[#261608] border-2 border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.25)]'
+                      : 'bg-[#150f09] border-stone-800 hover:border-stone-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 flex-1">
+                      {/* Quest Icon */}
+                      <div
+                        className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl flex-shrink-0 border ${
+                          quest.claimed
+                            ? 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300'
+                            : quest.completed
+                            ? 'bg-amber-950 border-amber-400 text-yellow-300 shadow-md'
+                            : 'bg-stone-900 border-stone-800 text-stone-300'
+                        }`}
+                      >
+                        {quest.claimed ? '✅' : quest.icon}
+                      </div>
+
+                      {/* Quest Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${catBadge.color}`}>
+                            {catBadge.label}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${diffBadge.color}`}>
+                            {diffBadge.label}
+                          </span>
+                          <span className="text-xs font-mono font-bold text-[#ffd700] ml-auto">
+                            +{quest.coinReward} 🍺🪙
+                          </span>
+                        </div>
+
+                        <h4 className="text-sm sm:text-base font-bold text-amber-200 font-cinzel">
+                          {isRo ? quest.titleRo : quest.titleEn}
+                        </h4>
+                        <p className="text-xs text-stone-400 font-barlow mt-0.5">
+                          {isRo ? quest.descRo : quest.descEn}
+                        </p>
+
+                        {/* Progress Bar */}
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between text-[11px] font-mono text-stone-400 mb-1">
+                            <span>{isRo ? 'Progres:' : 'Progress:'}</span>
+                            <span className="font-bold text-amber-300">
+                              {quest.progress} / {quest.target} {isRo ? (quest.unitRo || '') : (quest.unitEn || '')} ({progressPct}%)
+                            </span>
+                          </div>
+
+                          <div className="w-full h-2.5 bg-black/60 rounded-full overflow-hidden border border-stone-800 p-0.5">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                quest.claimed
+                                  ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
+                                  : quest.completed
+                                  ? 'bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-300 animate-pulse'
+                                  : 'bg-gradient-to-r from-amber-700 to-amber-500'
+                              }`}
+                              style={{ width: `${progressPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action / Claim Button */}
+                    <div className="flex items-center self-center flex-shrink-0">
+                      {quest.claimed ? (
+                        <span className="px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-cinzel font-bold">
+                          {isRo ? 'Revendicat ✅' : 'Claimed ✅'}
+                        </span>
+                      ) : canClaim ? (
+                        <button
+                          onClick={() => handleClaim(quest.id, quest.coinReward)}
+                          className="px-3.5 sm:px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-500 via-amber-500 to-yellow-600 hover:brightness-125 text-black font-cinzel font-black text-xs sm:text-sm shadow-[0_0_15px_rgba(234,179,8,0.5)] active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 animate-bounce"
+                        >
+                          <span>🎁</span>
+                          <span>{isRo ? 'Revendică' : 'Claim'}</span>
+                        </button>
+                      ) : (
+                        <span className="px-3 py-1.5 rounded-xl bg-stone-900 border border-stone-800 text-stone-500 text-xs font-mono font-semibold">
+                          {quest.progress}/{quest.target}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Footer */}

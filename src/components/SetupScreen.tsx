@@ -21,6 +21,7 @@ import { ProfilesManagementModal } from './ProfilesManagementModal';
 import { GlobalLeaderboardSection } from './GlobalLeaderboardSection';
 import { HeadToHeadTracker } from './HeadToHeadTracker';
 import { FriendsTab } from './FriendsTab';
+import { calculateProgression } from '../lib/progression';
 
 interface SetupScreenProps {
   onStartGame: (
@@ -1369,24 +1370,48 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                       </button>
 
                       {/* Name Input & Profile Picker Modal Button */}
-                      <div className="relative flex-1 flex items-center">
-                        <input
-                          type="text"
-                          value={playerNames[idx] || ''}
-                          onChange={(e) => handleNameChange(idx, e.target.value)}
-                          placeholder={`${t('playerPlaceholder')} ${idx + 1}`}
-                          className="w-full bg-[#100b07] border border-[#2d1e12] focus:border-[#ffd700] rounded-xl pl-3 pr-14 py-2 text-xs sm:text-sm text-[#f0ebe0] focus:outline-none transition-all font-barlow"
-                        />
+                      <div className="relative flex-1 flex flex-col justify-center">
+                        <div className="relative flex items-center w-full">
+                          <input
+                            type="text"
+                            value={playerNames[idx] || ''}
+                            onChange={(e) => handleNameChange(idx, e.target.value)}
+                            placeholder={`${t('playerPlaceholder')} ${idx + 1}`}
+                            className="w-full bg-[#100b07] border border-[#2d1e12] focus:border-[#ffd700] rounded-xl pl-3 pr-14 py-2 text-xs sm:text-sm text-[#f0ebe0] focus:outline-none transition-all font-barlow"
+                          />
 
-                        <button
-                          type="button"
-                          onClick={() => setPickerPlayerIndex(idx)}
-                          className="absolute right-1.5 py-1 px-2 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1 transition-all bg-[#22180e] border border-[#e8c84a]/50 text-[#ffd700] hover:bg-[#2d2013] active:scale-95 shadow"
-                          title={language === 'ro' ? 'Alege profil salvat' : 'Select saved profile'}
-                        >
-                          <span>👤</span>
-                          <span className="text-[10px]">▼</span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setPickerPlayerIndex(idx)}
+                            className="absolute right-1.5 py-1 px-2 rounded-lg text-xs font-cinzel font-bold flex items-center gap-1 transition-all bg-[#22180e] border border-[#e8c84a]/50 text-[#ffd700] hover:bg-[#2d2013] active:scale-95 shadow"
+                            title={language === 'ro' ? 'Alege profil salvat' : 'Select saved profile'}
+                          >
+                            <span>👤</span>
+                            <span className="text-[10px]">▼</span>
+                          </button>
+                        </div>
+
+                        {/* Matching profile title badge */}
+                        {(() => {
+                          const currentName = (playerNames[idx] || '').trim().toLowerCase();
+                          if (!currentName) return null;
+                          const matchedProf = profiles.find((p) => p.name.trim().toLowerCase() === currentName);
+                          if (!matchedProf) return null;
+                          const prog = calculateProgression(matchedProf.totalXP || 0);
+                          const customEquipped = language === 'ro' ? matchedProf.currentTitle_ro : matchedProf.currentTitle_en;
+                          const titleToShow = customEquipped || (language === 'ro' ? prog.titleRo : prog.titleEn);
+                          return (
+                            <div className="flex items-center gap-1.5 px-1 pt-1">
+                              <span className="text-[9px] font-cinzel font-bold px-1.5 py-0.2 rounded-full bg-amber-600/90 text-white border border-amber-400/40">
+                                Nv. {prog.currentLevel}
+                              </span>
+                              <span className="text-[9px] font-cinzel font-bold text-[#ffd700] flex items-center gap-0.5 bg-black/60 px-1.5 py-0.2 rounded-md border border-[#ffd700]/30 truncate max-w-[200px]">
+                                <span>👑</span>
+                                <span className="truncate">{titleToShow}</span>
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );

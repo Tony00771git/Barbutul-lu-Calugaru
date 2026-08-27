@@ -44,6 +44,8 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
     language,
   } = useApp();
 
+  const isRo = language === 'ro';
+
   const isOnlyAchievements = achievementsOnly || initialTab === 'achievements';
 
   const [activeTab, setActiveTab] = useState<'live' | 'alltime' | 'achievements'>(
@@ -299,8 +301,26 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
 
                           {/* Name & Drunken Title */}
                           <div>
-                            <div className="font-cinzel font-bold text-sm sm:text-base text-[#f0ebe0] flex items-center gap-1.5">
+                            <div className="font-cinzel font-bold text-sm sm:text-base text-[#f0ebe0] flex items-center gap-1.5 flex-wrap">
                               <span>{p.name}</span>
+                              {(() => {
+                                const matchedProf = profiles.find(
+                                  (pr) => pr.id === p.profileId || pr.name.trim().toLowerCase() === p.name.trim().toLowerCase()
+                                );
+                                if (!matchedProf) return null;
+                                const customEquipped = isRo ? matchedProf.currentTitle_ro : matchedProf.currentTitle_en;
+                                const prog = calculateProgression(matchedProf.totalXP || 0);
+                                const titleToShow = customEquipped || (isRo ? prog.titleRo : prog.titleEn);
+                                return (
+                                  <span
+                                    className="text-[10px] px-1.5 py-0.2 rounded-full font-cinzel font-bold bg-[#291a0c] border border-[#ffd700]/40 text-[#ffd700] flex items-center gap-0.5 shadow-sm"
+                                    title={isRo ? 'Titlu de Profil' : 'Profile Title'}
+                                  >
+                                    <span>👑</span>
+                                    <span>{titleToShow}</span>
+                                  </span>
+                                );
+                              })()}
                               {p.inJail && <span className="text-xs bg-red-600 text-white px-1.5 py-0.2 rounded-md">În Temniță</span>}
                               {p.hasGivenUp && <span className="text-xs bg-gray-600 text-white px-1.5 py-0.2 rounded-md">Abandonat</span>}
                             </div>
@@ -487,11 +507,25 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
                                 <span className="bg-amber-600/90 text-white font-cinzel font-bold text-[10px] px-2 py-0.5 rounded-full border border-amber-400/40">
                                   Nv. {prog.currentLevel}
                                 </span>
-                                {/* Thematic Rank Title */}
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-cinzel font-bold flex items-center gap-1 ${prog.titleColor} bg-black/40 border border-white/10`}>
-                                  <span>{prog.titleIcon}</span>
-                                  <span>{isRo ? prog.titleRo : prog.titleEn}</span>
-                                </span>
+                                {/* Thematic / Custom Equipped Title */}
+                                {(() => {
+                                  const customEquipped = isRo ? prof.currentTitle_ro : prof.currentTitle_en;
+                                  const titleToShow = customEquipped || (isRo ? prog.titleRo : prog.titleEn);
+                                  const isCustom = Boolean(customEquipped);
+                                  return (
+                                    <span
+                                      className={`text-[10px] px-2 py-0.5 rounded-full font-cinzel font-bold flex items-center gap-1 shadow-sm ${
+                                        isCustom
+                                          ? 'bg-gradient-to-r from-amber-950 via-[#2f1c07] to-amber-950 border border-[#ffd700] text-[#ffd700]'
+                                          : `${prog.titleColor} bg-black/40 border border-white/10`
+                                      }`}
+                                      title={isCustom ? (isRo ? 'Titlu Echipat' : 'Equipped Title') : (isRo ? 'Rang Monastic' : 'Monastic Rank')}
+                                    >
+                                      <span>{isCustom ? '👑' : prog.titleIcon}</span>
+                                      <span>{titleToShow}</span>
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <div className="text-xs text-gray-400 mt-0.5">
                                 Jocuri: <b className="text-gray-300">{prof.gamesPlayed}</b> | 🍺 <b className="text-amber-300">{prof.totalSips}</b> guri | 🔥 <b className="text-red-400">{prof.totalChugs}</b> gropi | ⚡ <b className="text-[#ffd700]">{prof.totalXP || 0} XP</b>

@@ -986,8 +986,19 @@ export async function sendCasinoEmote(roomCode: string, emote: TavernEmoteMessag
   const roomRef = doc(db, CASINO_COLLECTION, cleanCode);
 
   try {
+    const cleanEmote = {
+      id: emote.id || `em_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      senderId: emote.senderId || 'player',
+      senderName: emote.senderName || 'Călugăr',
+      senderAvatar: emote.senderAvatar || '🍺',
+      emoteKey: emote.emoteKey,
+      textRo: emote.textRo || '',
+      textEn: emote.textEn || '',
+      icon: emote.icon || '🍺',
+      timestamp: emote.timestamp || Date.now(),
+    };
     await updateDoc(roomRef, cleanFirestoreData({
-      lastEmote: emote,
+      lastEmote: cleanEmote,
       updatedAt: serverTimestamp(),
     }));
   } catch (error) {

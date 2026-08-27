@@ -394,6 +394,16 @@ function MainAppContent() {
         return 'bg-gradient-to-br from-[#18130e] via-[#0d0d0d] to-[#060504]';
       case 'dungeon':
         return 'bg-gradient-to-br from-[#1a0f0a] via-[#0d0d0d] to-[#060403]';
+      case 'crypt':
+        return 'bg-gradient-to-br from-[#031c13] via-[#05110c] to-[#010805]';
+      case 'dragon_lair':
+        return 'bg-gradient-to-br from-[#290a06] via-[#140503] to-[#080201]';
+      case 'celestial_observatory':
+        return 'bg-gradient-to-br from-[#090d2e] via-[#080a1c] to-[#02030a]';
+      case 'enchanted_forest':
+        return 'bg-gradient-to-br from-[#041f13] via-[#05150d] to-[#020a06]';
+      case 'royal_treasury':
+        return 'bg-gradient-to-br from-[#2c1d06] via-[#170e03] to-[#0a0601]';
       default:
         return 'bg-gradient-to-br from-[#1e130b] via-[#0d0d0d] to-[#080503]';
     }
@@ -461,19 +471,6 @@ function MainAppContent() {
               <span className="truncate max-w-[110px] sm:max-w-none">
                 {user ? (cloudProfile?.displayName || user.displayName || t('tabCloudAccount')) : t('tabCloudLogin')}
               </span>
-            </button>
-
-            {/* Achievements Button on Main Screen & Navbar */}
-            <button
-              onClick={() => {
-                setScoreModalTab('achievements');
-                setShowScoreModal(true);
-              }}
-              className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-[#2e1f13] to-[#1c140d] border border-[#e8c84a] text-xs font-cinzel font-bold text-[#ffd700] hover:brightness-110 flex items-center gap-1 shadow active:scale-95"
-              title={language === 'ro' ? 'Realizări & Trofee' : 'Achievements & Trophies'}
-            >
-              <span>🏅</span>
-              <span>{language === 'ro' ? 'Realizări' : 'Achievements'}</span>
             </button>
 
             <button

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { AvatarModal } from './AvatarModal';
 import { Profile } from '../types';
+import { calculateProgression } from '../lib/progression';
 
 interface ProfilesManagementModalProps {
   isOpen: boolean;
@@ -246,11 +247,34 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
                     </button>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-cinzel font-bold text-xs sm:text-sm text-[#f0ebe0] truncate">
                           {p.name}
                         </span>
-                        <span className="text-[10px] font-mono text-[#ffd700] bg-[#ffd700]/10 px-1.5 py-0.2 rounded border border-[#ffd700]/20 flex-shrink-0">
+                        {(() => {
+                          const prog = calculateProgression(p.totalXP || 0);
+                          const customEquipped = language === 'ro' ? p.currentTitle_ro : p.currentTitle_en;
+                          const titleToShow = customEquipped || (language === 'ro' ? prog.titleRo : prog.titleEn);
+                          const isCustom = Boolean(customEquipped);
+                          return (
+                            <>
+                              <span className="text-[9px] font-cinzel font-bold px-1.5 py-0.2 rounded-full bg-amber-600/90 text-white border border-amber-400/40">
+                                Nv. {prog.currentLevel}
+                              </span>
+                              <span
+                                className={`text-[9px] px-1.5 py-0.2 rounded-full font-cinzel font-bold flex items-center gap-0.5 shadow-sm ${
+                                  isCustom
+                                    ? 'bg-gradient-to-r from-amber-950 via-[#2f1c07] to-amber-950 border border-[#ffd700] text-[#ffd700]'
+                                    : 'bg-black/60 border border-white/10 text-amber-200'
+                                }`}
+                              >
+                                <span>{isCustom ? '👑' : prog.titleIcon}</span>
+                                <span className="truncate max-w-[120px]">{titleToShow}</span>
+                              </span>
+                            </>
+                          );
+                        })()}
+                        <span className="text-[10px] font-mono text-[#ffd700] bg-[#ffd700]/10 px-1.5 py-0.2 rounded border border-[#ffd700]/20 flex-shrink-0 ml-auto">
                           {totalScore} <span className="text-[8px] text-gray-400">pct</span>
                         </span>
                       </div>

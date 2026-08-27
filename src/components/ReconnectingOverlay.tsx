@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Wifi, WifiOff, RefreshCw, ShieldAlert, ArrowLeft, Beer, Sparkles } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { reconnectionService, ReconnectionState } from '../lib/reconnectionService';
+import { getActiveSession } from '../lib/sessionManager';
 
 interface ReconnectingOverlayProps {
   onLeaveGame?: () => void;
@@ -25,7 +26,7 @@ export const ReconnectingOverlay: React.FC<ReconnectingOverlayProps> = ({ onLeav
     return unsub;
   }, []);
 
-  const isVisible = state.status === 'reconnecting' || state.status === 'failed';
+  const isVisible = (state.status === 'reconnecting' || state.status === 'failed') && Boolean(getActiveSession());
   if (!isVisible) return null;
 
   const isFailed = state.status === 'failed';

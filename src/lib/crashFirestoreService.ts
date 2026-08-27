@@ -60,52 +60,72 @@ export function calculateElapsedForMultiplier(multiplier: number): number {
 
 /**
  * Generates crash point according to game mode.
- * - Standard/Dynamic/Guri: standard crash distribution with occasional highs.
- * - High Multipliers (high_mult): higher chance for multipliers > 5x, up to x100 (which remains rare),
- *   while still including small multipliers (e.g. x2.7, x1.2, x5.8, x10.2, x9.2, x1.8).
+ * - Standard/Dynamic/Guri: balanced crash distribution with lower frequency of < 2.0x crashes (~16%),
+ *   and strictly prevents streaks of 3-5 consecutive sub-2x crashes.
+ * - High Multipliers (high_mult): higher chance for multipliers > 5x, up to x100.
  */
-export function generateCrashPoint(mode?: CrashStakeMode): number {
+export function generateCrashPoint(mode?: CrashStakeMode, recentHistory?: number[]): number {
+  // Prevent streaks of sub-2x crashes: if the previous round was < 2.0x, guarantee >= 2.0x
+  const hadRecentLowCrash =
+    recentHistory &&
+    recentHistory.length > 0 &&
+    recentHistory.slice(-1).some((pt) => pt < 2.0);
+
   if (mode === 'high_mult') {
     const roll = Math.random();
     let val: number;
-    if (roll < 0.30) {
-      // Small multiplier (1.10 - 2.99) ~30% chance
-      val = 1.10 + Math.random() * 1.89;
-    } else if (roll < 0.55) {
-      // Medium multiplier (3.00 - 5.99) ~25% chance
-      val = 3.00 + Math.random() * 2.99;
-    } else if (roll < 0.85) {
-      // High multiplier (6.00 - 15.00) ~30% chance
-      val = 6.00 + Math.random() * 9.00;
-    } else if (roll < 0.96) {
-      // Very High multiplier (15.01 - 40.00) ~11% chance
-      val = 15.01 + Math.random() * 24.99;
+    // If the last round was sub-2x, guarantee at least 2.50x
+    if (hadRecentLowCrash || roll >= 0.12) {
+      if (roll < 0.38) {
+        // Medium multiplier (2.50 - 5.50) ~26% chance
+        val = 2.50 + Math.random() * 3.00;
+      } else if (roll < 0.70) {
+        // High multiplier (5.51 - 18.00) ~32% chance
+        val = 5.51 + Math.random() * 12.49;
+      } else if (roll < 0.90) {
+        // Very High multiplier (18.01 - 45.00) ~20% chance
+        val = 18.01 + Math.random() * 26.99;
+      } else {
+        // Peak flight (45.01 - 100.00) ~10% chance
+        val = 45.01 + Math.random() * 54.99;
+      }
     } else {
-      // Rare peak up to 100 (40.01 - 100.00) ~4% chance
-      val = 40.01 + Math.random() * 59.99;
+      // Occasional small multiplier (1.20 - 1.99) ~12% chance
+      val = 1.20 + Math.random() * 0.79;
     }
     return Math.min(100.00, Math.max(1.00, Number(val.toFixed(2))));
   }
 
-  // Standard crash point generation:
-  const r = Math.random();
-  // Safe guard: if r >= 0.99, max out at 100
-  if (r >= 0.99) return 100.00;
-  const raw = 1 / (1 - r);
-  const val = Math.min(100, Math.floor(raw * 100) / 100);
-  return Math.max(1.00, Number(val.toFixed(2)));
+  // Standard/Dynamic/Guri mode - balanced distribution:
+  // Sub-2x crashes occur occasionally (~16%), but if previous round crashed < 2x, it won't crash < 2x again!
+  const roll = Math.random();
+  let val: number;
+
+  if (!hadRecentLowCrash && roll < 0.16) {
+    // Occasional low multiplier (1.18 - 1.95) ~16% chance
+    val = 1.18 + Math.random() * 0.77;
+  } else if (roll < 0.58) {
+    // Solid base multipliers (2.05 - 4.50) ~42% chance
+    val = 2.05 + Math.random() * 2.45;
+  } else if (roll < 0.84) {
+    // Great flight multipliers (4.51 - 11.50) ~26% chance
+    val = 4.51 + Math.random() * 6.99;
+  } else if (roll < 0.96) {
+    // High flight multipliers (11.51 - 28.00) ~12% chance
+    val = 11.51 + Math.random() * 16.49;
+  } else {
+    // Legendary peak flight (28.01 - 100.00) ~4% chance
+    val = 28.01 + Math.random() * 71.99;
+  }
+
+  return Math.min(100.00, Math.max(1.00, Number(val.toFixed(2))));
 }
 
 /**
- * Generates random bet value for sips (1 to 5)
+ * Generates random bet value for sips (1 to 10)
  */
 export function generateRoundBetValue(): number {
-  const rand = Math.random();
-  if (rand < 0.40) return 1;
-  if (rand < 0.70) return 2;
-  if (rand < 0.88) return 3;
-  if (rand < 0.96) return 4;
-  return 5;
+  return Math.floor(Math.random() * 10) + 1;
 }
 
 /**
@@ -980,8 +1000,12 @@ export async function startNextCrashRound(code: string): Promise<void> {
   const pastGropiCount = (room.history || []).filter(h => h.stakeType === 'groapa').length;
   const currentIsGroapa = (room.currentRound?.stakeType === 'groapa' || room.currentRound?.isGroapaRound) ? 1 : 0;
   const totalGropiSoFar = pastGropiCount + currentIsGroapa;
+  const pastPoints = (room.history || []).map((h) => h.multiplier);
+  if (typeof room.currentRound?.crashPoint === 'number') {
+    pastPoints.push(room.currentRound.crashPoint);
+  }
   const nextStake = generateRoundStake(room.settings, nextRoundNumber, totalGropiSoFar);
-  const newCrashPoint = generateCrashPoint(room.settings?.stakeMode);
+  const newCrashPoint = generateCrashPoint(room.settings?.stakeMode, pastPoints);
 
   const resetPlayers = room.players.map(p => {
     return {
@@ -1119,8 +1143,19 @@ export async function sendCrashEmote(code: string, emote: TavernEmoteMessage): P
   const cleanCode = code.trim().toUpperCase();
   const roomRef = doc(db, 'crash_rooms', cleanCode);
   try {
+    const cleanEmote = {
+      id: emote.id || `em_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      senderId: emote.senderId || 'player',
+      senderName: emote.senderName || 'Călugăr',
+      senderAvatar: emote.senderAvatar || '🍺',
+      emoteKey: emote.emoteKey,
+      textRo: emote.textRo || '',
+      textEn: emote.textEn || '',
+      icon: emote.icon || '🍺',
+      timestamp: emote.timestamp || Date.now(),
+    };
     await updateDoc(roomRef, {
-      lastEmote: emote,
+      lastEmote: cleanEmote,
       updatedAt: serverTimestamp(),
     });
   } catch (err) {

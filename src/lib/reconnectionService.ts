@@ -75,8 +75,9 @@ class AutoReconnectionService {
 
   public notifyDisconnected(mode: GameMode, reason?: string): void {
     const session = getActiveSession();
+    // If there is no active session, or the session belongs to a different mode, do not trigger reconnect
     if (!session || session.mode !== mode) {
-      this.updateState({ status: 'idle', mode: null, roomCode: null, error: reason || null });
+      this.updateState({ status: 'idle', mode: null, roomCode: null, error: null });
       return;
     }
 
