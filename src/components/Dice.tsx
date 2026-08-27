@@ -1020,31 +1020,16 @@ export const DieFace: React.FC<{
         size={size}
       />
 
-      {/* Central Ace Emblem for Roll 1 OR Standard Carved Pips for 2-6 */}
-      {value === 1 ? (
-        <div className="relative z-10 flex flex-col items-center justify-center pointer-events-none">
-          <div
-            className={`rounded-full flex items-center justify-center ${config.pipBorder} ${config.pipShadow} ${
-              size === 'sm' ? 'w-5 h-5 text-xs' : size === 'md' ? 'w-7 h-7 text-base' : 'w-10 h-10 text-xl sm:text-2xl'
-            }`}
+      {/* Luxury Inlaid Pips (Dots) for all faces 1-6 */}
+      <div className={`grid grid-cols-3 grid-rows-3 w-full h-full ${padding} items-center justify-items-center relative z-10 pointer-events-none`}>
+        {positions.map((pos, idx) => (
+          <span
+            key={idx}
+            className={`${dotSize} rounded-full ${pos} ${config.pipBorder} ${config.pipShadow} transform active:scale-95 transition-transform`}
             style={{ background: config.pipGradient }}
-          >
-            <span className="filter drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] transform scale-110">
-              {config.aceIcon}
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div className={`grid grid-cols-3 grid-rows-3 w-full h-full ${padding} items-center justify-items-center relative z-10 pointer-events-none`}>
-          {positions.map((pos, idx) => (
-            <span
-              key={idx}
-              className={`${dotSize} rounded-full ${pos} ${config.pipBorder} ${config.pipShadow} transform active:scale-95 transition-transform`}
-              style={{ background: config.pipGradient }}
-            />
-          ))}
-        </div>
-      )}
+          />
+        ))}
+      </div>
     </div>
   );
 };

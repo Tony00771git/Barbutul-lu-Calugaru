@@ -444,15 +444,30 @@ export async function acceptFriendRequest(
     }
 
     // 2. Add to current user's (receiver) friends subcollection
-    const friendDocRef = doc(db, 'users', myProfile.uid, 'friends', request.fromUid);
-    const friendData: FriendEntry = {
+    const receiverFriendDocRef = doc(db, 'users', myProfile.uid, 'friends', request.fromUid);
+    const friendForReceiver: FriendEntry = {
       friendUid: request.fromUid,
       displayName: request.fromName,
       avatarIcon: request.fromAvatar || 'monk_drunk',
       shortId: request.fromShortId || '',
       addedAt: serverTimestamp(),
     };
-    await setDoc(friendDocRef, friendData, { merge: true });
+    await setDoc(receiverFriendDocRef, friendForReceiver, { merge: true });
+
+    // 3. Immediately add receiver to sender's friends subcollection as well
+    try {
+      const senderFriendDocRef = doc(db, 'users', request.fromUid, 'friends', myProfile.uid);
+      const friendForSender: FriendEntry = {
+        friendUid: myProfile.uid,
+        displayName: receiverDisplayName,
+        avatarIcon: receiverAvatar,
+        shortId: receiverShortId,
+        addedAt: serverTimestamp(),
+      };
+      await setDoc(senderFriendDocRef, friendForSender, { merge: true });
+    } catch (senderWriteErr) {
+      console.warn('Reciprocal friend write to sender failed, fallback listener will handle it:', senderWriteErr);
+    }
 
     return true;
   } catch (error) {
@@ -489,7 +504,12 @@ export async function removeFriend(myUid: string, friendUid: string): Promise<bo
     // 1. Delete from my friends subcollection
     await deleteDoc(doc(db, 'users', myUid, 'friends', friendUid));
 
-    // 2. Delete any friend requests between the two to prevent auto-recreation
+    // 2. Also try deleting reciprocally
+    try {
+      await deleteDoc(doc(db, 'users', friendUid, 'friends', myUid));
+    } catch {}
+
+    // 3. Delete any friend requests between the two to prevent auto-recreation
     const reqId1 = `req_${myUid.substring(0, 20)}_${friendUid.substring(0, 20)}`;
     const reqId2 = `req_${friendUid.substring(0, 20)}_${myUid.substring(0, 20)}`;
 

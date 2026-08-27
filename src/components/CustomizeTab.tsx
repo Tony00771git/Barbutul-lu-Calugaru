@@ -156,6 +156,16 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
       fallbackPreview: 'https://images.unsplash.com/photo-1548625361-16eb1ea1e5d5?q=80&w=600&auto=format&fit=crop',
       cost: 450,
     },
+    {
+      id: 'custom_player',
+      nameKey: 'themeCustomPlayer',
+      emoji: '🖼️',
+      descRo: '★ Fundal Personalizat: încarcă propria ta poză/tapet direct pe ecranul jocului',
+      descEn: '★ Custom Wallpaper: upload your own photo or wallpaper directly to your game screen',
+      gradient: 'from-[#ffd700] via-[#7c3aed] to-[#1e1b4b]',
+      fallbackPreview: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?q=80&w=600&auto=format&fit=crop',
+      cost: 500,
+    },
   ];
 
   const diceSkinsList: { id: DiceSkin; nameKey: string; previewColor: string; cost?: number; labelRo?: string; labelEn?: string; rarity?: string }[] = [
@@ -492,8 +502,9 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
       {/* CHAPTER 2: 🖼️ BACKGROUND & ATMOSFERĂ (Themes)                          */}
       {/* ========================================================================= */}
       {activeChapter === 'background' && (
-        <div className="w-full bg-[#171008] border border-[#ffd700]/40 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl animate-fadeIn">
-          <div className="flex items-center justify-between border-b border-[#2e1f12] pb-2.5 flex-wrap gap-2">
+        <div className="w-full bg-[#171008] border border-[#ffd700]/40 rounded-2xl p-4 sm:p-5 space-y-5 shadow-xl animate-fadeIn">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-[#2e1f12] pb-3 flex-wrap gap-2">
             <div>
               <h3 className="font-cinzel font-bold text-sm sm:text-base text-[#ffd700] flex items-center gap-2">
                 <ImageIcon className="w-4 h-4 text-[#ffd700]" />
@@ -501,126 +512,237 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
               </h3>
               <p className="text-xs text-gray-400 font-barlow mt-0.5">
                 {isRo
-                  ? 'Alege decorul vizual al tavernei sau încarcă propria ta imagine de fundal!'
-                  : 'Select the tavern scenic atmosphere or upload your own custom wallpaper!'}
+                  ? 'Alege decorul vizual al tavernei sau deblochează fundalul custom pentru a încărca propria ta poză!'
+                  : 'Choose the tavern scenic atmosphere or unlock the custom background to upload your own photo!'}
               </p>
             </div>
             <span className="text-xs text-amber-300 font-mono font-bold bg-[#291a0c] border border-amber-700/50 px-2 py-0.5 rounded-lg">
-              9 {isRo ? 'Atmosfere Disponibile' : 'Atmospheres Available'}
+              9 {isRo ? 'Atmosfere Medievale' : 'Medieval Atmospheres'} + 1 {isRo ? 'Custom' : 'Custom'}
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-            {themesList.map((th) => {
-              const hasCustomBg = Boolean(customThemeBackgrounds?.[th.id]);
-              const previewBg = hasCustomBg ? customThemeBackgrounds[th.id] : th.fallbackPreview;
-              const isSelected = theme === th.id;
-              const isUnlocked = isItemPurchased(th.id) || isItemPurchased(`theme_${th.id}`) || !th.cost;
+          {/* Dedicated Custom Background Studio (Highlighted Card) */}
+          {(() => {
+            const customTh = themesList.find((t) => t.id === 'custom_player');
+            if (!customTh) return null;
+            const isCustomUnlocked = isItemPurchased('custom_player') || isItemPurchased('theme_custom_player');
+            const customImg = customThemeBackgrounds?.custom_player;
+            const isCustomActive = theme === 'custom_player';
 
-              return (
-                <div
-                  key={th.id}
-                  onClick={() => {
-                    if (isUnlocked) {
-                      setTheme(th.id);
-                    } else if (th.cost) {
-                      if (drunkenCoins >= th.cost) {
-                        purchaseShopItem(`theme_${th.id}`, th.cost, () => setTheme(th.id));
-                      }
-                    }
-                  }}
-                  className={`p-3 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 relative overflow-hidden group ${
-                    isSelected
-                      ? 'border-[#ffd700] bg-gradient-to-b from-[#2e1e0d] to-[#1a1107] shadow-[0_0_20px_rgba(255,215,0,0.3)] text-[#ffd700]'
-                      : isUnlocked
-                      ? 'border-[#2d2012] bg-[#140e08] text-gray-300 hover:border-amber-700/70 hover:bg-[#1a120b]'
-                      : 'border-[#381c1c] bg-[#160d0d] text-gray-400 opacity-90'
-                  }`}
-                >
-                  {/* Visual Thumbnail Preview */}
-                  <div className="w-full h-28 rounded-xl border border-[#3e2b17] relative overflow-hidden bg-black flex items-center justify-center">
-                    <img
-                      src={previewBg}
-                      alt={t(th.nameKey)}
-                      referrerPolicy="no-referrer"
-                      className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-
-                    {/* Theme Emoji Icon */}
-                    <span className="relative z-10 text-4xl drop-shadow-lg transform group-hover:scale-110 transition-transform">
-                      {th.emoji}
-                    </span>
-
-                    {hasCustomBg && (
-                      <span className="absolute top-2 left-2 z-10 text-[10px] bg-[#ffd700] text-black font-cinzel font-black px-2 py-0.5 rounded-full shadow flex items-center gap-1">
-                        <span>🖼️</span>
-                        <span>{isRo ? 'Personalizată' : 'Custom Image'}</span>
-                      </span>
-                    )}
-
-                    {isSelected && (
-                      <span className="absolute top-2 right-2 z-10 text-xs bg-[#ffd700] text-black font-black px-2.5 py-0.5 rounded-full shadow flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        <span>{isRo ? 'ACTIV' : 'ACTIVE'}</span>
-                      </span>
-                    )}
-
-                    {!isUnlocked && th.cost && (
-                      <span className="absolute top-2 right-2 z-10 text-[11px] bg-[#3a1414] border border-red-500/60 text-red-200 font-cinzel font-bold px-2 py-0.5 rounded-full shadow flex items-center gap-1">
-                        <Lock className="w-3 h-3" />
-                        <span>{th.cost} 🍺🪙</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Theme Title & Description */}
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="font-cinzel text-sm font-bold block truncate text-[#ffd700]">
-                        {t(th.nameKey)}
-                      </span>
-                      {!isUnlocked && (
-                        <span className="text-[11px] font-cinzel font-bold text-amber-300">
-                          {drunkenCoins >= (th.cost || 0)
-                            ? (isRo ? 'Deblochează ➔' : 'Unlock ➔')
-                            : (isRo ? 'În Bazar 🔒' : 'In Shop 🔒')}
-                        </span>
+            return (
+              <div
+                className={`p-4 rounded-2xl border-2 transition-all relative overflow-hidden bg-gradient-to-r ${
+                  isCustomActive
+                    ? 'from-[#2e1c0d] via-[#3a200e] to-[#1a0f07] border-[#ffd700] shadow-[0_0_25px_rgba(255,215,0,0.25)]'
+                    : isCustomUnlocked
+                    ? 'from-[#20140a] to-[#120b05] border-amber-700/60 hover:border-amber-500'
+                    : 'from-[#231212] via-[#1a0d0d] to-[#100808] border-red-900/50'
+                }`}
+              >
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  {/* Left: Thumbnail & Details */}
+                  <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                    <div className="w-20 h-20 rounded-xl border-2 border-amber-600/60 overflow-hidden relative flex-shrink-0 bg-black flex items-center justify-center shadow-inner">
+                      {customImg ? (
+                        <img
+                          src={customImg}
+                          alt="Custom Wallpaper"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-center p-1">
+                          <span className="text-2xl">🖼️</span>
+                          <span className="text-[9px] font-cinzel text-amber-300 font-bold leading-none mt-1">
+                            {isRo ? 'Fără Poză' : 'No Photo'}
+                          </span>
+                        </div>
                       )}
                     </div>
-                    <span className="text-xs text-gray-400 font-barlow leading-tight block mt-1 line-clamp-2">
-                      {isRo ? th.descRo : th.descEn}
-                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-cinzel text-sm sm:text-base font-black text-[#ffd700]">
+                          ★ {isRo ? 'Fundal Personalizat Jucător' : 'Custom Player Wallpaper'} ★
+                        </span>
+                        {isCustomActive && (
+                          <span className="text-[10px] bg-[#ffd700] text-black font-black px-2 py-0.5 rounded-full shadow flex items-center gap-1">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                            <span>{isRo ? 'ECHIPAT' : 'EQUIPPED'}</span>
+                          </span>
+                        )}
+                        {!isCustomUnlocked && (
+                          <span className="text-[10px] bg-[#3a1414] border border-red-500/60 text-red-200 font-cinzel font-bold px-2 py-0.5 rounded-full shadow flex items-center gap-1">
+                            <Lock className="w-3 h-3" />
+                            <span>500 🍺🪙 / {isRo ? 'Drop Cufăr' : 'Chest Drop'}</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-300 font-barlow mt-1 leading-relaxed">
+                        {isRo
+                          ? 'Încarcă orice poză proprie din telefon/PC (JPG, PNG, WebP) pentru a personaliza fundalul pe tot parcursul jocului. Se deblochează cu 500 de galbeni sau drop maxim din cufere.'
+                          : 'Upload any photo from your device to fully customize your in-game wallpaper. Obtainable for 500 Drunken Coins in Shop or as a max-rarity chest drop.'}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Custom Background Upload & Reset Controls */}
-                  <div className="pt-2 border-t border-[#2e2013] flex items-center justify-between gap-2 mt-auto">
-                    <button
-                      type="button"
-                      onClick={(e) => handleUploadClick(th.id, e)}
-                      className="flex-1 py-1.5 px-2.5 bg-[#26190d] hover:bg-[#3b2715] border border-[#52371c] text-[#ffd700] rounded-xl text-xs font-cinzel font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>{hasCustomBg ? (isRo ? 'Schimbă poza' : 'Change photo') : (isRo ? 'Încarcă poză' : 'Upload photo')}</span>
-                    </button>
+                  {/* Right: Actions */}
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end flex-wrap">
+                    {isCustomUnlocked ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTheme('custom_player');
+                          }}
+                          className={`py-2 px-3 rounded-xl text-xs font-cinzel font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                            isCustomActive
+                              ? 'bg-[#ffd700] text-black shadow-lg hover:bg-yellow-400 font-black'
+                              : 'bg-[#291a0c] hover:bg-[#3d2713] text-[#ffd700] border border-[#5a3b1d]'
+                          }`}
+                        >
+                          {isCustomActive ? (
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>{isRo ? 'Activ' : 'Active'}</span>
+                            </>
+                          ) : (
+                            <span>{isRo ? 'Setează Activ' : 'Set Active'}</span>
+                          )}
+                        </button>
 
-                    {hasCustomBg && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          resetCustomThemeBackground(th.id);
-                        }}
-                        title={t('resetCustomBg')}
-                        className="py-1.5 px-2.5 bg-[#331414] hover:bg-[#4d1d1d] border border-red-700/60 text-red-300 rounded-xl text-xs font-cinzel font-bold transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleUploadClick('custom_player', e)}
+                          className="py-2 px-3.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-xl text-xs font-cinzel font-bold flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>{customImg ? (isRo ? 'Schimbă Poza' : 'Change Photo') : (isRo ? 'Încarcă Poză' : 'Upload Photo')}</span>
+                        </button>
+
+                        {customImg && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              resetCustomThemeBackground('custom_player');
+                            }}
+                            title={t('resetCustomBg')}
+                            className="p-2 bg-[#331414] hover:bg-[#4d1d1d] border border-red-700/60 text-red-300 rounded-xl text-xs transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {drunkenCoins >= 500 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              purchaseShopItem('theme_custom_player', 500, () => setTheme('custom_player'));
+                            }}
+                            className="py-2 px-4 bg-gradient-to-r from-[#ffd700] to-[#f59e0b] text-black rounded-xl text-xs font-cinzel font-black shadow-lg hover:brightness-110 flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <span>🔓 {isRo ? 'Deblochează cu 500' : 'Unlock for 500'} 🍺🪙</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowChestModal(true)}
+                            className="py-2 px-3 bg-[#2a1414] hover:bg-[#3d1c1c] border border-red-700/60 text-red-200 rounded-xl text-xs font-cinzel font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <span>🎁 {isRo ? 'Deschide Cufere (Drop Rar)' : 'Open Chests (Rare Drop)'}</span>
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            );
+          })()}
+
+          {/* Standard Curated Medieval Themes Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {themesList
+              .filter((th) => th.id !== 'custom_player')
+              .map((th) => {
+                const previewBg = th.fallbackPreview;
+                const isSelected = theme === th.id;
+                const isUnlocked = isItemPurchased(th.id) || isItemPurchased(`theme_${th.id}`) || !th.cost;
+
+                return (
+                  <div
+                    key={th.id}
+                    onClick={() => {
+                      if (isUnlocked) {
+                        setTheme(th.id);
+                      } else if (th.cost) {
+                        if (drunkenCoins >= th.cost) {
+                          purchaseShopItem(`theme_${th.id}`, th.cost, () => setTheme(th.id));
+                        }
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 relative overflow-hidden group ${
+                      isSelected
+                        ? 'border-[#ffd700] bg-gradient-to-b from-[#2e1e0d] to-[#1a1107] shadow-[0_0_20px_rgba(255,215,0,0.3)] text-[#ffd700]'
+                        : isUnlocked
+                        ? 'border-[#2d2012] bg-[#140e08] text-gray-300 hover:border-amber-700/70 hover:bg-[#1a120b]'
+                        : 'border-[#381c1c] bg-[#160d0d] text-gray-400 opacity-90'
+                    }`}
+                  >
+                    {/* Visual Thumbnail Preview */}
+                    <div className="w-full h-28 rounded-xl border border-[#3e2b17] relative overflow-hidden bg-black flex items-center justify-center">
+                      <img
+                        src={previewBg}
+                        alt={t(th.nameKey)}
+                        referrerPolicy="no-referrer"
+                        className="absolute inset-0 w-full h-full object-cover opacity-65 group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
+
+                      {/* Theme Emoji Icon */}
+                      <span className="relative z-10 text-4xl drop-shadow-lg transform group-hover:scale-110 transition-transform">
+                        {th.emoji}
+                      </span>
+
+                      {isSelected && (
+                        <span className="absolute top-2 right-2 z-10 text-xs bg-[#ffd700] text-black font-black px-2.5 py-0.5 rounded-full shadow flex items-center gap-1">
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>{isRo ? 'ACTIV' : 'ACTIVE'}</span>
+                        </span>
+                      )}
+
+                      {!isUnlocked && th.cost && (
+                        <span className="absolute top-2 right-2 z-10 text-[11px] bg-[#3a1414] border border-red-500/60 text-red-200 font-cinzel font-bold px-2 py-0.5 rounded-full shadow flex items-center gap-1">
+                          <Lock className="w-3 h-3" />
+                          <span>{th.cost} 🍺🪙</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Theme Title & Description */}
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="font-cinzel text-sm font-bold block truncate text-[#ffd700]">
+                          {t(th.nameKey)}
+                        </span>
+                        {!isUnlocked && (
+                          <span className="text-[11px] font-cinzel font-bold text-amber-300">
+                            {drunkenCoins >= (th.cost || 0)
+                              ? (isRo ? 'Deblochează ➔' : 'Unlock ➔')
+                              : (isRo ? 'În Bazar 🔒' : 'In Shop 🔒')}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400 font-barlow leading-tight block mt-1 line-clamp-2">
+                        {isRo ? th.descRo : th.descEn}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}

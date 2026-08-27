@@ -180,7 +180,7 @@ export const generateUniqueId = (prefix = 'id'): string => {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, cloudProfile, resetCloudAccount } = useAuth();
+  const { user, cloudProfile, resetCloudAccount, refreshProfile } = useAuth();
 
   const [customThemeBackgrounds, setCustomThemeBackgrounds] = useState<Record<ThemeId, string>>(() => {
     try {
@@ -197,6 +197,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       great_hall: '',
       dungeon: '',
       crypt: '',
+      dragon_lair: '',
+      celestial_observatory: '',
+      enchanted_forest: '',
+      royal_treasury: '',
+      custom_player: '',
     };
   });
 
@@ -1133,6 +1138,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (catalogItem.themeKey) updated.push(catalogItem.themeKey);
         if (catalogItem.perkKey) updated.push(catalogItem.perkKey);
         if (catalogItem.titleKey) updated.push(catalogItem.titleKey);
+        if (catalogItem.avatarKey) updated.push(catalogItem.avatarKey);
       }
       const uniqueUpdated = Array.from(new Set(updated));
       try {
@@ -1181,9 +1187,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     if (user && updatedProfiles.length > 0) {
-      syncAccountProfilesToCloud(updatedProfiles, drunkenCoins).catch(err => {
-        console.warn('Immediate title cloud sync failed:', err);
-      });
+      syncAccountProfilesToCloud(updatedProfiles, drunkenCoins)
+        .then(() => {
+          refreshProfile?.();
+        })
+        .catch(err => {
+          console.warn('Immediate title cloud sync failed:', err);
+        });
     }
 
     soundEffects.playEquip();

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { SHOP_CATALOG, TAVERN_EMOTES_LIST } from '../data/shopCatalog';
 import { CHESTS_CATALOG, RARITY_DEFINITIONS } from '../data/chestsCatalog';
+import { MEDIEVAL_AVATARS } from '../data/avatars';
 import { DiceSkin, ThemeId } from '../types';
 import { soundEffects } from '../lib/soundFx';
 import { ChestOpeningModal } from './ChestOpeningModal';
@@ -11,7 +12,7 @@ import { Sparkles, Gift } from 'lucide-react';
 interface DrunkenCoinsShopModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'chests' | 'dice' | 'themes' | 'perks' | 'titles' | 'emotes';
+  initialTab?: 'chests' | 'avatars' | 'dice' | 'themes' | 'perks' | 'titles' | 'emotes';
 }
 
 export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
@@ -30,12 +31,13 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
     theme,
     setTheme,
     equipCustomTitle,
+    updateProfileAvatar,
     masterProfile,
   } = useApp();
 
   const isRo = language === 'ro';
 
-  const [activeTab, setActiveTab] = useState<'chests' | 'dice' | 'themes' | 'perks' | 'titles' | 'emotes'>(
+  const [activeTab, setActiveTab] = useState<'chests' | 'avatars' | 'dice' | 'themes' | 'perks' | 'titles' | 'emotes'>(
     initialTab === ('ideas' as any) ? 'chests' : initialTab
   );
   const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -87,12 +89,14 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
   };
 
   // Filter items by category
+  const avatarItems = SHOP_CATALOG.filter((i) => i.category === 'avatars');
   const diceItems = SHOP_CATALOG.filter((i) => i.category === 'dice');
   const themeItems = SHOP_CATALOG.filter((i) => i.category === 'themes');
   const perkItems = SHOP_CATALOG.filter((i) => i.category === 'perks');
   const titleItems = SHOP_CATALOG.filter((i) => i.category === 'titles');
   const emoteItems = SHOP_CATALOG.filter((i) => i.category === 'emotes');
 
+  const ownedAvatarCount = avatarItems.filter((i) => isItemPurchased(i.id) || isItemPurchased(i.key) || (i.avatarKey && isItemPurchased(i.avatarKey))).length;
   const ownedDiceCount = diceItems.filter((i) => isItemPurchased(i.id) || isItemPurchased(i.key)).length;
   const ownedThemeCount = themeItems.filter((i) => isItemPurchased(i.id) || isItemPurchased(i.key)).length;
   const ownedPerkCount = perkItems.filter((i) => isItemPurchased(i.id) || isItemPurchased(i.key)).length;
@@ -194,6 +198,19 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
             <span>🎁</span>
             <span>{isRo ? 'Cufere (CS Open)' : 'Chests (Case Open)'}</span>
             <span className="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[9px] font-mono font-bold">★ CS</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('avatars')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 flex-shrink-0 ${
+              activeTab === 'avatars'
+                ? 'bg-[#ffd700] text-black shadow-lg font-black'
+                : 'bg-[#18110a] border border-[#2e2114] text-gray-300 hover:text-white'
+            }`}
+          >
+            <span>🧙‍♂️</span>
+            <span>{isRo ? 'Poze Profil (Avatare)' : 'Profile Avatars'}</span>
+            <span className="text-[10px] opacity-75 font-normal">({ownedAvatarCount}/{avatarItems.length})</span>
           </button>
 
           <button
@@ -361,6 +378,116 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: MEDIEVAL PROFILE AVATARS */}
+          {activeTab === 'avatars' && (
+            <div className="space-y-3">
+              <div className="p-3 bg-[#170e08] border border-amber-800/40 rounded-2xl text-xs text-amber-200/90 font-barlow flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🧙‍♂️</span>
+                  <span>
+                    {isRo
+                      ? 'Pozele de profil cumpărate sau câștigate din cufere pot fi echipate oricând pe profilul tău de jucător!'
+                      : 'Profile avatars purchased or won from chests can be equipped anytime on your player profile!'}
+                  </span>
+                </div>
+                <div className="text-[10px] font-cinzel text-amber-300 flex-shrink-0 bg-amber-950/80 px-2.5 py-1 rounded-xl border border-amber-600/40">
+                  {ownedAvatarCount}/{avatarItems.length} {isRo ? 'Deblocate' : 'Unlocked'}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {avatarItems.map((item) => {
+                  const isOwned =
+                    isItemPurchased(item.id) ||
+                    isItemPurchased(item.key) ||
+                    (item.avatarKey && isItemPurchased(item.avatarKey));
+                  const isEquipped = masterProfile?.avatarIcon === item.avatarKey;
+                  const avatarDef = MEDIEVAL_AVATARS.find((a) => a.id === item.avatarKey);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-3 rounded-2xl flex items-center justify-between gap-2.5 transition-all ${
+                        isEquipped
+                          ? 'bg-gradient-to-r from-[#2a1d0f] to-[#1a1209] border-2 border-[#ffd700] shadow-[0_0_15px_rgba(255,215,0,0.3)]'
+                          : isOwned
+                          ? 'bg-[#150f09] border border-emerald-500/30'
+                          : 'bg-[#120a06] border border-amber-900/40'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 pr-1">
+                        <div
+                          className="w-12 h-12 rounded-2xl overflow-hidden border border-[#e8c84a]/40 shadow-inner flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: avatarDef?.bgColor || '#1c140d' }}
+                        >
+                          {avatarDef ? (
+                            avatarDef.renderSvg('w-full h-full')
+                          ) : (
+                            <span className="text-2xl">{item.icon}</span>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-cinzel font-bold text-xs text-[#ffd700] truncate flex items-center gap-1.5">
+                            <span className="truncate">{isRo ? item.nameRo : item.nameEn}</span>
+                          </div>
+                          <div className="text-[10px] text-gray-400 line-clamp-1 mt-0.5">
+                            {isRo ? item.descRo : item.descEn}
+                          </div>
+                        </div>
+                      </div>
+
+                      {isOwned ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (item.avatarKey && masterProfile?.id) {
+                              updateProfileAvatar(masterProfile.id, item.avatarKey);
+                              showToast(
+                                isRo
+                                  ? `✅ Avatarul „${item.nameRo}” a fost echipat pe profil!`
+                                  : `✅ Avatar "${item.nameEn}" equipped on profile!`,
+                                'success'
+                              );
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-cinzel font-bold flex-shrink-0 transition-all active:scale-95 ${
+                            isEquipped
+                              ? 'bg-emerald-600 text-white shadow'
+                              : 'bg-[#22160c] text-amber-200 border border-[#ffd700]/40 hover:bg-[#342212]'
+                          }`}
+                        >
+                          {isEquipped
+                            ? (isRo ? 'Echipat ✅' : 'Equipped ✅')
+                            : (isRo ? 'Echipează' : 'Equip')}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleBuy(
+                              item.id,
+                              item.cost,
+                              isRo ? item.nameRo : item.nameEn,
+                              () => {
+                                if (item.avatarKey && masterProfile?.id) {
+                                  updateProfileAvatar(masterProfile.id, item.avatarKey);
+                                }
+                              }
+                            )
+                          }
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-cinzel font-bold bg-gradient-to-r from-amber-600 to-yellow-500 text-black shadow hover:brightness-110 active:scale-95 flex-shrink-0 flex items-center gap-1"
+                        >
+                          <span>{item.cost}</span>
+                          <span>🍺🪙</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

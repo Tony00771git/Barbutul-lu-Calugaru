@@ -405,6 +405,8 @@ function MainAppContent() {
         return 'bg-gradient-to-br from-[#041f13] via-[#05150d] to-[#020a06]';
       case 'royal_treasury':
         return 'bg-gradient-to-br from-[#2c1d06] via-[#170e03] to-[#0a0601]';
+      case 'custom_player':
+        return 'bg-gradient-to-br from-[#18110b] via-[#0d0905] to-[#050302]';
       default:
         return 'bg-gradient-to-br from-[#1e130b] via-[#0d0d0d] to-[#080503]';
     }

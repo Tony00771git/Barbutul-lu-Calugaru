@@ -9,7 +9,8 @@ export type ThemeId =
   | 'dragon_lair'
   | 'celestial_observatory'
   | 'enchanted_forest'
-  | 'royal_treasury';
+  | 'royal_treasury'
+  | 'custom_player';
 export type DiceSkin =
   | 'gold'
   | 'bone'
@@ -504,12 +505,12 @@ export interface GameInvite {
   updatedAt?: any;
 }
 
-export type ShopItemCategory = 'dice' | 'themes' | 'perks' | 'titles' | 'emotes';
+export type ShopItemCategory = 'dice' | 'themes' | 'perks' | 'titles' | 'emotes' | 'avatars';
 
 // CS-Style Case Opening & Cosmetic Rarities
 export type CosmeticRarity = 'milspec' | 'restricted' | 'classified' | 'covert' | 'rareSpecial';
 
-export type CosmeticItemType = 'diceSkin' | 'theme' | 'avatar' | 'cardBack';
+export type CosmeticItemType = 'diceSkin' | 'theme' | 'avatar' | 'title' | 'emote';
 
 export interface CosmeticRarityMeta {
   rarity: CosmeticRarity;
@@ -533,10 +534,13 @@ export interface CosmeticItem {
   descEn?: string;
   icon: string;
   exclusiveToChest: boolean;
-  diceSkinKey?: DiceSkin | string;
-  themeKey?: ThemeId | string;
+  diceSkinKey?: DiceSkin;
+  themeKey?: ThemeId;
   avatarKey?: string;
-  cardBackKey?: string;
+  titleKey?: string;
+  titleNameRo?: string;
+  titleNameEn?: string;
+  emoteKey?: string;
   previewGradient?: string;
 }
 
@@ -603,5 +607,6 @@ export interface ShopItemDef {
   perkKey?: string;
   titleKey?: string;
   emoteKey?: string;
+  avatarKey?: string;
 }
 

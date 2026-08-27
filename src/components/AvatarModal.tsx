@@ -1,9 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { MEDIEVAL_AVATARS, MedievalAvatar } from '../data/avatars';
+import { SHOP_CATALOG } from '../data/shopCatalog';
 import { useApp } from '../context/AppContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { processImageFile } from '../utils/imageUtils';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Lock } from 'lucide-react';
 
 interface AvatarModalProps {
   isOpen: boolean;
@@ -22,7 +23,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
   onSelectAvatar,
   playerName,
 }) => {
-  const { language } = useApp();
+  const { language, isItemPurchased, purchaseShopItem, drunkenCoins } = useApp();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeAvatarId = selectedAvatarId || currentAvatarId;
@@ -44,6 +45,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [unlockConfirmItem, setUnlockConfirmItem] = useState<{ id: string; name: string; cost: number; avatarKey: string } | null>(null);
 
   if (!isOpen) return null;
 
@@ -229,22 +231,36 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
               </span>
             </button>
 
-            {/* Avatars Grid (10 items) */}
+            {/* Avatars Grid */}
             <div className="flex-1 overflow-y-auto pr-1 grid grid-cols-2 gap-2.5 py-1 custom-scrollbar">
               {MEDIEVAL_AVATARS.map((avatar: MedievalAvatar) => {
                 const isSelected = activeAvatarId === avatar.id;
+                const shopItem = SHOP_CATALOG.find((s) => s.avatarKey === avatar.id);
+                const isOwned = !shopItem || isItemPurchased(avatar.id) || isItemPurchased(shopItem.id);
+
                 return (
                   <button
                     key={avatar.id}
                     id={`avatar-option-${avatar.id}`}
                     onClick={() => {
-                      onSelectAvatar(avatar.id);
-                      onClose();
+                      if (isOwned) {
+                        onSelectAvatar(avatar.id);
+                        onClose();
+                      } else if (shopItem) {
+                        setUnlockConfirmItem({
+                          id: shopItem.id,
+                          name: language === 'ro' ? shopItem.nameRo : shopItem.nameEn,
+                          cost: shopItem.cost,
+                          avatarKey: avatar.id,
+                        });
+                      }
                     }}
                     className={`p-2.5 rounded-2xl border-2 text-left transition-all flex items-center gap-2.5 relative group ${
                       isSelected
                         ? 'border-[#ffd700] bg-gradient-to-r from-[#2e1f13] to-[#1c140d] shadow-[0_0_20px_rgba(255,215,0,0.3)] scale-[1.01]'
-                        : 'border-[#2c2218] bg-[#140f0a] hover:border-[#e8c84a]/70 hover:bg-[#1f160e]'
+                        : isOwned
+                        ? 'border-[#2c2218] bg-[#140f0a] hover:border-[#e8c84a]/70 hover:bg-[#1f160e]'
+                        : 'border-amber-900/40 bg-[#0f0a07] hover:border-amber-600/60 opacity-90'
                     }`}
                   >
                     {/* Selected Checkmark Badge */}
@@ -254,9 +270,19 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
                       </div>
                     )}
 
+                    {/* Locked Badge */}
+                    {!isOwned && shopItem && (
+                      <div className="absolute top-2 right-2 bg-amber-950/90 border border-amber-500/60 text-amber-300 px-1.5 py-0.5 rounded-lg flex items-center gap-1 text-[9px] font-cinzel font-bold shadow">
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>{shopItem.cost} 🪙</span>
+                      </div>
+                    )}
+
                     {/* Avatar SVG Portrait */}
                     <div
-                      className="w-12 h-12 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-[#e8c84a]/40 shadow-inner group-hover:scale-105 transition-transform"
+                      className={`w-12 h-12 rounded-2xl overflow-hidden flex-shrink-0 flex items-center justify-center border border-[#e8c84a]/40 shadow-inner group-hover:scale-105 transition-transform relative ${
+                        !isOwned ? 'brightness-90' : ''
+                      }`}
                       style={{ backgroundColor: avatar.bgColor }}
                     >
                       {avatar.renderSvg('w-full h-full')}
@@ -405,7 +431,7 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
         <div className="pt-2 border-t border-[#2a2218] flex items-center justify-between text-[11px] font-barlow text-gray-400">
           <span>
             {activeTab === 'medieval'
-              ? `✨ ${language === 'ro' ? '10 personaje medievale' : '10 medieval characters'}`
+              ? `✨ ${MEDIEVAL_AVATARS.length} ${language === 'ro' ? 'personaje medievale' : 'medieval characters'}`
               : `📸 ${language === 'ro' ? 'Poză de profil personalizată' : 'Custom profile photo'}`}
           </span>
           <button
@@ -416,6 +442,69 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
             {language === 'ro' ? 'Gata ➔' : 'Done ➔'}
           </button>
         </div>
+
+        {/* Unlock Confirmation Modal */}
+        {unlockConfirmItem && (
+          <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-sm rounded-3xl flex items-center justify-center p-4">
+            <div className="bg-[#1b120a] border-2 border-[#ffd700] rounded-2xl p-5 max-w-sm w-full text-center space-y-4 shadow-[0_0_40px_rgba(255,215,0,0.4)]">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#2e1d0f] border border-[#ffd700]/50 flex items-center justify-center text-3xl shadow-inner">
+                {MEDIEVAL_AVATARS.find((a) => a.id === unlockConfirmItem.avatarKey)?.renderSvg('w-10 h-10') || '🧙‍♂️'}
+              </div>
+
+              <div>
+                <h3 className="font-cinzel font-bold text-base text-[#ffd700]">
+                  {language === 'ro' ? 'Deblochează Avatarul' : 'Unlock Avatar'}
+                </h3>
+                <p className="text-xs text-gray-300 font-barlow mt-1">
+                  {language === 'ro'
+                    ? `Vrei să deblochezi permanent „${unlockConfirmItem.name}” pentru ${unlockConfirmItem.cost} 🍺🪙?`
+                    : `Do you want to permanently unlock "${unlockConfirmItem.name}" for ${unlockConfirmItem.cost} 🍺🪙?`}
+                </p>
+                <div className="mt-2 text-[11px] text-amber-300 font-cinzel">
+                  {language === 'ro' ? 'Ai în Tezaur:' : 'Treasury:'} {drunkenCoins.toLocaleString()} 🍺🪙
+                </div>
+              </div>
+
+              {drunkenCoins < unlockConfirmItem.cost && (
+                <div className="text-[11px] text-red-400 font-barlow bg-red-950/60 p-2 rounded-xl border border-red-800/60">
+                  {language === 'ro'
+                    ? '❌ Nu ai destui bănuți. Deschide cufere sau joacă meciuri pentru a strânge bănuți!'
+                    : '❌ Not enough coins. Open chests or play matches to earn coins!'}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setUnlockConfirmItem(null)}
+                  className="flex-1 py-2 rounded-xl bg-[#2a1d12] border border-[#e8c84a]/40 text-gray-300 font-cinzel font-bold text-xs hover:bg-[#3d2a19]"
+                >
+                  {language === 'ro' ? 'Anulează' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  disabled={drunkenCoins < unlockConfirmItem.cost}
+                  onClick={() => {
+                    const success = purchaseShopItem(
+                      unlockConfirmItem.id,
+                      unlockConfirmItem.cost,
+                      () => {
+                        onSelectAvatar(unlockConfirmItem.avatarKey);
+                      }
+                    );
+                    if (success) {
+                      setUnlockConfirmItem(null);
+                      onClose();
+                    }
+                  }}
+                  className="flex-1 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-500 text-black font-cinzel font-black text-xs hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow"
+                >
+                  {language === 'ro' ? `Cumpără (${unlockConfirmItem.cost} 🪙)` : `Buy (${unlockConfirmItem.cost} 🪙)`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

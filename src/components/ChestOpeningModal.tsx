@@ -15,6 +15,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { soundEffects } from '../lib/soundFx';
 import { DieFace } from './Dice';
+import { AvatarDisplay } from './AvatarDisplay';
 import { Sparkles, X, FastForward, RotateCcw, Check, ArrowDown, Gift, ArrowLeft, ShoppingBag } from 'lucide-react';
 
 interface ChestOpeningModalProps {
@@ -45,6 +46,9 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
     purchaseShopItem,
     setDiceSkin,
     setTheme,
+    masterProfile,
+    updateProfileAvatar,
+    equipCustomTitle,
     language,
   } = useApp();
 
@@ -236,6 +240,23 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
       setTheme(item.themeKey as any);
       setEquippedSuccess(true);
       soundEffects.playEquip();
+    } else if (item.type === 'avatar' && item.avatarKey) {
+      if (masterProfile?.id) {
+        updateProfileAvatar(masterProfile.id, item.avatarKey);
+      }
+      setEquippedSuccess(true);
+      soundEffects.playEquip();
+    } else if (item.type === 'title') {
+      if (masterProfile?.id) {
+        equipCustomTitle(
+          item.titleKey || item.id,
+          item.titleNameRo || item.name,
+          item.titleNameEn || item.nameEn || item.name,
+          masterProfile.id
+        );
+      }
+      setEquippedSuccess(true);
+      soundEffects.playEquip();
     } else {
       setEquippedSuccess(true);
       soundEffects.playEquip();
@@ -412,6 +433,10 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
                         <div className="transform scale-95 hover:scale-105 transition-transform">
                           <DieFace value={6} skin={item.diceSkinKey} size="sm" />
                         </div>
+                      ) : item.type === 'avatar' && item.avatarKey ? (
+                        <div className="transform scale-95 shadow-md rounded-2xl overflow-hidden border border-white/20">
+                          <AvatarDisplay avatarId={item.avatarKey} className="w-12 h-12" />
+                        </div>
                       ) : (
                         <div
                           style={{
@@ -493,6 +518,10 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
                   {openResult.winningItem.type === 'diceSkin' && openResult.winningItem.diceSkinKey ? (
                     <div className="transform scale-110 drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)]">
                       <DieFace value={6} skin={openResult.winningItem.diceSkinKey} size="md" />
+                    </div>
+                  ) : openResult.winningItem.type === 'avatar' && openResult.winningItem.avatarKey ? (
+                    <div className="transform scale-110 shadow-2xl rounded-2xl overflow-hidden border-2 border-[#ffd700] ring-4 ring-[#ffd700]/30">
+                      <AvatarDisplay avatarId={openResult.winningItem.avatarKey} className="w-16 h-16" />
                     </div>
                   ) : (
                     <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-black/60 border border-[#ffd700]/50 flex items-center justify-center text-4xl shadow-xl">

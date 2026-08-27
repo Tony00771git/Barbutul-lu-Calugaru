@@ -48,6 +48,10 @@ const THEME_FALLBACK_PHOTOS: Record<ThemeId, string[]> = {
     'https://images.unsplash.com/photo-1548625361-16eb1ea1e5d5?q=80&w=1920&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&auto=format&fit=crop',
   ],
+  custom_player: [
+    'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?q=80&w=1920&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1920&auto=format&fit=crop',
+  ],
 };
 
 export const ThemeBackground: React.FC<ThemeBackgroundProps> = ({ theme }) => {
@@ -942,6 +946,68 @@ export const ThemeBackground: React.FC<ThemeBackgroundProps> = ({ theme }) => {
 
           {/* Vignette Overlay */}
           <div className="absolute inset-0 bg-gradient-to-b from-[#1a1004]/85 via-[#2b1b07]/65 to-[#0f0902]/90" />
+        </div>
+      )}
+
+      {/* 10. CUSTOM PLAYER THEME: Fundal Personalizat de Jucător */}
+      {theme === 'custom_player' && (
+        <div className="absolute inset-0 bg-[#0c0805]">
+          {activeImageUrl ? (
+            <img
+              src={activeImageUrl}
+              alt="Fundal Personalizat"
+              referrerPolicy="no-referrer"
+              onError={handleImageError}
+              className="absolute inset-0 w-full h-full object-cover object-center opacity-85 transition-opacity duration-700"
+            />
+          ) : (
+            /* Elegant Regal Tapestry Fallback when no custom photo uploaded yet */
+            <svg
+              viewBox="0 0 1080 1920"
+              className="w-full h-full object-cover opacity-80"
+              preserveAspectRatio="xMidYMid slice"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                <linearGradient id="customTapestryBg" x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#2a1408" />
+                  <stop offset="30%" stopColor="#1a0c05" />
+                  <stop offset="70%" stopColor="#120703" />
+                  <stop offset="100%" stopColor="#080301" />
+                </linearGradient>
+                <radialGradient id="customGoldAura" cx="50%" cy="45%" r="50%">
+                  <stop offset="0%" stopColor="#ffd700" stopOpacity="0.6" />
+                  <stop offset="40%" stopColor="#d97706" stopOpacity="0.25" />
+                  <stop offset="80%" stopColor="#78350f" stopOpacity="0.05" />
+                  <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+
+              <rect width="1080" height="1920" fill="url(#customTapestryBg)" />
+              <circle cx="540" cy="850" r="480" fill="url(#customGoldAura)" />
+
+              {/* Decorative Medieval Border Frame */}
+              <rect x="60" y="80" width="960" height="1760" rx="24" fill="none" stroke="#b45309" strokeWidth="4" strokeDasharray="16 12" opacity="0.6" />
+              <rect x="80" y="100" width="920" height="1720" rx="18" fill="none" stroke="#ffd700" strokeWidth="2" opacity="0.4" />
+
+              {/* Central Custom Heraldic Shield */}
+              <g transform="translate(540, 750)">
+                <path d="M -140 -120 L 140 -120 L 140 40 Q 140 180 0 240 Q -140 180 -140 40 Z" fill="#2d170b" stroke="#ffd700" strokeWidth="6" />
+                <path d="M -110 -95 L 110 -95 L 110 35 Q 110 150 0 200 Q -110 150 -110 35 Z" fill="#451a03" stroke="#f59e0b" strokeWidth="3" />
+                <text x="0" y="20" fill="#ffd700" fontSize="72" textAnchor="middle">🖼️</text>
+                <text x="0" y="90" fill="#fef08a" fontSize="24" fontFamily="serif" fontWeight="bold" textAnchor="middle">GALERIA TA</text>
+              </g>
+
+              {/* Floating Golden Dust Particles */}
+              <circle cx="320" cy="550" r="4" fill="#ffd700" opacity="0.8" />
+              <circle cx="760" cy="620" r="5" fill="#fef08a" opacity="0.85" />
+              <circle cx="420" cy="1150" r="3.5" fill="#ffd700" opacity="0.75" />
+              <circle cx="680" cy="1250" r="4.5" fill="#fef08a" opacity="0.9" />
+            </svg>
+          )}
+
+          {/* Vignette Overlay for UI Contrast & Readability */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0a0603]/80 via-[#0d0804]/50 to-[#0a0603]/85" />
         </div>
       )}
     </div>

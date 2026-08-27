@@ -114,7 +114,8 @@ service cloud.firestore {
         (!('shortId' in data) || (data.shortId is string && data.shortId.size() <= 20)) &&
         (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
         (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100)) &&
-        (!('activeRoom' in data) || data.activeRoom == null || data.activeRoom is map);
+        (!('activeRoom' in data) || data.activeRoom == null || data.activeRoom is map) &&
+        (!('addedAt' in data) || data.addedAt is timestamp);
     }
 
     // Friend Request Validation
@@ -168,8 +169,8 @@ service cloud.firestore {
       // User's private friends subcollection
       match /friends/{friendUid} {
         allow get, list: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidId(friendUid) && isValidFriendRecord(incoming());
-        allow delete: if isOwner(userId);
+        allow create, update: if (isOwner(userId) || (isSignedIn() && request.auth.uid == friendUid)) && isValidId(friendUid) && isValidFriendRecord(incoming());
+        allow delete: if isOwner(userId) || (isSignedIn() && request.auth.uid == friendUid);
       }
     }
 
