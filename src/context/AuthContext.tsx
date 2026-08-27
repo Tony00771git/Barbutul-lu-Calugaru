@@ -21,6 +21,10 @@ interface AuthContextType {
   loading: boolean;
   isSigningIn: boolean;
   authError: string | null;
+  hasSetMainProfile: boolean;
+  shouldShowMainProfileSetup: boolean;
+  setShouldShowMainProfileSetup: (val: boolean) => void;
+  markMainProfileAsSet: () => Promise<void>;
   clearAuthError: () => void;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -37,8 +41,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
   const [isSigningIn, setIsSigningIn] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [shouldShowMainProfileSetup, setShouldShowMainProfileSetup] = useState<boolean>(false);
 
   const clearAuthError = () => setAuthError(null);
+
+  const hasSetMainProfile = Boolean(
+    cloudProfile?.hasSetMainProfile ||
+      (user && typeof localStorage !== 'undefined' && localStorage.getItem(`barbut_has_set_main_profile_${user.uid}`) === 'true')
+  );
 
   const fetchProfile = async (uid: string) => {
     if (!auth.currentUser || auth.currentUser.uid !== uid) {
@@ -46,8 +56,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     try {
       const p = await getUserProfile(uid);
+      const localHasSet = typeof localStorage !== 'undefined' && localStorage.getItem(`barbut_has_set_main_profile_${uid}`) === 'true';
+
       if (p) {
         setCloudProfile(p);
+        if (!p.hasSetMainProfile && !localHasSet) {
+          setShouldShowMainProfileSetup(true);
+        }
       } else if (auth.currentUser && auth.currentUser.uid === uid) {
         // Initial setup for new user with Master Profile
         const masterName = auth.currentUser.displayName || 'Starețul Mănăstirii';
@@ -84,6 +99,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           subProfiles: [],
           profiles: [initialMasterProfile],
           drunkenCoins: 100,
+          hasSetMainProfile: false,
           gamesPlayed: 0,
           totalSips: 0,
           totalChugs: 0,
@@ -102,6 +118,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         await saveUserProfile(initial);
         setCloudProfile(initial);
+        if (!localHasSet) {
+          setShouldShowMainProfileSetup(true);
+        }
       }
     } catch (e) {
       console.warn('Could not fetch cloud profile:', e);
@@ -161,6 +180,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const markMainProfileAsSet = async () => {
+    if (user) {
+      try {
+        localStorage.setItem(`barbut_has_set_main_profile_${user.uid}`, 'true');
+      } catch (e) {}
+      await saveUserProfile({ hasSetMainProfile: true });
+      await refreshProfile();
+    }
+    setShouldShowMainProfileSetup(false);
+  };
+
   const signOut = async () => {
     try {
       await fbSignOut(auth);
@@ -196,6 +226,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         isSigningIn,
         authError,
+        hasSetMainProfile,
+        shouldShowMainProfileSetup,
+        setShouldShowMainProfileSetup,
+        markMainProfileAsSet,
         clearAuthError,
         signInWithGoogle,
         signOut,

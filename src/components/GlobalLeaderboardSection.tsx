@@ -8,6 +8,7 @@ import {
   syncAccountProfilesToCloud,
   resetGlobalLeaderboard,
 } from '../lib/firestoreService';
+import { calculateProgression } from '../lib/progression';
 
 type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'pineapple' | 'crash' | 'totalScore';
 
@@ -425,7 +426,14 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
                   <div className="font-cinzel font-bold text-[11px] text-gray-200 truncate w-full">
                     {top3[1].displayName}
                   </div>
-                  <div className="text-[10px] font-mono text-gray-400 truncate w-full">
+                  <div className="text-[9px] font-cinzel font-bold text-gray-300 truncate w-full flex items-center justify-center gap-0.5">
+                    <span className="text-[8px]">👑</span>
+                    <span className="truncate">
+                      {(language === 'ro' ? top3[1].currentTitle_ro : top3[1].currentTitle_en) ||
+                        (language === 'ro' ? calculateProgression(top3[1].totalXP || 0).titleRo : calculateProgression(top3[1].totalXP || 0).titleEn)}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono text-gray-400 truncate w-full mt-0.5">
                     {getCategoryStatDisplay(top3[1]).primary}
                   </div>
                 </div>
@@ -445,7 +453,14 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
                   <div className="font-cinzel font-bold text-xs text-[#ffd700] truncate w-full">
                     {top3[0].displayName}
                   </div>
-                  <div className="text-[11px] font-mono font-bold text-[#fce881] truncate w-full">
+                  <div className="text-[10px] font-cinzel font-bold text-amber-300 truncate w-full flex items-center justify-center gap-0.5">
+                    <span className="text-[9px]">👑</span>
+                    <span className="truncate">
+                      {(language === 'ro' ? top3[0].currentTitle_ro : top3[0].currentTitle_en) ||
+                        (language === 'ro' ? calculateProgression(top3[0].totalXP || 0).titleRo : calculateProgression(top3[0].totalXP || 0).titleEn)}
+                    </span>
+                  </div>
+                  <div className="text-[11px] font-mono font-bold text-[#fce881] truncate w-full mt-0.5">
                     {getCategoryStatDisplay(top3[0]).primary}
                   </div>
                 </div>
@@ -463,7 +478,14 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
                   <div className="font-cinzel font-bold text-[11px] text-amber-200 truncate w-full">
                     {top3[2].displayName}
                   </div>
-                  <div className="text-[10px] font-mono text-amber-400 truncate w-full">
+                  <div className="text-[9px] font-cinzel font-bold text-amber-400/90 truncate w-full flex items-center justify-center gap-0.5">
+                    <span className="text-[8px]">👑</span>
+                    <span className="truncate">
+                      {(language === 'ro' ? top3[2].currentTitle_ro : top3[2].currentTitle_en) ||
+                        (language === 'ro' ? calculateProgression(top3[2].totalXP || 0).titleRo : calculateProgression(top3[2].totalXP || 0).titleEn)}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono text-amber-400 truncate w-full mt-0.5">
                     {getCategoryStatDisplay(top3[2]).primary}
                   </div>
                 </div>
@@ -479,6 +501,8 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
               const rank = searchTerm ? index + 1 : index + 4;
               const isMyProfile = user && entry.userId === user.uid;
               const stat = getCategoryStatDisplay(entry);
+              const entryTitle = (language === 'ro' ? entry.currentTitle_ro : entry.currentTitle_en) ||
+                (language === 'ro' ? calculateProgression(entry.totalXP || 0).titleRo : calculateProgression(entry.totalXP || 0).titleEn);
 
               return (
                 <div
@@ -509,8 +533,12 @@ export const GlobalLeaderboardSection: React.FC<GlobalLeaderboardSectionProps> =
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px] text-gray-400 font-barlow truncate">
-                        {entry.accountName ? `👤 ${entry.accountName}` : stat.secondary}
+                      <div className="text-[10px] text-amber-400/90 font-cinzel font-semibold truncate flex items-center gap-1">
+                        <span className="text-[9px]">👑</span>
+                        <span className="truncate">{entryTitle}</span>
+                        {entry.accountName && (
+                          <span className="text-[9px] text-gray-500 font-barlow truncate">({entry.accountName})</span>
+                        )}
                       </div>
                     </div>
                   </div>

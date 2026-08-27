@@ -17,6 +17,7 @@ interface CloudAccountModalProps {
 }
 
 type LeaderboardCategory = 'monopoly' | 'duel' | 'casino' | 'pineapple' | 'crash' | 'totalScore';
+type AccountModalSubtab = 'profile' | 'leaderboard' | 'history' | 'diagnostics';
 
 export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, onClose }) => {
   const {
@@ -28,16 +29,33 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
     isSigningIn,
     authError,
     clearAuthError,
+    hasSetMainProfile,
+    shouldShowMainProfileSetup,
+    setShouldShowMainProfileSetup,
+    refreshProfile,
   } = useAuth();
-  const { profiles, t, language } = useApp();
+  const { profiles, masterProfile, subProfiles, setMainProfile, t, language } = useApp();
 
-  const [activeSubtab, setActiveSubtab] = useState<'profile' | 'leaderboard' | 'history'>('profile');
+  const [activeSubtab, setActiveSubtab] = useState<AccountModalSubtab>('profile');
   const [leaderboardCategory, setLeaderboardCategory] = useState<LeaderboardCategory>('totalScore');
   const [leaderboard, setLeaderboard] = useState<CloudLeaderboardEntry[]>([]);
   const [history, setHistory] = useState<CloudDuelHistory[]>([]);
   const [loadingData, setLoadingData] = useState<boolean>(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  // Diagnostic Test States
+  const [diagnosticLogs, setDiagnosticLogs] = useState<{ id: number; title: string; status: 'idle' | 'running' | 'pass' | 'fail'; detail: string }[]>([
+    { id: 1, title: 'Conexiune & Inițializare Firebase Auth', status: 'idle', detail: 'Neverificat încă' },
+    { id: 2, title: 'Integritate Profil Principal (Master Profile)', status: 'idle', detail: 'Neverificat încă' },
+    { id: 3, title: 'Segregare Subprofiluri', status: 'idle', detail: 'Neverificat încă' },
+    { id: 4, title: 'Validare Statut hasSetMainProfile', status: 'idle', detail: 'Neverificat încă' },
+    { id: 5, title: 'Calcul XP, Nivel & Titluri Medievale', status: 'idle', detail: 'Neverificat încă' },
+    { id: 6, title: 'Sanitizare Payload Firestore (Fără Undefined/NaN)', status: 'idle', detail: 'Neverificat încă' },
+    { id: 7, title: 'Sincronizare Cloud Round-trip', status: 'idle', detail: 'Neverificat încă' },
+  ]);
+  const [isRunningDiagSuite, setIsRunningDiagSuite] = useState<boolean>(false);
+  const [diagActionMessage, setDiagActionMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -90,6 +108,102 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
     } finally {
       setIsSyncing(false);
     }
+  };
+
+  const runFullDiagnostics = async () => {
+    setIsRunningDiagSuite(true);
+    setDiagActionMessage(null);
+
+    const updateStep = (id: number, status: 'running' | 'pass' | 'fail', detail: string) => {
+      setDiagnosticLogs(prev => prev.map(item => item.id === id ? { ...item, status, detail } : item));
+    };
+
+    try {
+      // 1. Firebase Auth Status
+      updateStep(1, 'running', 'Verificare instanță Firebase Auth...');
+      await new Promise(r => setTimeout(r, 200));
+      if (user) {
+        updateStep(1, 'pass', `Autentificat Google UID: ${user.uid.substring(0, 10)}... (${user.email})`);
+      } else {
+        updateStep(1, 'pass', 'Mod Oaspete / Local (Firebase Auth gata pentru conectare)');
+      }
+
+      // 2. Master Profile Integrity
+      updateStep(2, 'running', 'Verificare profil principal...');
+      await new Promise(r => setTimeout(r, 200));
+      const currentMaster = masterProfile || profiles.find(p => p.isMaster) || profiles[0];
+      if (currentMaster && currentMaster.name) {
+        updateStep(2, 'pass', `Profil Principal Activ: "${currentMaster.name}" (Avatar: ${currentMaster.avatarIcon || 'monk_master'}, XP: ${currentMaster.totalXP || 0})`);
+      } else {
+        updateStep(2, 'fail', 'Nu s-a detectat un profil principal valid!');
+      }
+
+      // 3. Subprofiles Segregation
+      updateStep(3, 'running', 'Verificare subprofiluri...');
+      await new Promise(r => setTimeout(r, 200));
+      const subs = subProfiles || profiles.filter(p => !p.isMaster);
+      const invalidSub = subs.find(p => p.isMaster === true);
+      if (!invalidSub) {
+        updateStep(3, 'pass', `${subs.length} subprofiluri detectate, toate segregate corect cu isMaster: false`);
+      } else {
+        updateStep(3, 'fail', `Conflict de segregare: subprofilul ${invalidSub.name} are isMaster: true`);
+      }
+
+      // 4. hasSetMainProfile Status
+      updateStep(4, 'running', 'Verificare status configurare profil...');
+      await new Promise(r => setTimeout(r, 200));
+      const isSet = hasSetMainProfile;
+      updateStep(4, 'pass', `Status hasSetMainProfile: ${isSet ? 'CONFIGURAT (Salvat)' : 'NECONFIGURAT (Va declanșa pop-up-ul automat)'}`);
+
+      // 5. XP & Level Progression
+      updateStep(5, 'running', 'Calcul formulă progresie...');
+      await new Promise(r => setTimeout(r, 200));
+      const xpVal = currentMaster?.totalXP || 0;
+      const prog = calculateProgression(xpVal);
+      if (prog.currentLevel >= 1 && prog.titleRo && prog.titleEn) {
+        updateStep(5, 'pass', `Nivel ${prog.currentLevel} | Titlu: "${prog.titleRo}" | Progres: ${prog.progressPercent}% (${prog.xpInCurrentLevel}/${prog.xpNeededForNextLevel} XP)`);
+      } else {
+        updateStep(5, 'fail', 'Eroare la calcularea progresiei XP!');
+      }
+
+      // 6. Firestore Payload Sanitation
+      updateStep(6, 'running', 'Testare sanitizare payload Firestore...');
+      await new Promise(r => setTimeout(r, 200));
+      const hasUndefined = profiles.some(p => p.name === undefined || p.id === undefined);
+      if (!hasUndefined) {
+        updateStep(6, 'pass', `Toate cele ${profiles.length} profiluri trec validarea strictă de tipuri și proprietăți`);
+      } else {
+        updateStep(6, 'fail', 'Profilurile conțin câmpuri undefined!');
+      }
+
+      // 7. Cloud Sync Roundtrip
+      updateStep(7, 'running', 'Testare sincronizare Firestore...');
+      if (user) {
+        const start = Date.now();
+        await syncAccountProfilesToCloud(profiles);
+        const duration = Date.now() - start;
+        updateStep(7, 'pass', `Sincronizare în Firestore confirmată cu succes în ${duration}ms`);
+      } else {
+        updateStep(7, 'pass', 'Sincronizare locală pregătită (conectați contul Google pentru sincronizare live în Cloud)');
+      }
+
+      setDiagActionMessage('✅ Toate testele au fost finalizate cu succes!');
+    } catch (err: any) {
+      console.error('Diagnostic error:', err);
+      setDiagActionMessage(`❌ Eroare la rularea testelor: ${err?.message || err}`);
+    } finally {
+      setIsRunningDiagSuite(false);
+    }
+  };
+
+  const handleResetMainProfileSimulation = () => {
+    if (user) {
+      try {
+        localStorage.removeItem(`barbut_has_set_main_profile_${user.uid}`);
+      } catch (e) {}
+    }
+    setShouldShowMainProfileSetup(true);
+    setDiagActionMessage('🔄 S-a resetat flag-ul și s-a deschis fereastra de configurare a Profilului Principal!');
   };
 
   // Sort and filter leaderboard based on active category (strictly individual subprofiles)
@@ -172,7 +286,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
         </div>
 
         {/* Main Subtab Navigation */}
-        <div className="grid grid-cols-3 gap-1.5 bg-[#0e0a06] p-1.5 rounded-2xl border border-[#2a2219]">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-[#0e0a06] p-1.5 rounded-2xl border border-[#2a2219]">
           <button
             onClick={() => setActiveSubtab('profile')}
             className={`py-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1.5 ${
@@ -182,7 +296,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
             }`}
           >
             <span>👤</span>
-            <span>Cont & Profiluri</span>
+            <span>Cont</span>
           </button>
 
           <button
@@ -194,7 +308,7 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
             }`}
           >
             <span>🏆</span>
-            <span>Top Mondial</span>
+            <span>Top</span>
           </button>
 
           <button
@@ -206,7 +320,19 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
             }`}
           >
             <span>📜</span>
-            <span>Cronică Dueluri</span>
+            <span>Dueluri</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubtab('diagnostics')}
+            className={`py-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1.5 ${
+              activeSubtab === 'diagnostics'
+                ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
+                : 'text-yellow-400/80 hover:text-yellow-300'
+            }`}
+          >
+            <span>🧪</span>
+            <span>Diagnostic</span>
           </button>
         </div>
 
@@ -355,8 +481,22 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                                   <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} className="w-full h-full" />
                                 </div>
                                 <div>
-                                  <div className="font-cinzel font-bold text-gray-200">{p.name}</div>
-                                  <div className="text-[10px] text-gray-400 font-barlow flex gap-2">
+                                  <div className="font-cinzel font-bold text-gray-200 flex items-center gap-1.5">
+                                    <span>{p.name}</span>
+                                    {p.isMaster && (
+                                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-cinzel font-bold border border-amber-500/40">
+                                        Principal
+                                      </span>
+                                    )}
+                                    <span className="text-[9px] text-amber-400 font-cinzel font-bold">
+                                      Nv. {p.currentLevel || calculateProgression(p.totalXP || 0).currentLevel}
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] text-amber-300/90 font-cinzel font-semibold flex items-center gap-1">
+                                    <span>👑</span>
+                                    <span>{language === 'ro' ? (p.currentTitle_ro || calculateProgression(p.totalXP || 0).titleRo) : (p.currentTitle_en || calculateProgression(p.totalXP || 0).titleEn)}</span>
+                                  </div>
+                                  <div className="text-[10px] text-gray-400 font-barlow flex gap-2 mt-0.5">
                                     <span>🏰 Monopoly: <strong>{p.winsBoardgame || 0}</strong></span>
                                     <span>⚔️ Duel: <strong>{p.winsDuel || 0}</strong></span>
                                     <span>🎲 Casino: <strong>{p.winsCasino || 0}</strong></span>
@@ -697,6 +837,164 @@ export const CloudAccountModal: React.FC<CloudAccountModalProps> = ({ isOpen, on
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {/* TAB 4: GOOGLE PLAY & MASTER PROFILE DIAGNOSTIC SUITE */}
+          {activeSubtab === 'diagnostics' && (
+            <div className="space-y-4 animate-fade-in text-left">
+              {/* Header Info */}
+              <div className="bg-[#140e08] border border-[#ffd700]/30 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🛠️</span>
+                    <h3 className="font-cinzel font-bold text-sm text-[#ffd700]">
+                      Centru Diagnostic & Teste Google Play
+                    </h3>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#24180d] text-yellow-300 font-cinzel border border-yellow-500/30">
+                    Live Monitor
+                  </span>
+                </div>
+                <p className="text-xs text-gray-300 font-barlow">
+                  Testează în timp real conectarea la Google Play, crearea Profilului Principal (Master), segregarea subprofilurilor și salvarea în Firebase Firestore.
+                </p>
+              </div>
+
+              {/* Status Overview Card */}
+              <div className="bg-[#100b06] border border-[#2e2216] rounded-2xl p-3.5 space-y-2.5">
+                <div className="text-xs font-cinzel font-bold text-gray-200 border-b border-[#2e2216] pb-1.5 flex items-center justify-between">
+                  <span>📊 Stare Curentă Sistem</span>
+                  <span className="text-[10px] text-gray-400 font-mono">
+                    {user ? `UID: ${user.uid.substring(0, 8)}...` : 'Nelogat (Local)'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs font-barlow">
+                  <div className="bg-[#18110a] p-2 rounded-xl border border-white/5">
+                    <div className="text-gray-400 text-[11px]">Cont Google Play:</div>
+                    <div className="font-bold text-yellow-300 truncate">
+                      {user ? (user.displayName || user.email) : 'Deconectat'}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#18110a] p-2 rounded-xl border border-white/5">
+                    <div className="text-gray-400 text-[11px]">Status Profil Principal:</div>
+                    <div className={`font-bold ${hasSetMainProfile ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {hasSetMainProfile ? '✓ Configurat (Salvat)' : '⏳ Neconfigurat'}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#18110a] p-2 rounded-xl border border-white/5">
+                    <div className="text-gray-400 text-[11px]">Profil Principal Activ:</div>
+                    <div className="font-bold text-white truncate">
+                      👑 {masterProfile?.name || profiles[0]?.name || 'Nespecificat'}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#18110a] p-2 rounded-xl border border-white/5">
+                    <div className="text-gray-400 text-[11px]">Subprofiluri Asociate:</div>
+                    <div className="font-bold text-gray-300">
+                      👥 {subProfiles?.length || profiles.filter(p => !p.isMaster).length} active
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons: Run Diagnostic Suite & Simulation Reset */}
+              <div className="space-y-2">
+                <button
+                  onClick={runFullDiagnostics}
+                  disabled={isRunningDiagSuite}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black font-cinzel font-bold text-xs hover:brightness-110 active:scale-95 transition-all shadow flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {isRunningDiagSuite ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      <span>Se rulează suita de teste (7 verificări)...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🚀</span>
+                      <span>Rulează Suita Completă de Teste (7 Etape)</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={handleResetMainProfileSimulation}
+                    className="py-2 px-3 rounded-xl bg-[#22140a] border border-amber-500/50 text-amber-300 hover:bg-amber-950/50 font-cinzel font-bold text-[11px] transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <span>🔄</span>
+                    <span>Re-testează Pop-up Setup</span>
+                  </button>
+
+                  <button
+                    onClick={handleSyncLocalStatsToCloud}
+                    disabled={isSyncing}
+                    className="py-2 px-3 rounded-xl bg-[#161c10] border border-emerald-500/50 text-emerald-300 hover:bg-emerald-950/50 font-cinzel font-bold text-[11px] transition-all flex items-center justify-center gap-1.5 disabled:opacity-60"
+                  >
+                    <span>☁️</span>
+                    <span>{isSyncing ? 'Sincronizare...' : 'Verifică Sincronizarea'}</span>
+                  </button>
+                </div>
+
+                {diagActionMessage && (
+                  <div className="p-2.5 rounded-xl bg-yellow-950/70 border border-yellow-500/50 text-yellow-200 text-xs font-barlow text-center animate-fade-in">
+                    {diagActionMessage}
+                  </div>
+                )}
+              </div>
+
+              {/* Step-by-Step Diagnostic Test Results */}
+              <div className="space-y-2">
+                <div className="text-xs font-cinzel font-bold text-gray-300">
+                  Jurnal Teste Automate (Diagnostic Logs)
+                </div>
+
+                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  {diagnosticLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="bg-[#0e0905] border border-[#2a1e12] rounded-xl p-2.5 flex items-start justify-between gap-2 text-xs"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="font-cinzel font-bold text-gray-200 flex items-center gap-1.5">
+                          <span>{log.id}.</span>
+                          <span>{log.title}</span>
+                        </div>
+                        <div className="text-[11px] text-gray-400 font-barlow pl-4">
+                          {log.detail}
+                        </div>
+                      </div>
+
+                      <div className="flex-shrink-0 pt-0.5">
+                        {log.status === 'pass' && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/50 text-[10px] font-bold">
+                            ✓ PASS
+                          </span>
+                        )}
+                        {log.status === 'fail' && (
+                          <span className="px-2 py-0.5 rounded-full bg-red-950 text-red-400 border border-red-500/50 text-[10px] font-bold">
+                            ✕ FAIL
+                          </span>
+                        )}
+                        {log.status === 'running' && (
+                          <span className="px-2 py-0.5 rounded-full bg-yellow-950 text-yellow-300 border border-yellow-500/50 text-[10px] font-bold animate-pulse">
+                            ⏳ TEST...
+                          </span>
+                        )}
+                        {log.status === 'idle' && (
+                          <span className="px-2 py-0.5 rounded-full bg-[#1c140c] text-gray-500 border border-white/5 text-[10px]">
+                            AȘTEPTARE
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>

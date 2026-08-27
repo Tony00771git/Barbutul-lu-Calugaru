@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { AvatarDisplay } from './AvatarDisplay';
 import { AvatarModal } from './AvatarModal';
+import { MainProfileSetupModal } from './MainProfileSetupModal';
 import { Profile } from '../types';
 import { calculateProgression } from '../lib/progression';
 
@@ -19,6 +20,8 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
 }) => {
   const {
     profiles,
+    masterProfile,
+    subProfiles,
     addProfile,
     deleteProfile,
     updateProfileAvatar,
@@ -31,6 +34,7 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
   const { user } = useAuth();
 
   const [showAddForm, setShowAddForm] = useState<boolean>(false);
+  const [showMainSetupModal, setShowMainSetupModal] = useState<boolean>(false);
   const [newProfileName, setNewProfileName] = useState<string>('');
   const [newAvatarId, setNewAvatarId] = useState<string>('monk_drunk');
   const [avatarPickerProfileId, setAvatarPickerProfileId] = useState<string | 'new' | null>(null);
@@ -109,8 +113,8 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
             </div>
             <p className="text-[10px] text-gray-400 font-barlow leading-tight mt-0.5">
               {language === 'ro'
-                ? 'Generează automat profil pentru nume noi introduse în meci.'
-                : 'Automatically create a profile when a new name plays.'}
+                ? 'Generează automat subprofil pentru nume noi introduse în meci.'
+                : 'Automatically create a sub-profile when a new name plays.'}
             </p>
           </div>
 
@@ -129,6 +133,37 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
             />
           </button>
         </div>
+
+        {/* Master Profile Configure Quick Card */}
+        {masterProfile && (
+          <div className="bg-gradient-to-r from-[#26170a] via-[#1c1107] to-[#26170a] border border-[#ffd700]/70 rounded-xl p-2 sm:p-2.5 flex items-center justify-between gap-2 shadow-md">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="relative w-8 h-8 rounded-lg overflow-hidden border border-[#ffd700] bg-[#120a05] flex-shrink-0">
+                <AvatarDisplay avatarId={masterProfile.avatarIcon || 'monk_master'} className="w-full h-full p-0.5" />
+                <span className="absolute -bottom-1 -right-1 bg-[#ffd700] text-black text-[8px] font-black px-0.5 rounded">👑</span>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-cinzel font-black text-xs text-[#ffd700] truncate">{masterProfile.name}</span>
+                  <span className="text-[8px] font-mono px-1 rounded bg-amber-950 text-amber-300 border border-amber-500/40">
+                    {language === 'ro' ? '👑 Principal' : '👑 Master'}
+                  </span>
+                </div>
+                <span className="text-[9px] text-gray-400 font-barlow block">
+                  {language === 'ro' ? 'Profilul tău de căpetenie pe Google Play' : 'Your primary Google Play identity'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowMainSetupModal(true)}
+              className="py-1 px-2 rounded-lg bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black text-[10px] font-cinzel font-bold hover:brightness-110 transition-all shadow flex-shrink-0"
+            >
+              {language === 'ro' ? '👑 Editează' : '👑 Edit Master'}
+            </button>
+          </div>
+        )}
 
         {/* Action Button: Add Profile Toggle */}
         <div className="flex items-center justify-between gap-2">
@@ -152,7 +187,7 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
             }`}
           >
             <span>{showAddForm ? '✕' : '+'}</span>
-            <span>{showAddForm ? (language === 'ro' ? 'Anulează' : 'Cancel') : (language === 'ro' ? 'Adaugă Profil Nou' : 'Add New Profile')}</span>
+            <span>{showAddForm ? (language === 'ro' ? 'Anulează' : 'Cancel') : (language === 'ro' ? 'Adaugă Subprofil' : 'Add Sub-profile')}</span>
           </button>
         </div>
 
@@ -226,21 +261,33 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
             filteredProfiles.map((p) => {
               const totalScore = p.totalSips + 25 * p.totalChugs;
               const totalWins = (p.winsBoardgame || 0) + (p.winsDuel || 0) + (p.winsCasino || 0) + (p.winsPineapple || 0);
+              const isMaster = p.isMaster || (masterProfile && p.id === masterProfile.id);
 
               return (
                 <div
                   key={p.id}
-                  className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl border border-[#261c11] bg-[#100b07] hover:border-[#ffd700]/50 hover:bg-[#18110a] transition-all group"
+                  className={`flex items-center justify-between p-2 sm:p-2.5 rounded-xl border transition-all group ${
+                    isMaster
+                      ? 'border-[#ffd700] bg-[#1a1107] shadow-[0_0_10px_rgba(255,215,0,0.15)] ring-1 ring-[#ffd700]/50'
+                      : 'border-[#261c11] bg-[#100b07] hover:border-[#ffd700]/50 hover:bg-[#18110a]'
+                  }`}
                 >
                   {/* Left: Avatar & Info */}
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <button
                       type="button"
                       onClick={() => setAvatarPickerProfileId(p.id)}
-                      className="w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 bg-[#080503] border border-[#ffd700]/40 shadow relative group hover:scale-105 transition-all"
+                      className={`w-9 h-9 rounded-xl overflow-hidden flex-shrink-0 bg-[#080503] border shadow relative group hover:scale-105 transition-all ${
+                        isMaster ? 'border-[#ffd700]' : 'border-[#ffd700]/40'
+                      }`}
                       title={language === 'ro' ? 'Schimbă avatarul profilului' : 'Change avatar'}
                     >
                       <AvatarDisplay avatarId={p.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
+                      {isMaster && (
+                        <span className="absolute -bottom-1 -right-1 bg-[#ffd700] text-black text-[8px] font-black px-0.5 rounded shadow">
+                          👑
+                        </span>
+                      )}
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-[10px] text-white">
                         ✏️
                       </div>
@@ -248,9 +295,18 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-cinzel font-bold text-xs sm:text-sm text-[#f0ebe0] truncate">
+                        <span className={`font-cinzel font-bold text-xs sm:text-sm truncate ${isMaster ? 'text-[#ffd700]' : 'text-[#f0ebe0]'}`}>
                           {p.name}
                         </span>
+                        {isMaster ? (
+                          <span className="text-[8px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-950 text-[#ffd700] border border-[#ffd700]/60">
+                            👑 {language === 'ro' ? 'Principal' : 'Master'}
+                          </span>
+                        ) : (
+                          <span className="text-[8px] font-mono px-1.5 py-0.2 rounded bg-black/50 text-gray-400 border border-gray-700/50">
+                            👥 {language === 'ro' ? 'Subprofil' : 'Sub-profile'}
+                          </span>
+                        )}
                         {(() => {
                           const prog = calculateProgression(p.totalXP || 0);
                           const customEquipped = language === 'ro' ? p.currentTitle_ro : p.currentTitle_en;
@@ -303,14 +359,16 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
                       </button>
                     )}
 
-                    <button
-                      type="button"
-                      onClick={() => deleteProfile(p.id)}
-                      className="w-7 h-7 rounded-lg bg-[#1a0e0e] border border-red-900/40 text-red-400 hover:bg-red-950 hover:text-red-200 text-xs flex items-center justify-center transition-all"
-                      title={language === 'ro' ? 'Șterge profilul' : 'Delete profile'}
-                    >
-                      ✕
-                    </button>
+                    {!isMaster && (
+                      <button
+                        type="button"
+                        onClick={() => deleteProfile(p.id)}
+                        className="w-7 h-7 rounded-lg bg-[#1a0e0e] border border-red-900/40 text-red-400 hover:bg-red-950 hover:text-red-200 text-xs flex items-center justify-center transition-all"
+                        title={language === 'ro' ? 'Șterge subprofilul' : 'Delete sub-profile'}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -393,6 +451,12 @@ export const ProfilesManagementModal: React.FC<ProfilesManagementModalProps> = (
           onClose={() => setAvatarPickerProfileId(null)}
         />
       )}
+
+      {/* Main Profile Setup Modal (Master Profile Configuration) */}
+      <MainProfileSetupModal
+        isOpen={showMainSetupModal}
+        onClose={() => setShowMainSetupModal(false)}
+      />
     </div>
   );
 };

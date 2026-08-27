@@ -19,6 +19,7 @@ import { LegendaryBanner } from './components/LegendaryBanner';
 import { XpGainModal } from './components/XpGainModal';
 import { DrunkenCoinsShopModal } from './components/DrunkenCoinsShopModal';
 import { DailyQuestsModal } from './components/DailyQuestsModal';
+import { MainProfileSetupModal } from './components/MainProfileSetupModal';
 import { useDuelSocket } from './hooks/useDuelSocket';
 import { useCasinoSocket } from './hooks/useCasinoSocket';
 import { createPineappleRoom, joinPineappleRoom, addPineappleBot } from './lib/pineappleFirestoreService';
@@ -46,7 +47,7 @@ function MainAppContent() {
     activeXpBreakdown,
     dismissXpBreakdown,
   } = useApp();
-  const { user, cloudProfile } = useAuth();
+  const { user, cloudProfile, shouldShowMainProfileSetup, setShouldShowMainProfileSetup } = useAuth();
 
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('setup');
   const [gameMode, setGameMode] = useState<GameMode>('normal');
@@ -658,6 +659,12 @@ function MainAppContent() {
           setShowDailyQuestsModal(false);
           setShowCoinsModal(true);
         }}
+      />
+
+      {/* First-time Google Play Main Profile Setup Modal */}
+      <MainProfileSetupModal
+        isOpen={shouldShowMainProfileSetup}
+        onClose={() => setShouldShowMainProfileSetup(false)}
       />
 
       {/* Global Live Game Invite Floating Banner */}

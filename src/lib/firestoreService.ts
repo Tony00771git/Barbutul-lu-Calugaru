@@ -40,6 +40,7 @@ export interface CloudUserProfile {
   shortId?: string;
   customShortId?: string;
   unlockedAchievements?: string[];
+  hasSetMainProfile?: boolean;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -143,15 +144,47 @@ export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoi
     const existing = await getDoc(doc(db, 'users', userId));
     const now = serverTimestamp();
 
-    // Determine Master Profile vs Sub-Profiles
-    const master = profiles.find(p => p.isMaster) || profiles[0];
-    const masterId = master ? master.id : 'profile_master';
+    const rawList = Array.isArray(profiles) ? profiles.filter(Boolean) : [];
+    let activeProfilesList = [...rawList];
 
-    const sanitizedProfiles: Profile[] = profiles.map(p => {
+    if (activeProfilesList.length === 0) {
+      const defaultProg = calculateProgression(0);
+      activeProfilesList = [
+        {
+          id: `master_${userId.substring(0, 8)}`,
+          name: accountName,
+          avatarIcon: 'monk_master',
+          isMaster: true,
+          gamesPlayed: 0,
+          totalSips: 0,
+          totalChugs: 0,
+          totalXP: 0,
+          currentLevel: 1,
+          currentTitle_ro: defaultProg.titleRo,
+          currentTitle_en: defaultProg.titleEn,
+          winsBoardgame: 0,
+          winsDuel: 0,
+          winsCasino: 0,
+          winsPineapple: 0,
+          winsCrash: 0,
+          gamesPlayedCrash: 0,
+          sipsDrunkCrash: 0,
+          totalPineapplePoints: 0,
+          unlockedAchievements: [],
+          createdAt: Date.now(),
+        },
+      ];
+    }
+
+    // Determine Master Profile vs Sub-Profiles
+    const master = activeProfilesList.find(p => p && p.isMaster) || activeProfilesList[0];
+    const masterId = master ? master.id : `master_${userId.substring(0, 8)}`;
+
+    const sanitizedProfiles: Profile[] = activeProfilesList.map(p => {
       const isMaster = p.id === masterId || p.isMaster === true;
       const prog = calculateProgression(p.totalXP || 0);
       return {
-        id: p.id,
+        id: p.id || `profile_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         name: (p.name || 'Călugăr').substring(0, 50),
         avatarIcon: (p.avatarIcon || (isMaster ? 'monk_master' : 'monk_drunk')).substring(0, 50000),
         isMaster,
@@ -159,9 +192,9 @@ export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoi
         totalSips: Math.max(0, p.totalSips || 0),
         totalChugs: Math.max(0, p.totalChugs || 0),
         totalXP: Math.max(0, p.totalXP || 0),
-        currentLevel: prog.currentLevel,
-        currentTitle_ro: prog.titleRo,
-        currentTitle_en: prog.titleEn,
+        currentLevel: p.currentLevel || prog.currentLevel,
+        currentTitle_ro: p.currentTitle_ro || prog.titleRo,
+        currentTitle_en: p.currentTitle_en || prog.titleEn,
         winsBoardgame: Math.max(0, p.winsBoardgame || 0),
         winsDuel: Math.max(0, p.winsDuel || 0),
         winsCasino: Math.max(0, p.winsCasino || 0),
@@ -175,12 +208,12 @@ export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoi
       };
     });
 
-    const sanitizedMaster = sanitizedProfiles.find(p => p.isMaster) || sanitizedProfiles[0];
+    const sanitizedMaster: Profile = sanitizedProfiles.find(p => p.isMaster) || sanitizedProfiles[0];
     const sanitizedSubProfiles = sanitizedProfiles.filter(p => !p.isMaster && p.id !== sanitizedMaster.id);
 
-    const totalLocalSips = sanitizedProfiles.reduce((s, p) => s + p.totalSips, 0);
-    const totalLocalChugs = sanitizedProfiles.reduce((s, p) => s + p.totalChugs, 0);
-    const totalLocalGames = sanitizedProfiles.reduce((s, p) => s + p.gamesPlayed, 0);
+    const totalLocalSips = sanitizedProfiles.reduce((s, p) => s + (p.totalSips || 0), 0);
+    const totalLocalChugs = sanitizedProfiles.reduce((s, p) => s + (p.totalChugs || 0), 0);
+    const totalLocalGames = sanitizedProfiles.reduce((s, p) => s + (p.gamesPlayed || 0), 0);
     const totalLocalXP = sanitizedProfiles.reduce((s, p) => s + (p.totalXP || 0), 0);
     const totalBoardWins = sanitizedProfiles.reduce((s, p) => s + (p.winsBoardgame || 0), 0);
     const totalDuelWins = sanitizedProfiles.reduce((s, p) => s + (p.winsDuel || 0), 0);
@@ -192,12 +225,12 @@ export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoi
       new Set(sanitizedProfiles.flatMap(p => p.unlockedAchievements || []))
     ).slice(0, 80);
 
-    const masterProg = calculateProgression(sanitizedMaster.totalXP || totalLocalXP);
+    const masterProg = calculateProgression(sanitizedMaster ? (sanitizedMaster.totalXP || totalLocalXP) : totalLocalXP);
 
     const userDocData: CloudUserProfile = {
       userId,
-      displayName: (sanitizedMaster.name || accountName).substring(0, 100),
-      avatarIcon: (sanitizedMaster.avatarIcon || 'monk_drunk').substring(0, 50000),
+      displayName: ((sanitizedMaster && sanitizedMaster.name) || accountName).substring(0, 100),
+      avatarIcon: ((sanitizedMaster && sanitizedMaster.avatarIcon) || 'monk_drunk').substring(0, 50000),
       email: auth.currentUser.email ? auth.currentUser.email.substring(0, 256) : '',
       masterProfile: sanitizedMaster,
       subProfiles: sanitizedSubProfiles,
@@ -207,9 +240,9 @@ export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoi
       totalSips: totalLocalSips,
       totalChugs: totalLocalChugs,
       totalXP: totalLocalXP,
-      currentLevel: masterProg.currentLevel,
-      currentTitle_ro: masterProg.titleRo,
-      currentTitle_en: masterProg.titleEn,
+      currentLevel: sanitizedMaster?.currentLevel || masterProg.currentLevel,
+      currentTitle_ro: sanitizedMaster?.currentTitle_ro || masterProg.titleRo,
+      currentTitle_en: sanitizedMaster?.currentTitle_en || masterProg.titleEn,
       duelWins: totalDuelWins,
       duelPlayed: totalDuelWins,
       winsBoardgame: totalBoardWins,
@@ -218,6 +251,7 @@ export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoi
       winsPineapple: totalPineappleWins,
       winsCrash: totalCrashWins,
       unlockedAchievements: mergedAchievements,
+      hasSetMainProfile: existing.exists() ? (existing.data()?.hasSetMainProfile ?? false) : false,
       createdAt: (existing.exists() && existing.data()?.createdAt?.nanoseconds !== undefined) ? existing.data()?.createdAt : now,
       updatedAt: now,
     };
@@ -246,9 +280,9 @@ export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoi
         totalScore,
         totalXP: p.totalXP || 0,
         drunkenCoins: p.isMaster ? Math.max(0, drunkenCoins) : 0,
-        currentLevel: prog.currentLevel,
-        currentTitle_ro: prog.titleRo,
-        currentTitle_en: prog.titleEn,
+        currentLevel: p.currentLevel || prog.currentLevel,
+        currentTitle_ro: p.currentTitle_ro || prog.titleRo,
+        currentTitle_en: p.currentTitle_en || prog.titleEn,
         winsBoardgame: p.winsBoardgame || 0,
         winsDuel: p.winsDuel || 0,
         winsCasino: p.winsCasino || 0,
@@ -274,32 +308,34 @@ export async function saveUserProfile(profile: Partial<CloudUserProfile>): Promi
   try {
     const existing = await getDoc(doc(db, 'users', userId));
     const now = serverTimestamp();
+    const existingData = existing.exists() ? existing.data() : {};
 
     const dataToSave = {
       userId,
-      displayName: (profile.displayName || auth.currentUser.displayName || 'Călugăr Google').substring(0, 100),
-      avatarIcon: (profile.avatarIcon || 'monk_drunk').substring(0, 50000),
+      displayName: (profile.displayName || existingData?.displayName || auth.currentUser.displayName || 'Călugăr Google').substring(0, 100),
+      avatarIcon: (profile.avatarIcon || existingData?.avatarIcon || 'monk_drunk').substring(0, 50000),
       email: auth.currentUser.email ? auth.currentUser.email.substring(0, 256) : '',
-      masterProfile: profile.masterProfile || existing.data()?.masterProfile || null,
-      subProfiles: profile.subProfiles || existing.data()?.subProfiles || [],
-      profiles: profile.profiles || existing.data()?.profiles || [],
-      drunkenCoins: profile.drunkenCoins ?? existing.data()?.drunkenCoins ?? 100,
-      gamesPlayed: Math.max(0, profile.gamesPlayed || 0),
-      totalSips: Math.max(0, profile.totalSips || 0),
-      totalChugs: Math.max(0, profile.totalChugs || 0),
-      totalXP: Math.max(0, profile.totalXP || 0),
-      currentLevel: profile.currentLevel || 1,
-      currentTitle_ro: profile.currentTitle_ro || 'Ucenic de Tavernă',
-      currentTitle_en: profile.currentTitle_en || 'Tavern Apprentice',
-      duelWins: Math.max(0, profile.duelWins || 0),
-      duelPlayed: Math.max(0, profile.duelPlayed || 0),
-      winsBoardgame: Math.max(0, profile.winsBoardgame || 0),
-      winsDuel: Math.max(0, profile.winsDuel || 0),
-      winsCasino: Math.max(0, profile.winsCasino || 0),
-      winsPineapple: Math.max(0, profile.winsPineapple || 0),
-      winsCrash: Math.max(0, profile.winsCrash || 0),
-      gamesPlayedCrash: Math.max(0, profile.gamesPlayedCrash || 0),
-      unlockedAchievements: (profile.unlockedAchievements || []).slice(0, 80),
+      masterProfile: profile.masterProfile || existingData?.masterProfile || null,
+      subProfiles: profile.subProfiles || existingData?.subProfiles || [],
+      profiles: profile.profiles || existingData?.profiles || [],
+      drunkenCoins: profile.drunkenCoins ?? existingData?.drunkenCoins ?? 100,
+      hasSetMainProfile: profile.hasSetMainProfile ?? existingData?.hasSetMainProfile ?? false,
+      gamesPlayed: Math.max(0, profile.gamesPlayed ?? existingData?.gamesPlayed ?? 0),
+      totalSips: Math.max(0, profile.totalSips ?? existingData?.totalSips ?? 0),
+      totalChugs: Math.max(0, profile.totalChugs ?? existingData?.totalChugs ?? 0),
+      totalXP: Math.max(0, profile.totalXP ?? existingData?.totalXP ?? 0),
+      currentLevel: profile.currentLevel ?? existingData?.currentLevel ?? 1,
+      currentTitle_ro: profile.currentTitle_ro || existingData?.currentTitle_ro || 'Ucenic de Tavernă',
+      currentTitle_en: profile.currentTitle_en || existingData?.currentTitle_en || 'Tavern Apprentice',
+      duelWins: Math.max(0, profile.duelWins ?? existingData?.duelWins ?? 0),
+      duelPlayed: Math.max(0, profile.duelPlayed ?? existingData?.duelPlayed ?? 0),
+      winsBoardgame: Math.max(0, profile.winsBoardgame ?? existingData?.winsBoardgame ?? 0),
+      winsDuel: Math.max(0, profile.winsDuel ?? existingData?.winsDuel ?? 0),
+      winsCasino: Math.max(0, profile.winsCasino ?? existingData?.winsCasino ?? 0),
+      winsPineapple: Math.max(0, profile.winsPineapple ?? existingData?.winsPineapple ?? 0),
+      winsCrash: Math.max(0, profile.winsCrash ?? existingData?.winsCrash ?? 0),
+      gamesPlayedCrash: Math.max(0, profile.gamesPlayedCrash ?? existingData?.gamesPlayedCrash ?? 0),
+      unlockedAchievements: (profile.unlockedAchievements || existingData?.unlockedAchievements || []).slice(0, 80),
       createdAt: (existing.exists() && existing.data()?.createdAt?.nanoseconds !== undefined) ? existing.data()?.createdAt : now,
       updatedAt: now,
     };
