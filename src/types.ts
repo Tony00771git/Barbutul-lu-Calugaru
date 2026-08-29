@@ -136,6 +136,7 @@ export interface PineapplePlayerState {
   sipsAccumulated: number;         // Float, exact decimal value
   pointsAccumulated?: number;      // Total positive OFC points accumulated in current match
   handLocked: boolean;             // Finished current round placement
+  roundReady?: boolean;            // Explicit confirmation barrier for the current round
   isReadyNextHand: boolean;
 }
 
@@ -341,7 +342,7 @@ export interface Profile {
   totalSips: number;
   totalChugs: number;
   totalXP?: number;
-  drunkenCoins?: number; // Ingame currency: Drunken Coins (Bănuți Turmentați 🍺🪙)
+  drunkenCoins?: number; // Ingame currency: Drunken Coins (Bănuți Turmentați 🪙)
   currentLevel?: number;
   currentTitle_ro?: string;
   currentTitle_en?: string;
@@ -353,6 +354,12 @@ export interface Profile {
   gamesPlayedCrash?: number;
   sipsDrunkCrash?: number;
   totalPineapplePoints?: number;
+  // Showcase & Trophy Hall Customization & Records
+  highestCrashMultiplier?: number;
+  highestWinStreak?: number;
+  currentWinStreak?: number;
+  totalDrinksServedToFriends?: number; // Beers/sips/chugs distributed or served in tavern
+  showcasedItemIds?: string[]; // Up to 3 featured rare cosmetics/avatars/dice
   unlockedAchievements?: string[];
   createdAt: number;
 }
@@ -404,21 +411,50 @@ export type TileType =
   | 'biggest_drinker'
   | 'merchant'
   | 'two_truths'
-  | 'tax';
+  | 'tax'
+  | 'trade'
+  | 'dice_roll';
+
+export type PropertyGroup = 'maro' | 'albastru' | 'verde' | 'portocaliu' | 'auriu';
 
 export interface BoardTile {
   index: number;
   emoji: string;
   type: TileType;
+  group?: PropertyGroup;
   nameRo: string;
   nameEn: string;
   descriptionRo: string;
   descriptionEn: string;
   buyable: boolean;
   price?: number;
+  basePrice?: number;
   sipsCount?: number;
+  baseSipsCount?: number;
+  buildingLevel?: 0 | 1 | 2;
+  currentGuriValue?: number;
+  isGroapa?: boolean;
   gridRow: number;
   gridCol: number;
+}
+
+export type TradeAsset =
+  | { type: 'property'; tileIndex: number }
+  | { type: 'item'; itemType: 'pardonLetter' | 'jailKey' };
+
+export interface TradeBid {
+  bidderId: string;
+  bidderName: string;
+  offeredAssets: TradeAsset[];
+}
+
+export interface TradeAuction {
+  auctioneerId: string;
+  auctioneerName: string;
+  offeredAsset: TradeAsset | null;
+  bids: TradeBid[];
+  status: 'selecting_asset' | 'bidding' | 'reviewing' | 'resolved' | 'declined' | 'passed';
+  deadline?: number;
 }
 
 export interface Card {
@@ -556,6 +592,9 @@ export interface ChestDef {
   color: string;
   bannerGradient: string;
   items: CosmeticItem[];
+  isHighTierOnly?: boolean;
+  badgeRo?: string;
+  badgeEn?: string;
 }
 
 export interface ChestOpenResult {

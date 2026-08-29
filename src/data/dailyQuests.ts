@@ -19,7 +19,7 @@ export interface DailyQuestDefinition {
   descEn: string;
   icon: string;
   target: number;
-  coinReward: number; // Reward in Drunken Coins (Bănuți Turmentați 🍺🪙)
+  coinReward: number; // Reward in Drunken Coins (Bănuți Turmentați 🪙)
   unitRo?: string;
   unitEn?: string;
   difficulty?: 'easy' | 'medium' | 'hard';

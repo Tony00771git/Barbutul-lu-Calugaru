@@ -102,6 +102,19 @@ service cloud.firestore {
         (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
         (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100)) &&
         (!('currentTitle_en' in data) || (data.currentTitle_en is string && data.currentTitle_en.size() <= 100)) &&
+        (!('winsBoardgame' in data) || (data.winsBoardgame is number && data.winsBoardgame >= 0)) &&
+        (!('winsDuel' in data) || (data.winsDuel is number && data.winsDuel >= 0)) &&
+        (!('winsCasino' in data) || (data.winsCasino is number && data.winsCasino >= 0)) &&
+        (!('winsPineapple' in data) || (data.winsPineapple is number && data.winsPineapple >= 0)) &&
+        (!('winsCrash' in data) || (data.winsCrash is number && data.winsCrash >= 0)) &&
+        (!('highestCrashMultiplier' in data) || (data.highestCrashMultiplier is number && data.highestCrashMultiplier >= 0)) &&
+        (!('highestWinStreak' in data) || (data.highestWinStreak is number && data.highestWinStreak >= 0)) &&
+        (!('totalDrinksServedToFriends' in data) || (data.totalDrinksServedToFriends is number && data.totalDrinksServedToFriends >= 0)) &&
+        (!('totalSips' in data) || (data.totalSips is number && data.totalSips >= 0)) &&
+        (!('totalChugs' in data) || (data.totalChugs is number && data.totalChugs >= 0)) &&
+        (!('gamesPlayed' in data) || (data.gamesPlayed is number && data.gamesPlayed >= 0)) &&
+        (!('totalXP' in data) || (data.totalXP is number && data.totalXP >= 0)) &&
+        (!('showcasedItemIds' in data) || (data.showcasedItemIds is list && data.showcasedItemIds.size() <= 10)) &&
         (!('activeRoom' in data) || data.activeRoom == null || data.activeRoom is map);
     }
 

@@ -457,11 +457,11 @@ export const AvatarModal: React.FC<AvatarModalProps> = ({
                 </h3>
                 <p className="text-xs text-gray-300 font-barlow mt-1">
                   {language === 'ro'
-                    ? `Vrei să deblochezi permanent „${unlockConfirmItem.name}” pentru ${unlockConfirmItem.cost} 🍺🪙?`
-                    : `Do you want to permanently unlock "${unlockConfirmItem.name}" for ${unlockConfirmItem.cost} 🍺🪙?`}
+                    ? `Vrei să deblochezi permanent „${unlockConfirmItem.name}” pentru ${unlockConfirmItem.cost} 🪙?`
+                    : `Do you want to permanently unlock "${unlockConfirmItem.name}" for ${unlockConfirmItem.cost} 🪙?`}
                 </p>
                 <div className="mt-2 text-[11px] text-amber-300 font-cinzel">
-                  {language === 'ro' ? 'Ai în Tezaur:' : 'Treasury:'} {drunkenCoins.toLocaleString()} 🍺🪙
+                  {language === 'ro' ? 'Ai în Tezaur:' : 'Treasury:'} {drunkenCoins.toLocaleString()} 🪙
                 </div>
               </div>
 

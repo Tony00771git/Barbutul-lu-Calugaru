@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { BoardTile, Player, TriviaQuestion } from '../types';
+import { BoardTile, Player, TriviaQuestion, PropertyGroup, TradeAsset } from '../types';
 import { GameCardDef } from '../data/cards';
+import { PROPERTY_GROUPS, calculateUpgradedValues } from '../data/boardTiles';
 import { useApp } from '../context/AppContext';
 import { MonkMascot } from './MonkMascot';
 import { AvatarDisplay } from './AvatarDisplay';
@@ -9,29 +10,94 @@ import { AvatarDisplay } from './AvatarDisplay';
 export const TileDetailModal: React.FC<{
   tile: BoardTile | null;
   ownerName?: string;
+  player?: Player;
+  onUpgrade?: (tileIndex: number, cost: number) => void;
   onClose: () => void;
-}> = ({ tile, ownerName, onClose }) => {
+}> = ({ tile, ownerName, player, onUpgrade, onClose }) => {
   const { t, language } = useApp();
   if (!tile) return null;
+
+  const groupMeta = tile.group ? PROPERTY_GROUPS[tile.group] : null;
+  const isOwner = player && player.properties.includes(tile.index);
+  const currentLvl = tile.buildingLevel || 0;
+  const isMaxLevel = currentLvl >= 2;
+  const upgradeCost = Math.round((tile.price || 5) * (currentLvl === 0 ? 1.0 : 1.5));
+  const canAfford = player ? player.gold >= upgradeCost : false;
+  const nextPreview = tile.buyable ? calculateUpgradedValues(tile.price || 5, tile.baseSipsCount || tile.sipsCount || 2, Math.min(2, currentLvl + 1) as 1 | 2) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
       <div className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl p-5 max-w-sm w-full space-y-4 gold-glow text-center">
-        <div className="text-4xl">{tile.emoji}</div>
-        <h3 className="text-xl font-cinzel font-bold text-[#e8c84a]">
-          {language === 'ro' ? tile.nameRo : tile.nameEn}
-        </h3>
+        <div className="text-4xl">{tile.isGroapa ? '🔥' : tile.emoji}</div>
+        <div className="space-y-1">
+          {groupMeta && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-cinzel font-bold border"
+                 style={{ backgroundColor: `${groupMeta.colorHex}22`, borderColor: groupMeta.colorHex, color: groupMeta.colorHex }}>
+              <span>●</span>
+              <span>{language === 'ro' ? groupMeta.nameRo : groupMeta.nameEn}</span>
+            </div>
+          )}
+          <h3 className="text-xl font-cinzel font-bold text-[#e8c84a]">
+            {language === 'ro' ? tile.nameRo : tile.nameEn}
+          </h3>
+        </div>
         <p className="text-sm font-barlow text-[#f0ebe0]">
           {language === 'ro' ? tile.descriptionRo : tile.descriptionEn}
         </p>
 
         {tile.buyable && (
-          <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-3 rounded-xl text-xs space-y-1">
-            <div className="text-gray-400 font-cinzel">{language === 'ro' ? 'Preț / Cost:' : 'Price / Cost:'} <span className="text-[#e8c84a] font-bold">{tile.price} 🪙</span></div>
-            {ownerName ? (
-              <div className="text-green-400 font-bold">{language === 'ro' ? 'Proprietar:' : 'Owner:'} {ownerName} 👑</div>
-            ) : (
-              <div className="text-gray-400">{language === 'ro' ? 'Liberă pentru cumpărare' : 'Available for purchase'}</div>
+          <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-3 rounded-xl text-xs space-y-2">
+            <div className="flex justify-between items-center text-gray-400 font-cinzel">
+              <span>{language === 'ro' ? 'Preț de achiziție:' : 'Purchase Price:'}</span>
+              <span className="text-[#e8c84a] font-bold">{tile.price} 🪙</span>
+            </div>
+            <div className="flex justify-between items-center text-gray-400 font-cinzel">
+              <span>{language === 'ro' ? 'Pedeapsă / Chirie:' : 'Penalty / Rent:'}</span>
+              {tile.isGroapa ? (
+                <span className="text-red-400 font-bold">🔥 GROAPĂ (CHUG)</span>
+              ) : (
+                <span className="text-yellow-300 font-bold">🍺 {tile.sipsCount} guri</span>
+              )}
+            </div>
+            {tile.buildingLevel !== undefined && (
+              <div className="flex justify-between items-center text-gray-400 font-cinzel">
+                <span>{language === 'ro' ? 'Nivel Clădire:' : 'Building Level:'}</span>
+                <span className="text-amber-300 font-bold">
+                  {tile.buildingLevel === 0 ? 'Fără clădiri' : tile.buildingLevel === 1 ? 'Nivel 1 🏠' : 'Nivel 2 🏠🏠'}
+                </span>
+              </div>
+            )}
+            <div className="border-t border-[#333] pt-1.5 flex justify-between items-center">
+              <span className="text-gray-400">{language === 'ro' ? 'Proprietar:' : 'Owner:'}</span>
+              {ownerName ? (
+                <span className="text-green-400 font-bold">{ownerName} 👑</span>
+              ) : (
+                <span className="text-gray-400 italic">{language === 'ro' ? 'Liberă' : 'Available'}</span>
+              )}
+            </div>
+
+            {/* Direct Upgrade Option if active player owns this tile */}
+            {isOwner && onUpgrade && (
+              <div className="pt-2 border-t border-[#333]">
+                {isMaxLevel ? (
+                  <div className="text-center text-emerald-400 font-cinzel font-bold text-[11px] py-1 bg-emerald-950/40 rounded-lg">
+                    ✨ Nivel Maxim de Clădire
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => onUpgrade(tile.index, upgradeCost)}
+                    disabled={!canAfford}
+                    className={`w-full py-2 px-3 rounded-xl font-cinzel font-bold text-xs flex items-center justify-between transition-all ${
+                      canAfford
+                        ? 'bg-gradient-to-r from-[#ffd700] to-[#f59e0b] text-black hover:brightness-110 shadow'
+                        : 'bg-stone-800 text-gray-500 border border-stone-700 cursor-not-allowed'
+                    }`}
+                  >
+                    <span>🏗️ Upgrade la Nivel {currentLvl + 1}</span>
+                    <span>{upgradeCost} 🪙 {nextPreview?.isGroapa ? '(🔥 Groapă)' : `(🍺 ${nextPreview?.sipsCount} guri)`}</span>
+                  </button>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -765,42 +831,74 @@ export const TwoTruthsModal: React.FC<{
   );
 };
 
-// --- Merchant Modal ---
+// --- Merchant Modal (Târgul cu Scrisori & Chei) ---
 export const MerchantModal: React.FC<{
   player: Player;
-  onBuy: () => void;
+  onBuyPardon?: () => void;
+  onBuyKey?: () => void;
+  onBuy?: () => void;
   onDecline: () => void;
-}> = ({ player, onBuy, onDecline }) => {
-  const { t } = useApp();
+}> = ({ player, onBuyPardon, onBuyKey, onBuy, onDecline }) => {
+  const { language } = useApp();
+  const buyPardon = onBuyPardon || onBuy || (() => {});
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-      <div className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl p-6 max-w-sm w-full space-y-4 gold-glow text-center">
-        <div className="text-5xl">🧙 🎟️</div>
-        <h3 className="text-xl font-cinzel font-bold text-[#e8c84a] gold-text-glow">
-          {t('merchantTitle')}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none">
+      <div className="bg-[#16130e] border-2 border-[#ffd700] rounded-3xl p-6 max-w-sm w-full space-y-4 text-center shadow-2xl gold-glow">
+        <div className="text-4xl">🧙 📜 🔓</div>
+        <h3 className="text-xl font-cinzel font-black text-[#ffd700] gold-text-glow">
+          {language === 'ro' ? 'Târgul cu Scrisori & Chei' : 'Pardon & Keys Bazaar'}
         </h3>
-        <p className="text-sm font-barlow text-[#f0ebe0]">
-          {t('merchantDesc')}
+        <p className="text-xs font-barlow text-gray-300">
+          {language === 'ro'
+            ? 'Negustorul misterios al mănăstirii îți pune la dispoziție relicve valoroase de scăpare:'
+            : 'The monastery mystic offers valuable escape relics for your journey:'}
         </p>
 
-        <div className="space-y-2.5 pt-2">
+        <div className="p-2 rounded-xl bg-[#201911] border border-[#ffd700]/30 text-xs font-cinzel text-amber-300 font-bold">
+          🪙 {language === 'ro' ? 'Aurul tău:' : 'Your Gold:'} {player.gold} galbeni
+        </div>
+
+        <div className="space-y-2 pt-1">
           <button
             disabled={player.gold < 30}
-            onClick={onBuy}
-            className={`w-full py-3 rounded-xl font-cinzel font-bold text-sm ${
+            onClick={buyPardon}
+            className={`w-full py-2.5 px-3 rounded-2xl font-cinzel font-bold text-xs flex items-center justify-between transition-all ${
               player.gold >= 30
-                ? 'bg-[#e8c84a] text-black hover:brightness-110 gold-glow'
-                : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black hover:brightness-110 shadow-md'
+                : 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
             }`}
           >
-            {t('buyMerchantBtn')}
+            <span className="flex items-center gap-1">
+              <span>🎟️</span>
+              <span>{language === 'ro' ? 'Scrisoare de Iertare' : 'Pardon Letter'}</span>
+            </span>
+            <span className="font-black">30 🪙</span>
           </button>
+
+          {onBuyKey && (
+            <button
+              disabled={player.gold < 20}
+              onClick={onBuyKey}
+              className={`w-full py-2.5 px-3 rounded-2xl font-cinzel font-bold text-xs flex items-center justify-between transition-all ${
+                player.gold >= 20
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:brightness-110 shadow-md'
+                  : 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
+              }`}
+            >
+              <span className="flex items-center gap-1">
+                <span>🔓</span>
+                <span>{language === 'ro' ? 'Cheie de Temniță' : 'Dungeon Key'}</span>
+              </span>
+              <span className="font-black">20 🪙</span>
+            </button>
+          )}
+
           <button
             onClick={onDecline}
-            className="w-full py-3 rounded-xl bg-[#2a2a2a] text-gray-300 font-cinzel text-sm hover:text-white"
+            className="w-full py-2.5 rounded-2xl bg-[#241c14] border border-stone-700 text-gray-300 font-cinzel text-xs hover:text-white transition-all"
           >
-            {t('declineMerchantBtn')}
+            {language === 'ro' ? 'Pas (Nu cumpăr nimic)' : 'Pass (Decline)'}
           </button>
         </div>
       </div>
@@ -841,6 +939,760 @@ export const SelectPlayerModal: React.FC<{
               <span className="text-xs text-gray-400">🍺 {p.sipsTotal}</span>
             </button>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Building Upgrade Modal (Section 2) ---
+export const UpgradeBuildingsModal: React.FC<{
+  player: Player;
+  tiles: BoardTile[];
+  onUpgradeTile: (tileIndex: number, cost: number) => void;
+  onClose: () => void;
+}> = ({ player, tiles, onUpgradeTile, onClose }) => {
+  const { language } = useApp();
+
+  // Find all groups where the player owns ALL properties in the group
+  const ownedGroups: { groupKey: PropertyGroup; groupMeta: any; groupTiles: BoardTile[] }[] = [];
+
+  (Object.keys(PROPERTY_GROUPS) as PropertyGroup[]).forEach((gKey) => {
+    const meta = PROPERTY_GROUPS[gKey];
+    const hasAll = meta.tileIndices.every((idx) => player.properties.includes(idx));
+    if (hasAll) {
+      const gTiles = meta.tileIndices.map((idx) => tiles[idx]);
+      ownedGroups.push({ groupKey: gKey, groupMeta: meta, groupTiles: gTiles });
+    }
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none overflow-y-auto">
+      <div className="bg-[#14120e] border-2 border-[#ffd700] rounded-3xl p-4 sm:p-6 max-w-lg w-full space-y-4 shadow-2xl gold-glow my-auto max-h-[92vh] flex flex-col">
+        {/* Header */}
+        <div className="text-center space-y-1 border-b border-[#2d2215] pb-3">
+          <div className="text-3xl sm:text-4xl">🏗️ 🏰</div>
+          <h3 className="text-xl sm:text-2xl font-cinzel font-black text-[#ffd700] gold-text-glow">
+            {language === 'ro' ? 'Construcție & Upgrade Clădiri' : 'Building Upgrades & Expansions'}
+          </h3>
+          <p className="text-xs text-gray-300 font-barlow">
+            {language === 'ro'
+              ? 'Fiecare clădire adaugă +80% guri! Peste 25 guri devine automat GROAPĂ permanentă 🔥.'
+              : 'Each upgrade adds +80% sips! Over 25 sips permanently becomes a CHUG (GROAPĂ) 🔥.'}
+          </p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#201911] border border-[#ffd700]/40 text-xs font-cinzel text-[#ffd700] mt-1 font-bold">
+            <span>🪙 Aur disponibil:</span>
+            <span>{player.gold} galbeni</span>
+          </div>
+        </div>
+
+        {/* Groups List */}
+        <div className="overflow-y-auto flex-1 space-y-4 pr-1">
+          {ownedGroups.length === 0 ? (
+            <div className="text-center py-8 space-y-3 bg-[#1c1610] rounded-2xl border border-stone-800 p-4">
+              <div className="text-3xl">📜</div>
+              <h4 className="font-cinzel text-sm font-bold text-amber-300">
+                {language === 'ro' ? 'Niciun Set Complet Deținut' : 'No Complete Color Sets Owned'}
+              </h4>
+              <p className="text-xs text-gray-400 font-barlow max-w-xs mx-auto">
+                {language === 'ro'
+                  ? 'Pentru a construi clădiri, trebuie să deții toate proprietățile dintr-un grup de culoare (Maro, Albastru, Verde, Portocaliu sau Auriu).'
+                  : 'To upgrade buildings, you must own all properties within a color district (Brown, Blue, Green, Orange, or Gold).'}
+              </p>
+            </div>
+          ) : (
+            ownedGroups.map(({ groupKey, groupMeta, groupTiles }) => (
+              <div
+                key={groupKey}
+                className="bg-[#18130d] border border-[#3d2a19] rounded-2xl p-3 space-y-3 shadow-md"
+              >
+                {/* Group Title Bar */}
+                <div className="flex items-center justify-between border-b border-[#2d1e12] pb-2">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3.5 h-3.5 rounded-full shadow"
+                      style={{ backgroundColor: groupMeta.colorHex }}
+                    />
+                    <span className="font-cinzel font-bold text-sm text-[#ffd700]">
+                      {language === 'ro' ? groupMeta.nameRo : groupMeta.nameEn}
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-bold">
+                      {language === 'ro' ? 'Set Complet 👑' : 'Complete Set 👑'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tiles Grid */}
+                <div className="grid grid-cols-1 gap-2">
+                  {groupTiles.map((tile) => {
+                    const currentLevel = tile.buildingLevel || 0;
+                    const basePrice = tile.basePrice || tile.price || 10;
+                    const baseSips = tile.baseSipsCount || tile.sipsCount || 4;
+
+                    const upgradeMeta = calculateUpgradedValues(basePrice, baseSips, currentLevel);
+                    const isMaxLevel = currentLevel >= 2;
+                    const cost = upgradeMeta.nextUpgradeCost || 0;
+                    const canAfford = player.gold >= cost;
+
+                    // Compute preview of next level
+                    let nextPreview: { sips: number; isGroapa: boolean } | null = null;
+                    if (!isMaxLevel) {
+                      const nextLevel = (currentLevel + 1) as 1 | 2;
+                      const nextVals = calculateUpgradedValues(basePrice, baseSips, nextLevel);
+                      nextPreview = { sips: nextVals.sipsCount, isGroapa: nextVals.isGroapa };
+                    }
+
+                    return (
+                      <div
+                        key={tile.index}
+                        className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          tile.isGroapa
+                            ? 'bg-gradient-to-r from-[#2a0e0e] to-[#1a0808] border-red-600/70'
+                            : currentLevel > 0
+                            ? 'bg-gradient-to-r from-[#21180d] to-[#171109] border-[#e8c84a]/60'
+                            : 'bg-[#120e0a] border-stone-800'
+                        }`}
+                      >
+                        {/* Tile Info */}
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{tile.isGroapa ? '🔥' : tile.emoji}</span>
+                            <span className="font-cinzel font-bold text-xs sm:text-sm text-white">
+                              {language === 'ro' ? tile.nameRo : tile.nameEn}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-mono">
+                              (#{tile.index})
+                            </span>
+                          </div>
+
+                          {/* Building Icons & Current Sips */}
+                          <div className="flex items-center gap-2 text-xs">
+                            <div className="flex items-center gap-1 font-cinzel text-amber-300 font-bold">
+                              <span>Nivel {currentLevel}/2</span>
+                              {currentLevel === 1 && <span>🏠</span>}
+                              {currentLevel === 2 && <span>🏠🏠</span>}
+                            </div>
+                            <span className="text-gray-500">•</span>
+                            <div className="font-bold">
+                              {tile.isGroapa ? (
+                                <span className="text-red-400 font-black animate-pulse">
+                                  🔥 GROAPĂ (CHUG)
+                                </span>
+                              ) : (
+                                <span className="text-yellow-300">
+                                  🍺 {tile.sipsCount} guri chirie
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Upgrade Action Button */}
+                        <div>
+                          {isMaxLevel ? (
+                            <span className="text-[11px] font-cinzel font-bold text-emerald-400 bg-emerald-950/80 px-3 py-1.5 rounded-xl border border-emerald-600/40 inline-block text-center">
+                              ✨ Nivel Maxim
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => onUpgradeTile(tile.index, cost)}
+                              disabled={!canAfford}
+                              className={`w-full sm:w-auto px-4 py-2 rounded-xl font-cinzel font-bold text-xs flex flex-col items-center gap-0.5 transition-all shadow ${
+                                canAfford
+                                  ? 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black hover:brightness-110 active:scale-95'
+                                  : 'bg-stone-800 text-gray-500 border border-stone-700 cursor-not-allowed'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1">
+                                <span>🏗️ Upgrade</span>
+                                <span>({cost} 🪙)</span>
+                              </div>
+                              {nextPreview && (
+                                <span className="text-[9px] font-barlow tracking-tight">
+                                  ➔ {nextPreview.isGroapa ? '🔥 Devine GROAPĂ!' : `+80% (🍺 ${nextPreview.sips} guri)`}
+                                </span>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Close Button */}
+        <div className="pt-2 border-t border-[#2d2215]">
+          <button
+            onClick={onClose}
+            className="w-full py-3 rounded-2xl bg-[#2a1f13] border border-[#ffd700]/50 text-[#ffd700] font-cinzel font-bold text-sm hover:bg-[#3d2d1c] transition-all"
+          >
+            {language === 'ro' ? 'Închide Panoul de Construcții' : 'Close Construction Panel'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Trade Auction Modal (Section 3) ---
+export interface TradeAuctionModalProps {
+  auctioneer?: Player;
+  activePlayer?: Player;
+  players?: Player[];
+  allPlayers?: Player[];
+  tiles: BoardTile[];
+  onExecuteTrade: (
+    bidderId: string,
+    auctioneerAsset: TradeAsset,
+    bidderAssets: TradeAsset[]
+  ) => void;
+  onPass?: () => void;
+  onClose?: () => void;
+}
+
+export const TradeAuctionModal: React.FC<TradeAuctionModalProps> = ({
+  auctioneer: propAuctioneer,
+  activePlayer: propActivePlayer,
+  players: propPlayers,
+  allPlayers: propAllPlayers,
+  tiles,
+  onExecuteTrade,
+  onPass,
+  onClose,
+}) => {
+  const { language } = useApp();
+  const auctioneer = propAuctioneer || propActivePlayer;
+  const players = propAllPlayers || propPlayers || [];
+  const handleClose = onPass || onClose || (() => {});
+
+  // Phase: 1. selecting_asset -> 2. collecting_bids -> 3. reviewing_bids
+  const [phase, setPhase] = useState<'select_asset' | 'bidding' | 'review'>('select_asset');
+  const [selectedAuctionAsset, setSelectedAuctionAsset] = useState<TradeAsset | null>(null);
+
+  if (!auctioneer) return null;
+
+  // Other eligible players
+  const otherPlayers = (players || []).filter((p) => p && p.id !== auctioneer.id && !p.hasGivenUp);
+
+  // Bids state from each other player: { bidderId: TradeAsset[] }
+  const [playerBids, setPlayerBids] = useState<Record<string, TradeAsset[]>>({});
+  const [activeBidderIndex, setActiveBidderIndex] = useState<number>(0);
+
+  // Available assets of auctioneer
+  const auctioneerProperties = (auctioneer.properties || []).map((idx) => tiles[idx]).filter(Boolean);
+  const hasPardonLetter = (auctioneer.pardonLetters || 0) > 0;
+  const hasJailKey = (auctioneer.jailKeys || 0) > 0;
+  const hasAnyAsset = auctioneerProperties.length > 0 || hasPardonLetter || hasJailKey;
+
+  // Render Asset Badge Helper
+  const renderAssetLabel = (asset: TradeAsset) => {
+    if (asset.type === 'property') {
+      const tile = tiles[asset.tileIndex];
+      if (!tile) return <span className="text-xs font-cinzel">Proprietate #{asset.tileIndex}</span>;
+      return (
+        <span className="inline-flex items-center gap-1 text-xs font-cinzel font-bold text-amber-200">
+          <span>{tile.emoji}</span>
+          <span>{language === 'ro' ? tile.nameRo : tile.nameEn}</span>
+          <span className="text-[10px] text-gray-400 font-mono">(#{tile.index})</span>
+        </span>
+      );
+    } else if (asset.itemType === 'pardonLetter') {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs font-cinzel font-bold text-blue-300">
+          <span>🎟️</span>
+          <span>{language === 'ro' ? 'Scrisoare de Iertare' : 'Pardon Letter'}</span>
+        </span>
+      );
+    } else {
+      return (
+        <span className="inline-flex items-center gap-1 text-xs font-cinzel font-bold text-emerald-300">
+          <span>🔓</span>
+          <span>{language === 'ro' ? 'Cheie de Temniță' : 'Jail Key'}</span>
+        </span>
+      );
+    }
+  };
+
+  // If no other players exist in game
+  if (otherPlayers.length === 0) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none">
+        <div className="bg-[#16130e] border-2 border-[#ffd700] rounded-3xl p-6 max-w-sm w-full space-y-4 text-center shadow-2xl">
+          <div className="text-4xl">🤝 📜</div>
+          <h3 className="text-xl font-cinzel font-bold text-[#ffd700]">
+            {language === 'ro' ? 'Târgul Mănăstirii (Trade)' : 'Monastery Trade Bazaar'}
+          </h3>
+          <p className="text-sm font-barlow text-gray-300">
+            {language === 'ro'
+              ? 'Nu există alți jucători activi cu care să faci schimb în acest moment.'
+              : 'There are no other active players to trade with at this time.'}
+          </p>
+          <button
+            onClick={handleClose}
+            className="w-full py-3 rounded-2xl bg-[#ffd700] text-black font-cinzel font-bold text-sm hover:brightness-110"
+          >
+            {language === 'ro' ? 'Continuă Tura ➔' : 'Continue Turn ➔'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // If auctioneer has nothing to trade, let them pass easily
+  if (!hasAnyAsset && phase === 'select_asset') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none">
+        <div className="bg-[#16130e] border-2 border-[#ffd700] rounded-3xl p-6 max-w-sm w-full space-y-4 text-center shadow-2xl">
+          <div className="text-4xl">🤝 📜</div>
+          <h3 className="text-xl font-cinzel font-bold text-[#ffd700]">
+            {language === 'ro' ? 'Târgul Mănăstirii (Trade)' : 'Monastery Trade Bazaar'}
+          </h3>
+          <p className="text-sm font-barlow text-gray-300">
+            {language === 'ro'
+              ? `${auctioneer.name}, nu deții nicio proprietate sau item pe care să îl scoți la licitație.`
+              : `${auctioneer.name}, you do not own any properties or items to auction.`}
+          </p>
+          <button
+            onClick={handleClose}
+            className="w-full py-3 rounded-2xl bg-[#ffd700] text-black font-cinzel font-bold text-sm hover:brightness-110"
+          >
+            {language === 'ro' ? 'Continuă Tura ➔' : 'Continue Turn ➔'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- PHASE 1: Auctioneer Selects 1 Asset ---
+  if (phase === 'select_asset') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none overflow-y-auto">
+        <div className="bg-[#14120e] border-2 border-[#ffd700] rounded-3xl p-5 max-w-md w-full space-y-4 text-center shadow-2xl gold-glow my-auto">
+          <div className="text-4xl">🤝 ⚖️</div>
+          <div className="space-y-1">
+            <h3 className="text-xl font-cinzel font-black text-[#ffd700] gold-text-glow">
+              {language === 'ro' ? 'Târg & Licitație Mănăstirească' : 'Monastery Trade & Auction'}
+            </h3>
+            <p className="text-xs text-gray-300 font-barlow">
+              {language === 'ro'
+                ? `Alege UN SINGUR bun de-al tău pe care vrei să îl scoți la licitație către ceilalți frați.`
+                : `Select a SINGLE asset of yours to put up for auction to other monks.`}
+            </p>
+          </div>
+
+          {/* Asset Choice Options */}
+          <div className="space-y-2 max-h-60 overflow-y-auto text-left pr-1">
+            {/* Properties */}
+            {auctioneerProperties.map((tile) => {
+              const isSelected =
+                selectedAuctionAsset?.type === 'property' &&
+                selectedAuctionAsset.tileIndex === tile.index;
+              return (
+                <button
+                  key={tile.index}
+                  type="button"
+                  onClick={() => setSelectedAuctionAsset({ type: 'property', tileIndex: tile.index })}
+                  className={`w-full p-3 rounded-xl border flex items-center justify-between transition-all ${
+                    isSelected
+                      ? 'bg-[#2b2010] border-[#ffd700] shadow-[0_0_12px_rgba(255,215,0,0.5)] ring-1 ring-[#ffd700]'
+                      : 'bg-[#17130d] border-stone-800 hover:border-stone-600'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{tile.emoji}</span>
+                    <div>
+                      <div className="font-cinzel font-bold text-xs text-white">
+                        {language === 'ro' ? tile.nameRo : tile.nameEn}
+                      </div>
+                      <div className="text-[10px] text-amber-300/80 font-barlow">
+                        Chirie: 🍺 {tile.sipsCount} guri • Nivel: {tile.buildingLevel || 0}/2
+                      </div>
+                    </div>
+                  </div>
+                  {isSelected && <span className="text-sm text-[#ffd700]">✓</span>}
+                </button>
+              );
+            })}
+
+            {/* Pardon Letter */}
+            {hasPardonLetter && (
+              <button
+                type="button"
+                onClick={() => setSelectedAuctionAsset({ type: 'item', itemType: 'pardonLetter' })}
+                className={`w-full p-3 rounded-xl border flex items-center justify-between transition-all ${
+                  selectedAuctionAsset?.type === 'item' && selectedAuctionAsset.itemType === 'pardonLetter'
+                    ? 'bg-[#101b2b] border-blue-400 shadow-[0_0_12px_rgba(96,165,250,0.5)] ring-1 ring-blue-400'
+                    : 'bg-[#17130d] border-stone-800 hover:border-stone-600'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🎟️</span>
+                  <div>
+                    <div className="font-cinzel font-bold text-xs text-blue-300">
+                      {language === 'ro' ? 'Scrisoare de Iertare' : 'Pardon Letter'}
+                    </div>
+                    <div className="text-[10px] text-gray-400 font-barlow">
+                      Anulează orice pedeapsă de băut (Deții: {auctioneer.pardonLetters})
+                    </div>
+                  </div>
+                </div>
+                {selectedAuctionAsset?.type === 'item' && selectedAuctionAsset.itemType === 'pardonLetter' && (
+                  <span className="text-sm text-blue-400">✓</span>
+                )}
+              </button>
+            )}
+
+            {/* Jail Key */}
+            {hasJailKey && (
+              <button
+                type="button"
+                onClick={() => setSelectedAuctionAsset({ type: 'item', itemType: 'jailKey' })}
+                className={`w-full p-3 rounded-xl border flex items-center justify-between transition-all ${
+                  selectedAuctionAsset?.type === 'item' && selectedAuctionAsset.itemType === 'jailKey'
+                    ? 'bg-[#0f241a] border-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)] ring-1 ring-emerald-400'
+                    : 'bg-[#17130d] border-stone-800 hover:border-stone-600'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">🔓</span>
+                  <div>
+                    <div className="font-cinzel font-bold text-xs text-emerald-300">
+                      {language === 'ro' ? 'Cheie de Temniță' : 'Jail Key'}
+                    </div>
+                    <div className="text-[10px] text-gray-400 font-barlow">
+                      Ieși instant din închisoare fără să plătești (Deții: {auctioneer.jailKeys})
+                    </div>
+                  </div>
+                </div>
+                {selectedAuctionAsset?.type === 'item' && selectedAuctionAsset.itemType === 'jailKey' && (
+                  <span className="text-sm text-emerald-400">✓</span>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => {
+                if (selectedAuctionAsset) {
+                  setPhase('bidding');
+                }
+              }}
+              disabled={!selectedAuctionAsset}
+              className={`flex-1 py-3 rounded-2xl font-cinzel font-bold text-xs uppercase tracking-wider ${
+                selectedAuctionAsset
+                  ? 'bg-gradient-to-r from-[#ffd700] to-[#f59e0b] text-black hover:brightness-110 shadow-lg'
+                  : 'bg-stone-800 text-gray-500 border border-stone-700 cursor-not-allowed'
+              }`}
+            >
+              {language === 'ro' ? 'Deschide Licitația ➔' : 'Open Auction ➔'}
+            </button>
+            <button
+              onClick={handleClose}
+              className="py-3 px-4 rounded-2xl bg-[#241c14] border border-stone-700 text-gray-300 font-cinzel text-xs hover:text-white"
+            >
+              {language === 'ro' ? 'Pas (Nu licitez)' : 'Pass'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- PHASE 2: Other Players Submit Offers (1 or 2 items) ---
+  if (phase === 'bidding') {
+    const currentBidder = otherPlayers[activeBidderIndex];
+    if (!currentBidder) {
+      // Finished all bidders -> go to review phase
+      setPhase('review');
+      return null;
+    }
+
+    const bidderProperties = currentBidder.properties.map((idx) => tiles[idx]);
+    const bidderHasPardon = (currentBidder.pardonLetters || 0) > 0;
+    const bidderHasKey = (currentBidder.jailKeys || 0) > 0;
+    const currentBidderOffer = playerBids[currentBidder.id] || [];
+
+    const toggleBidderAsset = (asset: TradeAsset) => {
+      const exists = currentBidderOffer.some((a) => {
+        if (a.type === 'property' && asset.type === 'property') return a.tileIndex === asset.tileIndex;
+        if (a.type === 'item' && asset.type === 'item') return a.itemType === asset.itemType;
+        return false;
+      });
+
+      let nextOffer: TradeAsset[];
+      if (exists) {
+        nextOffer = currentBidderOffer.filter((a) => {
+          if (a.type === 'property' && asset.type === 'property') return a.tileIndex !== asset.tileIndex;
+          if (a.type === 'item' && asset.type === 'item') return a.itemType !== asset.itemType;
+          return true;
+        });
+      } else {
+        if (currentBidderOffer.length >= 2) return; // Max 2 assets
+        nextOffer = [...currentBidderOffer, asset];
+      }
+
+      setPlayerBids((prev) => ({
+        ...prev,
+        [currentBidder.id]: nextOffer,
+      }));
+    };
+
+    const isSelected = (asset: TradeAsset) => {
+      return currentBidderOffer.some((a) => {
+        if (a.type === 'property' && asset.type === 'property') return a.tileIndex === asset.tileIndex;
+        if (a.type === 'item' && asset.type === 'item') return a.itemType === asset.itemType;
+        return false;
+      });
+    };
+
+    const handleConfirmBidder = (passBid: boolean) => {
+      if (passBid) {
+        setPlayerBids((prev) => ({
+          ...prev,
+          [currentBidder.id]: [],
+        }));
+      }
+
+      if (activeBidderIndex + 1 < otherPlayers.length) {
+        setActiveBidderIndex((prev) => prev + 1);
+      } else {
+        setPhase('review');
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none overflow-y-auto">
+        <div className="bg-[#14120e] border-2 border-amber-500/80 rounded-3xl p-5 max-w-md w-full space-y-4 text-center shadow-2xl my-auto">
+          {/* Target Auctioned Asset Badge */}
+          <div className="bg-[#241a0f] border border-[#ffd700]/50 p-3 rounded-2xl space-y-1">
+            <div className="text-[10px] font-cinzel text-gray-400 uppercase tracking-wider">
+              {language === 'ro' ? 'Scos la licitație de' : 'Put up for auction by'} <strong>{auctioneer.name}</strong>:
+            </div>
+            <div className="text-sm font-bold text-[#ffd700] flex items-center justify-center gap-1.5">
+              {selectedAuctionAsset && renderAssetLabel(selectedAuctionAsset)}
+            </div>
+          </div>
+
+          {/* Current Bidder Header */}
+          <div className="space-y-1 border-b border-[#2d2215] pb-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1e1710] border border-amber-500/40 text-xs font-cinzel text-amber-300">
+              <span className="font-bold">{currentBidder.name}</span>
+              <span>({activeBidderIndex + 1}/{otherPlayers.length})</span>
+            </div>
+            <h4 className="text-sm font-cinzel font-bold text-white">
+              {language === 'ro' ? 'Alege până la 2 bunuri de oferit:' : 'Choose up to 2 assets to offer:'}
+            </h4>
+            <div className="text-[11px] text-gray-400 font-barlow">
+              {language === 'ro'
+                ? `Selectate: ${currentBidderOffer.length}/2 bunuri`
+                : `Selected: ${currentBidderOffer.length}/2 assets`}
+            </div>
+          </div>
+
+          {/* Bidder Available Assets */}
+          <div className="space-y-1.5 max-h-52 overflow-y-auto text-left pr-1">
+            {bidderProperties.length === 0 && !bidderHasPardon && !bidderHasKey ? (
+              <div className="text-center py-4 text-xs text-gray-400 font-barlow italic">
+                {language === 'ro' ? 'Nu deții bunuri de oferit la schimb.' : 'You have no assets to offer.'}
+              </div>
+            ) : (
+              <>
+                {bidderProperties.map((tile) => {
+                  const selected = isSelected({ type: 'property', tileIndex: tile.index });
+                  return (
+                    <button
+                      key={tile.index}
+                      type="button"
+                      onClick={() => toggleBidderAsset({ type: 'property', tileIndex: tile.index })}
+                      className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                        selected
+                          ? 'bg-[#2b2010] border-[#ffd700] shadow'
+                          : 'bg-[#17130d] border-stone-800 hover:border-stone-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span>{tile.emoji}</span>
+                        <span className="font-cinzel text-xs text-white">
+                          {language === 'ro' ? tile.nameRo : tile.nameEn}
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-[#ffd700]">{selected ? '✓' : '+'}</span>
+                    </button>
+                  );
+                })}
+
+                {bidderHasPardon && (
+                  <button
+                    type="button"
+                    onClick={() => toggleBidderAsset({ type: 'item', itemType: 'pardonLetter' })}
+                    className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                      isSelected({ type: 'item', itemType: 'pardonLetter' })
+                        ? 'bg-[#101b2b] border-blue-400'
+                        : 'bg-[#17130d] border-stone-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>🎟️</span>
+                      <span className="font-cinzel text-xs text-blue-300">
+                        {language === 'ro' ? 'Scrisoare de Iertare' : 'Pardon Letter'}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-blue-400">
+                      {isSelected({ type: 'item', itemType: 'pardonLetter' }) ? '✓' : '+'}
+                    </span>
+                  </button>
+                )}
+
+                {bidderHasKey && (
+                  <button
+                    type="button"
+                    onClick={() => toggleBidderAsset({ type: 'item', itemType: 'jailKey' })}
+                    className={`w-full p-2.5 rounded-xl border flex items-center justify-between transition-all ${
+                      isSelected({ type: 'item', itemType: 'jailKey' })
+                        ? 'bg-[#0f241a] border-emerald-400'
+                        : 'bg-[#17130d] border-stone-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>🔓</span>
+                      <span className="font-cinzel text-xs text-emerald-300">
+                        {language === 'ro' ? 'Cheie de Temniță' : 'Jail Key'}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-emerald-400">
+                      {isSelected({ type: 'item', itemType: 'jailKey' }) ? '✓' : '+'}
+                    </span>
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Action Buttons for current bidder */}
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={() => handleConfirmBidder(false)}
+              disabled={currentBidderOffer.length === 0}
+              className={`flex-1 py-2.5 rounded-xl font-cinzel font-bold text-xs ${
+                currentBidderOffer.length > 0
+                  ? 'bg-[#ffd700] text-black hover:brightness-110'
+                  : 'bg-stone-800 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {language === 'ro' ? `Trimite Oferta (${currentBidderOffer.length})` : `Submit Offer (${currentBidderOffer.length})`}
+            </button>
+            <button
+              onClick={() => handleConfirmBidder(true)}
+              className="py-2.5 px-4 rounded-xl bg-[#241c14] border border-stone-700 text-gray-300 font-cinzel text-xs hover:text-white"
+            >
+              {language === 'ro' ? 'Nu licitez' : 'Pass'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- PHASE 3: Auctioneer Reviews All Bids ---
+  const validBids = otherPlayers
+    .map((p) => ({
+      bidder: p,
+      assets: playerBids[p.id] || [],
+    }))
+    .filter((b) => b.assets.length > 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none overflow-y-auto">
+      <div className="bg-[#14120e] border-2 border-[#ffd700] rounded-3xl p-5 max-w-lg w-full space-y-4 shadow-2xl gold-glow my-auto">
+        <div className="text-center space-y-1 border-b border-[#2d2215] pb-3">
+          <div className="text-3xl">⚖️ 📜</div>
+          <h3 className="text-xl font-cinzel font-black text-[#ffd700] gold-text-glow">
+            {language === 'ro' ? 'Oferte Primite la Licitație' : 'Received Auction Offers'}
+          </h3>
+          <p className="text-xs text-gray-300 font-barlow">
+            {auctioneer.name},{' '}
+            {language === 'ro'
+              ? 'alege oferta care îți convine sau refuză tot.'
+              : 'accept an offer or decline all.'}
+          </p>
+        </div>
+
+        {/* The Auctioned Asset */}
+        <div className="bg-[#1f160c] border border-[#ffd700]/40 p-2.5 rounded-xl text-center space-y-0.5">
+          <span className="text-[10px] font-cinzel text-gray-400 uppercase">
+            {language === 'ro' ? 'Bunul tău scos la schimb:' : 'Your auctioned asset:'}
+          </span>
+          <div className="flex justify-center items-center gap-1.5">
+            {selectedAuctionAsset && renderAssetLabel(selectedAuctionAsset)}
+          </div>
+        </div>
+
+        {/* Bids List */}
+        <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+          {validBids.length === 0 ? (
+            <div className="text-center py-6 space-y-2 bg-[#17130e] rounded-2xl border border-stone-800 p-4">
+              <div className="text-2xl">🍂</div>
+              <p className="text-xs text-gray-400 font-barlow">
+                {language === 'ro'
+                  ? 'Niciun frate nu a depus o ofertă pentru acest bun.'
+                  : 'No other players submitted a bid for this asset.'}
+              </p>
+            </div>
+          ) : (
+            validBids.map(({ bidder, assets }) => (
+              <div
+                key={bidder.id}
+                className="bg-[#1a140d] border border-amber-500/50 rounded-2xl p-3 flex items-center justify-between gap-3 shadow"
+              >
+                <div className="space-y-1">
+                  <div className="font-cinzel font-bold text-xs text-[#ffd700] flex items-center gap-1.5">
+                    <span>👑</span>
+                    <span>{bidder.name}</span>
+                    <span className="text-[10px] text-gray-400 font-barlow font-normal">
+                      ({assets.length} {assets.length === 1 ? 'bun' : 'bunuri'})
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {assets.map((asset, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 rounded-lg bg-black/60 border border-stone-700"
+                      >
+                        {renderAssetLabel(asset)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (selectedAuctionAsset) {
+                      onExecuteTrade(bidder.id, selectedAuctionAsset, assets);
+                    }
+                  }}
+                  className="py-2 px-3 rounded-xl bg-gradient-to-r from-[#ffd700] to-[#f59e0b] text-black font-cinzel font-black text-xs hover:brightness-110 shadow active:scale-95 flex-shrink-0"
+                >
+                  {language === 'ro' ? 'Acceptă ✓' : 'Accept ✓'}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Decline All / Pass Button */}
+        <div className="pt-2 border-t border-[#2d2215]">
+          <button
+            onClick={handleClose}
+            className="w-full py-3 rounded-2xl bg-[#2a1f13] border border-stone-700 text-gray-300 font-cinzel font-bold text-xs hover:text-white transition-all"
+          >
+            {language === 'ro' ? 'Refuză Toate Ofertele (Pas)' : 'Decline All Offers (Pass)'}
+          </button>
         </div>
       </div>
     </div>
@@ -1014,6 +1866,182 @@ export const TurnEndDrinkModal: React.FC<{
                 : (language === 'ro' ? '➔ Următorul Jucător' : '➔ Next Player')}
             </span>
           </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Monk Dice Duel Modal (Zarurile Călugărului) ---
+export interface MonkDiceRollResult {
+  die1: number;
+  die2: number;
+  sum: number;
+  isDoubleSix: boolean;
+  isDoubleOne: boolean;
+  sipsToSelf: number;
+  sipsToGive: number;
+}
+
+export const MonkDiceDuelModal: React.FC<{
+  player: Player;
+  onComplete: (result: MonkDiceRollResult) => void;
+}> = ({ player, onComplete }) => {
+  const { language } = useApp();
+  const [isRolling, setIsRolling] = useState<boolean>(false);
+  const [rolled, setRolled] = useState<boolean>(false);
+  const [die1, setDie1] = useState<number>(1);
+  const [die2, setDie2] = useState<number>(1);
+
+  const handleRoll = () => {
+    if (isRolling || rolled) return;
+    setIsRolling(true);
+
+    let count = 0;
+    const interval = setInterval(() => {
+      setDie1(Math.floor(Math.random() * 6) + 1);
+      setDie2(Math.floor(Math.random() * 6) + 1);
+      count++;
+      if (count > 16) {
+        clearInterval(interval);
+        const final1 = Math.floor(Math.random() * 6) + 1;
+        const final2 = Math.floor(Math.random() * 6) + 1;
+        setDie1(final1);
+        setDie2(final2);
+        setIsRolling(false);
+        setRolled(true);
+      }
+    }, 80);
+  };
+
+  const sum = die1 + die2;
+  const isDoubleSix = die1 === 6 && die2 === 6;
+  const isDoubleOne = die1 === 1 && die2 === 1;
+  const sipsToSelf = !isDoubleSix && !isDoubleOne && sum < 6 ? sum : 0;
+  const sipsToGive = !isDoubleSix && !isDoubleOne && sum >= 6 ? sum : 0;
+
+  const getDicePip = (val: number) => {
+    const pips: Record<number, string> = {
+      1: '⚀',
+      2: '⚁',
+      3: '⚂',
+      4: '⚃',
+      5: '⚄',
+      6: '⚅',
+    };
+    return pips[val] || '🎲';
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md select-none animate-fade-in">
+      <div className="relative bg-gradient-to-b from-[#21160d] via-[#160f09] to-[#0c0804] border-2 border-[#ffd700] rounded-3xl p-5 max-w-sm w-full space-y-4 text-center shadow-2xl gold-glow">
+        {/* Header */}
+        <div className="space-y-1">
+          <div className="text-3xl">🎲 ⚔️ 🎲</div>
+          <h3 className="text-xl font-cinzel font-black text-[#ffd700] gold-text-glow">
+            {language === 'ro' ? 'ZARURILE CĂLUGĂRULUI' : 'MONK DICE DUEL'}
+          </h3>
+          <p className="text-xs font-barlow text-amber-200/90">
+            {language === 'ro' ? `${player.name} aruncă cele 2 Zaruri ale Destinului!` : `${player.name} rolls the 2 Dice of Destiny!`}
+          </p>
+        </div>
+
+        {/* Legend Box */}
+        <div className="bg-[#100a06] border border-[#ffd700]/30 rounded-2xl p-2 text-[10px] sm:text-[11px] font-barlow text-stone-300 space-y-1 text-left">
+          <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+            <span>🎲🎲 6 - 6:</span>
+            <span className="text-red-400">🔥 TOȚI CEILALȚI dau Groapă!</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+            <span>🎲🎲 1 - 1:</span>
+            <span className="text-red-400">💀 TU dai Groapă!</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-stone-300">
+            <span>🔢 Suma &lt; 6:</span>
+            <span className="text-yellow-300 font-semibold">Bei tu suma (ex: 3 guri)</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-stone-300">
+            <span>🎯 Suma &ge; 6:</span>
+            <span className="text-emerald-300 font-semibold">Dai suma altcuiva să bea!</span>
+          </div>
+        </div>
+
+        {/* 2 Dice Visual Box */}
+        <div className="flex items-center justify-center gap-4 py-2">
+          <div className={`w-18 h-18 rounded-2xl bg-gradient-to-br from-[#2a1e12] to-[#140e08] border-2 flex flex-col items-center justify-center shadow-lg transition-transform ${
+            isRolling ? 'animate-bounce border-amber-400 scale-105' : 'border-[#ffd700] scale-100'
+          }`}>
+            <span className="text-4xl text-[#ffd700] drop-shadow">{getDicePip(die1)}</span>
+            <span className="text-xs font-mono font-bold text-gray-300 mt-[-4px]">{die1}</span>
+          </div>
+
+          <span className="text-2xl text-amber-400 font-black font-cinzel">+</span>
+
+          <div className={`w-18 h-18 rounded-2xl bg-gradient-to-br from-[#2a1e12] to-[#140e08] border-2 flex flex-col items-center justify-center shadow-lg transition-transform ${
+            isRolling ? 'animate-bounce border-amber-400 scale-105' : 'border-[#ffd700] scale-100'
+          }`} style={{ animationDelay: '0.1s' }}>
+            <span className="text-4xl text-[#ffd700] drop-shadow">{getDicePip(die2)}</span>
+            <span className="text-xs font-mono font-bold text-gray-300 mt-[-4px]">{die2}</span>
+          </div>
+        </div>
+
+        {/* Outcome Display when rolled */}
+        {rolled && (
+          <div className="animate-fade-in p-3 rounded-2xl border space-y-1 bg-[#150d07] border-[#ffd700]/50 shadow-inner">
+            <div className="text-xs font-cinzel font-bold text-amber-300">
+              {language === 'ro' ? `Total Zaruri: ${die1} + ${die2} = ${sum}` : `Dice Total: ${die1} + ${die2} = ${sum}`}
+            </div>
+
+            {isDoubleSix && (
+              <div className="text-sm font-cinzel font-black text-red-400 animate-pulse">
+                🔥 DUBLĂ 6! TOȚI CEILALȚI CĂLUGĂRI DAU GROAPĂ! 🔥
+              </div>
+            )}
+
+            {isDoubleOne && (
+              <div className="text-sm font-cinzel font-black text-red-500 animate-pulse">
+                💀 DUBLĂ 1! TU DAI PAHARUL GROAPĂ! 💀
+              </div>
+            )}
+
+            {!isDoubleSix && !isDoubleOne && sum < 6 && (
+              <div className="text-sm font-cinzel font-bold text-amber-300">
+                🍺 Suma este &lt; 6: <span className="text-[#ffd700] font-black">Bei tu {sum} {sum === 1 ? 'gură' : 'guri'}!</span>
+              </div>
+            )}
+
+            {!isDoubleSix && !isDoubleOne && sum >= 6 && (
+              <div className="text-sm font-cinzel font-bold text-emerald-400">
+                👉 Suma este &ge; 6: <span className="text-emerald-300 font-black">Dai {sum} guri altui jucător să bea!</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action Button */}
+        <div className="pt-2">
+          {!rolled ? (
+            <button
+              onClick={handleRoll}
+              disabled={isRolling}
+              className={`w-full py-3.5 rounded-2xl font-cinzel font-bold text-sm sm:text-base transition-all shadow-lg ${
+                isRolling
+                  ? 'bg-amber-700 text-black cursor-wait'
+                  : 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black hover:brightness-110 active:scale-95 gold-glow'
+              }`}
+            >
+              {isRolling
+                ? (language === 'ro' ? '🎲 Se rostogolesc zarurile...' : '🎲 Rolling dice...')
+                : (language === 'ro' ? '🎲 Aruncă Zarurile!' : '🎲 Roll the Dice!')}
+            </button>
+          ) : (
+            <button
+              onClick={() => onComplete({ die1, die2, sum, isDoubleSix, isDoubleOne, sipsToSelf, sipsToGive })}
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-cinzel font-bold text-sm sm:text-base hover:brightness-110 active:scale-95 shadow-lg flex items-center justify-center gap-1.5"
+            >
+              <span>{language === 'ro' ? 'Aplică Sentința ➔' : 'Apply Outcome ➔'}</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -203,6 +203,10 @@ export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoi
         gamesPlayedCrash: Math.max(0, p.gamesPlayedCrash || 0),
         sipsDrunkCrash: Math.max(0, p.sipsDrunkCrash || 0),
         totalPineapplePoints: Math.max(0, p.totalPineapplePoints || 0),
+        highestCrashMultiplier: Math.max(0, p.highestCrashMultiplier || 0),
+        highestWinStreak: Math.max(0, p.highestWinStreak || 0),
+        totalDrinksServedToFriends: Math.max(0, p.totalDrinksServedToFriends || 0),
+        showcasedItemIds: (p.showcasedItemIds || []).slice(0, 3),
         unlockedAchievements: (p.unlockedAchievements || []).slice(0, 80),
         createdAt: p.createdAt || Date.now(),
       };

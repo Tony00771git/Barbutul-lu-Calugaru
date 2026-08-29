@@ -352,7 +352,7 @@ export const Podium: React.FC<PodiumProps> = ({ mode, players, turnsPlayed, onPl
         >
           <span>⚡</span>
           <span>{language === 'ro' ? 'Vezi Progresul XP & Bănuți Turmentați' : 'View Match XP & Drunken Coins Progress'}</span>
-          <span>🍺🪙</span>
+          <span>🪙</span>
         </button>
 
         {/* Change Players / Setup or Main Menu */}

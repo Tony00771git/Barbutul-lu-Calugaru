@@ -70,8 +70,8 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
     if (drunkenCoins < cost) {
       showToast(
         isRo
-          ? `❌ Fonduri insuficiente în Tezaur! Ai nevoie de ${cost} 🍺🪙 (ai doar ${drunkenCoins} 🍺🪙). Joacă mai multe meciuri sau revendică misiunile zilnice!`
-          : `❌ Not enough coins in Treasury! You need ${cost} 🍺🪙 (you have ${drunkenCoins} 🍺🪙). Play more games or complete daily quests!`,
+          ? `❌ Fonduri insuficiente în Tezaur! Ai nevoie de ${cost} 🪙 (ai doar ${drunkenCoins} 🪙). Joacă mai multe meciuri sau revendică misiunile zilnice!`
+          : `❌ Not enough coins in Treasury! You need ${cost} 🪙 (you have ${drunkenCoins} 🪙). Play more games or complete daily quests!`,
         'error'
       );
       return;
@@ -81,8 +81,8 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
     if (success) {
       showToast(
         isRo
-          ? `🎉 Ai cumpărat și deblocat permanent: ${name} (-${cost} 🍺🪙)!`
-          : `🎉 Successfully purchased and permanently unlocked: ${name} (-${cost} 🍺🪙)!`,
+          ? `🎉 Ai cumpărat și deblocat permanent: ${name} (-${cost} 🪙)!`
+          : `🎉 Successfully purchased and permanently unlocked: ${name} (-${cost} 🪙)!`,
         'success'
       );
     }
@@ -122,7 +122,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
         <div className="flex items-center justify-between pb-3 border-b border-[#2e2114] relative z-10 flex-shrink-0 gap-2">
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-amber-700 to-yellow-500 flex items-center justify-center text-xl sm:text-2xl shadow-lg border border-yellow-200 flex-shrink-0">
-              🍺🪙
+              🪙
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-xl font-cinzel font-black text-[#ffd700] gold-text-glow truncate">
@@ -140,10 +140,10 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
               type="button"
               onClick={() => {
                 addDrunkenCoins(999999);
-                showToast(isRo ? '💰 Tezaur reîncărcat cu +999,999 🍺🪙!' : '💰 Treasury refilled with +999,999 🍺🪙!', 'success');
+                showToast(isRo ? '💰 Tezaur reîncărcat cu +999,999 🪙!' : '💰 Treasury refilled with +999,999 🪙!', 'success');
               }}
               className="bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-600 hover:brightness-125 active:scale-95 text-black font-cinzel font-black text-[10px] sm:text-xs px-2.5 py-1 sm:py-1.5 rounded-xl border border-yellow-200 shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all flex items-center gap-1 cursor-pointer"
-              title={isRo ? 'Apasă pentru +999,999 🍺🪙 Bani Infiniți' : 'Click for +999,999 🍺🪙 Infinite Coins'}
+              title={isRo ? 'Apasă pentru +999,999 🪙 Bani Infiniți' : 'Click for +999,999 🪙 Infinite Coins'}
             >
               <span>⚡</span>
               <span>+999k 🪙</span>
@@ -155,7 +155,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                 {isRo ? 'Tezaur Total:' : 'Treasury:'}
               </span>
               <span className="text-sm sm:text-base font-cinzel font-black text-[#ffd700] gold-text-glow flex items-center gap-1">
-                <span>🍺🪙</span>
+                <span>🪙</span>
                 <span>{drunkenCoins.toLocaleString()}</span>
               </span>
             </div>
@@ -297,8 +297,8 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                     </h3>
                     <p className="text-xs text-gray-300 font-barlow">
                       {isRo
-                        ? 'Plătești bănuți 🍺🪙, învârți ruleta CS și câștigi cosmetice exclusive!'
-                        : 'Spend coins 🍺🪙, spin the CS roulette tape and win exclusive cosmetics!'}
+                        ? 'Plătești bănuți 🪙, învârți ruleta CS și câștigi cosmetice exclusive!'
+                        : 'Spend coins 🪙, spin the CS roulette tape and win exclusive cosmetics!'}
                     </p>
                   </div>
                 </div>
@@ -322,62 +322,87 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                 </div>
               </div>
 
-              {/* Chest Cards Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {CHESTS_CATALOG.map((chest) => (
-                  <div
-                    key={chest.id}
-                    className="p-4 rounded-2xl bg-gradient-to-b from-[#20150c] via-[#150e08] to-[#0c0704] border border-[#ffd700]/40 hover:border-[#ffd700] flex flex-col justify-between gap-3 transition-all hover:scale-[1.02] shadow-lg group relative overflow-hidden"
-                  >
-                    {/* Top Chest Visual & Badge */}
-                    <div className="text-center space-y-2">
-                      <div className="w-16 h-16 mx-auto rounded-2xl bg-[#2e1c0d] border border-amber-500/40 flex items-center justify-center text-4xl shadow-inner group-hover:scale-110 transition-transform">
-                        {chest.icon}
-                      </div>
+              {/* Chest Cards Grid (4 Cases: 3 Standard + 1 Premium High-Tier) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {CHESTS_CATALOG.map((chest) => {
+                  const isHighTier = chest.isHighTierOnly;
 
-                      <div>
-                        <h4 className="font-cinzel font-black text-sm text-[#ffd700]">
-                          {isRo ? chest.nameRo : chest.nameEn}
-                        </h4>
-                        <p className="text-[11px] text-gray-400 font-barlow mt-0.5 line-clamp-2">
-                          {isRo ? chest.descRo : chest.descEn}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Contained Items Preview Strip */}
-                    <div className="bg-black/50 p-2 rounded-xl border border-stone-800 space-y-1">
-                      <div className="text-[9px] font-cinzel text-gray-400 uppercase tracking-wider text-center">
-                        {isRo ? 'Conține cosmetice posibile:' : 'Contains possible drops:'}
-                      </div>
-                      <div className="flex items-center justify-center gap-1.5 overflow-hidden">
-                        {chest.items.slice(0, 5).map((item, idx) => {
-                          const r = RARITY_DEFINITIONS[item.rarity];
-                          return (
-                            <div
-                              key={idx}
-                              style={{ borderColor: r.color }}
-                              className="w-7 h-7 rounded-lg bg-stone-900 border flex items-center justify-center text-sm"
-                              title={`${item.name} (${r.nameRo})`}
-                            >
-                              <span>{item.icon}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Open Chest Button */}
-                    <button
-                      type="button"
-                      onClick={() => setOpeningChestId(chest.id)}
-                      className="w-full py-2.5 rounded-xl bg-gradient-to-r from-[#ffd700] via-[#f59e0b] to-[#ffd700] text-black font-cinzel font-black text-xs uppercase tracking-wider shadow-[0_0_15px_rgba(255,215,0,0.35)] hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                  return (
+                    <div
+                      key={chest.id}
+                      className={`p-3.5 rounded-2xl flex flex-col justify-between gap-3 transition-all hover:scale-[1.02] shadow-lg group relative overflow-hidden ${
+                        isHighTier
+                          ? 'bg-gradient-to-b from-[#2e1e07] via-[#1c1204] to-[#0d0802] border-2 border-[#ffd700] shadow-[0_0_25px_rgba(255,215,0,0.3)] ring-1 ring-[#ffd700]/50'
+                          : 'bg-gradient-to-b from-[#20150c] via-[#150e08] to-[#0c0704] border border-[#ffd700]/40 hover:border-[#ffd700]'
+                      }`}
                     >
-                      <Gift className="w-4 h-4" />
-                      <span>{isRo ? 'Deschide' : 'Open'} ({chest.cost} 🍺🪙)</span>
-                    </button>
-                  </div>
-                ))}
+                      {/* High-tier badge */}
+                      {isHighTier && (
+                        <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 text-black text-[9px] font-cinzel font-black uppercase shadow">
+                          HIGH-TIER ★
+                        </div>
+                      )}
+
+                      {/* Top Chest Visual & Badge */}
+                      <div className="text-center space-y-1.5 pt-1">
+                        <div className={`w-14 h-14 mx-auto rounded-2xl border flex items-center justify-center text-3xl shadow-inner group-hover:scale-110 transition-transform ${
+                          isHighTier
+                            ? 'bg-[#3d2908] border-[#ffd700]'
+                            : 'bg-[#2e1c0d] border-amber-500/40'
+                        }`}>
+                          {chest.icon}
+                        </div>
+
+                        <div>
+                          <h4 className="font-cinzel font-black text-xs sm:text-sm text-[#ffd700] truncate">
+                            {isRo ? chest.nameRo : chest.nameEn}
+                          </h4>
+                          <p className="text-[10px] text-gray-400 font-barlow mt-0.5 line-clamp-2 min-h-[30px]">
+                            {isRo ? chest.descRo : chest.descEn}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Contained Items Preview Strip */}
+                      <div className="bg-black/50 p-1.5 rounded-xl border border-stone-800 space-y-1">
+                        <div className="text-[8.5px] font-cinzel text-gray-400 uppercase tracking-wider text-center truncate">
+                          {isHighTier
+                            ? (isRo ? '✨ Doar Clasificat / Secret / Rar ★' : '✨ High-Tier Only Drops ★')
+                            : (isRo ? 'Conține toate raritățile:' : 'Contains all rarities:')}
+                        </div>
+                        <div className="flex items-center justify-center gap-1 overflow-hidden">
+                          {chest.items.slice(0, 5).map((item, idx) => {
+                            const r = RARITY_DEFINITIONS[item.rarity];
+                            return (
+                              <div
+                                key={idx}
+                                style={{ borderColor: r.color }}
+                                className="w-6 h-6 rounded-lg bg-stone-900 border flex items-center justify-center text-xs"
+                                title={`${item.name} (${r.nameRo})`}
+                              >
+                                <span>{item.icon}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Open Chest Button */}
+                      <button
+                        type="button"
+                        onClick={() => setOpeningChestId(chest.id)}
+                        className={`w-full py-2.5 rounded-xl text-black font-cinzel font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 active:scale-95 ${
+                          isHighTier
+                            ? 'bg-gradient-to-r from-[#ffd700] via-[#ffe066] to-[#f59e0b] shadow-[0_0_20px_rgba(255,215,0,0.5)] hover:brightness-110'
+                            : 'bg-gradient-to-r from-[#ffd700] via-[#f59e0b] to-[#ffd700] shadow-[0_0_15px_rgba(255,215,0,0.35)] hover:brightness-110'
+                        }`}
+                      >
+                        <Gift className="w-3.5 h-3.5" />
+                        <span>{isRo ? 'Deschide' : 'Open'} ({chest.cost} 🪙)</span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -482,7 +507,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                           className="px-3.5 py-1.5 rounded-xl text-xs font-cinzel font-bold bg-gradient-to-r from-amber-600 to-yellow-500 text-black shadow hover:brightness-110 active:scale-95 flex-shrink-0 flex items-center gap-1"
                         >
                           <span>{item.cost}</span>
-                          <span>🍺🪙</span>
+                          <span>🪙</span>
                         </button>
                       )}
                     </div>
@@ -564,7 +589,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                         className="px-3 py-1.5 rounded-xl text-xs font-cinzel font-bold bg-gradient-to-r from-amber-600 to-yellow-500 text-black shadow hover:brightness-110 active:scale-95 flex-shrink-0 flex items-center gap-1"
                       >
                         <span>{item.cost}</span>
-                        <span>🍺🪙</span>
+                        <span>🪙</span>
                       </button>
                     )}
                   </div>
@@ -635,7 +660,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                         className="px-3 py-1.5 rounded-xl text-xs font-cinzel font-bold bg-gradient-to-r from-amber-600 to-yellow-500 text-black shadow hover:brightness-110 active:scale-95 flex-shrink-0 flex items-center gap-1"
                       >
                         <span>{item.cost}</span>
-                        <span>🍺🪙</span>
+                        <span>🪙</span>
                       </button>
                     )}
                   </div>
@@ -686,7 +711,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                         className="px-4 py-2 rounded-xl text-xs font-cinzel font-bold bg-gradient-to-r from-amber-600 to-yellow-500 text-black shadow hover:brightness-110 active:scale-95 flex-shrink-0 flex items-center gap-1"
                       >
                         <span>{item.cost}</span>
-                        <span>🍺🪙</span>
+                        <span>🪙</span>
                       </button>
                     )}
                   </div>
@@ -754,7 +779,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                         className="px-4 py-2 rounded-xl text-xs font-cinzel font-bold bg-gradient-to-r from-amber-600 to-yellow-500 text-black shadow hover:brightness-110 active:scale-95 flex-shrink-0 flex items-center gap-1"
                       >
                         <span>{item.cost}</span>
-                        <span>🍺🪙</span>
+                        <span>🪙</span>
                       </button>
                     )}
                   </div>
@@ -822,7 +847,7 @@ export const DrunkenCoinsShopModal: React.FC<DrunkenCoinsShopModalProps> = ({
                         className="px-4 py-2 rounded-xl text-xs font-cinzel font-bold bg-gradient-to-r from-amber-600 to-yellow-500 text-black shadow hover:brightness-110 active:scale-95 flex-shrink-0 flex items-center gap-1"
                       >
                         <span>{emote.cost}</span>
-                        <span>🍺🪙</span>
+                        <span>🪙</span>
                       </button>
                     )}
                   </div>

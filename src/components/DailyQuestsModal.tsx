@@ -45,7 +45,7 @@ export const DailyQuestsModal: React.FC<DailyQuestsModalProps> = ({
     const success = claimDailyQuestReward(questId);
     if (success) {
       soundEffects.playQuestClaim();
-      setClaimCelebration(`+${coins} 🍺🪙 ${isRo ? 'adăugați în Tezaur!' : 'added to Treasury!'}`);
+      setClaimCelebration(`+${coins} 🪙 ${isRo ? 'adăugați în Tezaur!' : 'added to Treasury!'}`);
     }
   };
 
@@ -53,7 +53,7 @@ export const DailyQuestsModal: React.FC<DailyQuestsModalProps> = ({
     const success = claimDailyBonusChest();
     if (success) {
       soundEffects.playLevelUpFanfare();
-      setClaimCelebration(`🎁 +50 🍺🪙 ${isRo ? 'Bonusul Zilei a fost revendicat!' : 'Daily Master Bonus Claimed!'}`);
+      setClaimCelebration(`🎁 +50 🪙 ${isRo ? 'Bonusul Zilei a fost revendicat!' : 'Daily Master Bonus Claimed!'}`);
     }
   };
 
@@ -125,8 +125,8 @@ export const DailyQuestsModal: React.FC<DailyQuestsModalProps> = ({
               </h2>
               <p className="text-xs text-stone-400 font-barlow">
                 {isRo
-                  ? '3 sarcini noi în fiecare zi la 00:00 (Ora României) cu răsplată în Bănuți Turmentați 🍺🪙'
-                  : '3 fresh tasks every day at 12:00 AM (Romania Time) rewarding Drunken Coins 🍺🪙'}
+                  ? '3 sarcini noi în fiecare zi la 00:00 (Ora României) cu răsplată în Bănuți Turmentați 🪙'
+                  : '3 fresh tasks every day at 12:00 AM (Romania Time) rewarding Drunken Coins 🪙'}
               </p>
             </div>
           </div>
@@ -134,7 +134,7 @@ export const DailyQuestsModal: React.FC<DailyQuestsModalProps> = ({
           <div className="flex items-center gap-2">
             {/* Drunken Coins Treasury Pill */}
             <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 border border-amber-500/40 text-xs font-mono font-bold text-yellow-300">
-              <span>🍺🪙</span>
+              <span>🪙</span>
               <span>{drunkenCoins.toLocaleString()}</span>
             </div>
 
@@ -194,7 +194,7 @@ export const DailyQuestsModal: React.FC<DailyQuestsModalProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm sm:text-base font-black text-amber-300 font-cinzel">
-                      {isRo ? 'Cufărul Suprem al Zilei (+50 🍺🪙)' : 'Daily Master Chest (+50 🍺🪙)'}
+                      {isRo ? 'Cufărul Suprem al Zilei (+50 🪙)' : 'Daily Master Chest (+50 🪙)'}
                     </h3>
                     {dailyQuestPool.bonusClaimed && (
                       <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/40">
@@ -273,7 +273,7 @@ export const DailyQuestsModal: React.FC<DailyQuestsModalProps> = ({
                             {diffBadge.label}
                           </span>
                           <span className="text-xs font-mono font-bold text-[#ffd700] ml-auto">
-                            +{quest.coinReward} 🍺🪙
+                            +{quest.coinReward} 🪙
                           </span>
                         </div>
 

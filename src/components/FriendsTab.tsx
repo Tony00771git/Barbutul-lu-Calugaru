@@ -34,6 +34,7 @@ import { createDuelRoom } from '../lib/duelFirestoreService';
 import { createPineappleRoom } from '../lib/pineappleFirestoreService';
 import { createCrashRoom } from '../lib/crashFirestoreService';
 import { AvatarDisplay } from './AvatarDisplay';
+import { FriendProfileStatsModal } from './FriendProfileStatsModal';
 
 interface FriendsTabProps {
   onClose?: () => void;
@@ -45,11 +46,13 @@ interface FriendsTabProps {
     pineappleSettings?: PineappleMatchSettings,
     crashSettings?: CrashMatchSettings
   ) => void;
+  onOpenProfiles?: () => void;
 }
 
 export const FriendsTab: React.FC<FriendsTabProps> = ({
   onClose,
   onLaunchGameFromInvite,
+  onOpenProfiles,
 }) => {
   const { user, cloudProfile, signInWithGoogle, isSigningIn, authError, clearAuthError } = useAuth();
   const { language, t } = useApp();
@@ -85,6 +88,9 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
   const [inviteGameMode, setInviteGameMode] = useState<'duel' | 'pineapple' | 'crash'>('duel');
   const [isCreatingInvite, setIsCreatingInvite] = useState<boolean>(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // Inspect Friend Stats Modal state
+  const [inspectFriendStats, setInspectFriendStats] = useState<FriendEntry | null>(null);
 
   // Ensure public profile registration whenever user is logged in
   useEffect(() => {
@@ -541,15 +547,20 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
           <div className="w-full bg-gradient-to-r from-[#1f150c] via-[#2a1a0f] to-[#1f150c] border-2 border-[#e8c84a]/70 rounded-2xl p-3.5 shadow-lg space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-12 h-12 rounded-xl bg-[#140e08] border border-[#ffd700] flex-shrink-0 flex items-center justify-center shadow overflow-hidden">
+                <button
+                  type="button"
+                  onClick={onOpenProfiles}
+                  className="w-12 h-12 rounded-xl bg-[#140e08] border border-[#ffd700] flex-shrink-0 flex items-center justify-center shadow overflow-hidden hover:scale-105 active:scale-95 transition-transform cursor-pointer group"
+                  title={language === 'ro' ? 'Vezi Profiluri și Statistici' : 'View Profiles & Stats'}
+                >
                   <AvatarDisplay
                     avatarId={cloudProfile?.avatarIcon || 'monk_drunk'}
                     className="w-full h-full p-0.5"
                   />
-                </div>
-                <div className="min-w-0">
+                </button>
+                <div className="min-w-0 cursor-pointer" onClick={onOpenProfiles}>
                   <div className="flex items-center gap-1.5">
-                    <span className="font-cinzel font-bold text-sm sm:text-base text-[#ffd700] truncate">
+                    <span className="font-cinzel font-bold text-sm sm:text-base text-[#ffd700] truncate hover:underline">
                       {cloudProfile?.displayName || user.displayName || 'Călugăr Pelerin'}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
@@ -965,11 +976,16 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
                         className="p-2.5 rounded-xl bg-[#120a05] border border-amber-500/40 flex flex-wrap items-center justify-between gap-2 shadow"
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-9 h-9 rounded-xl bg-[#1c1208] border border-[#e8c84a]/70 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setInspectFriendStats(friend)}
+                            className="w-9 h-9 rounded-xl bg-[#1c1208] border border-[#e8c84a]/70 hover:border-[#ffd700] hover:scale-105 active:scale-95 transition-transform flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer shadow"
+                            title={language === 'ro' ? 'Vezi Profilul și Statisticile Prietenului' : "View Friend's Profile & Stats"}
+                          >
                             <AvatarDisplay avatarId={friend.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-cinzel font-bold text-xs sm:text-sm text-amber-200 truncate flex items-center gap-1.5">
+                          </button>
+                          <div className="min-w-0 cursor-pointer" onClick={() => setInspectFriendStats(friend)}>
+                            <div className="font-cinzel font-bold text-xs sm:text-sm text-amber-200 truncate flex items-center gap-1.5 hover:text-[#ffd700] transition-colors">
                               <span>{friend.displayName}</span>
                               <span className="text-[10px] font-mono text-gray-400">[{room.roomCode}]</span>
                             </div>
@@ -1043,11 +1059,16 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-[#1a120b] border border-[#e8c84a]/60 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setInspectFriendStats(friend)}
+                          className="w-10 h-10 rounded-xl bg-[#1a120b] border border-[#e8c84a]/60 hover:border-[#ffd700] hover:scale-105 active:scale-95 transition-transform flex items-center justify-center overflow-hidden flex-shrink-0 cursor-pointer shadow"
+                          title={language === 'ro' ? 'Vezi Profilul și Statisticile Prietenului' : "View Friend's Profile & Stats"}
+                        >
                           <AvatarDisplay avatarId={friend.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-cinzel font-bold text-xs sm:text-sm text-[#f0ebe0] truncate flex items-center gap-1.5">
+                        </button>
+                        <div className="min-w-0 cursor-pointer" onClick={() => setInspectFriendStats(friend)}>
+                          <div className="font-cinzel font-bold text-xs sm:text-sm text-[#f0ebe0] truncate flex items-center gap-1.5 hover:text-[#ffd700] transition-colors">
                             <span>{friend.displayName}</span>
                             {isLobby && (
                               <span className="w-2 h-2 rounded-full bg-green-500 inline-block animate-pulse" title="Lobby Deschis" />
@@ -1238,6 +1259,20 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Inspect Friend Statistics & Trophy Showcase Modal */}
+      {inspectFriendStats && (
+        <FriendProfileStatsModal
+          friend={inspectFriendStats}
+          isOpen={Boolean(inspectFriendStats)}
+          onClose={() => setInspectFriendStats(null)}
+          onInviteToGame={(f, mode) => {
+            setInspectFriendStats(null);
+            setSelectedFriendToInvite(f as FriendEntry);
+            setInviteGameMode(mode);
+          }}
+        />
       )}
     </div>
   );

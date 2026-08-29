@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Player, Profile, GameMode } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { Player, Profile, GameMode, FriendEntry } from '../types';
 import { AvatarDisplay } from './AvatarDisplay';
 import { AvatarModal } from './AvatarModal';
+import { TrophyShowcase } from './TrophyShowcase';
 import { ACHIEVEMENTS, Achievement, getAchievementsWithProgress } from '../data/achievements';
+import { subscribeToFriends } from '../lib/friendsService';
 import {
   calculateProgression,
   getAchievementTierInfo,
@@ -43,24 +46,42 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
     t,
     language,
   } = useApp();
+  const { user, cloudProfile } = useAuth();
 
   const isRo = language === 'ro';
 
-  const isOnlyAchievements = achievementsOnly || initialTab === 'achievements';
+  const [friendsList, setFriendsList] = useState<FriendEntry[]>([]);
+  const [selectedFriendModal, setSelectedFriendModal] = useState<FriendEntry | null>(null);
+
+  // Subscribe to real-time friends when modal is open
+  useEffect(() => {
+    if (!isOpen || !user?.uid) {
+      setFriendsList([]);
+      return;
+    }
+    const unsub = subscribeToFriends(
+      user.uid,
+      (friends) => {
+        setFriendsList(friends);
+      },
+      (err) => {
+        console.warn('Friends subscription error in ScoreModal:', err);
+      }
+    );
+    return () => unsub();
+  }, [isOpen, user?.uid]);
 
   const [activeTab, setActiveTab] = useState<'live' | 'alltime' | 'achievements'>(
-    isOnlyAchievements ? 'achievements' : initialTab || (activePlayers.length > 0 ? 'live' : 'alltime')
+    initialTab || (activePlayers.length > 0 ? 'live' : 'alltime')
   );
 
   React.useEffect(() => {
     if (isOpen) {
-      if (isOnlyAchievements) {
-        setActiveTab('achievements');
-      } else if (initialTab) {
+      if (initialTab) {
         setActiveTab(initialTab);
       }
     }
-  }, [isOpen, initialTab, isOnlyAchievements]);
+  }, [isOpen, initialTab]);
   const [selectedProfileIdForAchievements, setSelectedProfileIdForAchievements] = useState<string>(
     profiles[0]?.id || ''
   );
@@ -170,23 +191,31 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
       >
         
         {/* Header with Close */}
-        <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-3">
+        <div className="flex items-center justify-between border-b border-[#2a2a2a] pb-3 flex-shrink-0">
           <div className="flex items-center gap-2.5">
-            <span className="text-2xl sm:text-3xl">{isOnlyAchievements ? '🏅' : '📊'}</span>
+            <span className="text-2xl sm:text-3xl">
+              {activeTab === 'achievements' ? '🏅' : activeTab === 'alltime' ? '👤' : '🏆'}
+            </span>
             <div>
               <h2 className="text-xl sm:text-2xl font-cinzel font-black text-[#ffd700] gold-text-glow">
-                {isOnlyAchievements
+                {activeTab === 'achievements'
                   ? (language === 'ro' ? 'REALIZĂRI & TROFEE' : 'ACHIEVEMENTS & TROPHIES')
+                  : activeTab === 'alltime'
+                  ? (language === 'ro' ? 'PROFILURI ȘI STATISTICI' : 'PROFILES & STATISTICS')
                   : (language === 'ro' ? 'TABEL DE SCOR & STATISTICI' : 'SCORE TABLE & STATS')}
               </h2>
               <p className="text-[11px] font-barlow text-gray-400">
-                {isOnlyAchievements
+                {activeTab === 'achievements'
                   ? (language === 'ro'
                       ? 'Toate cele 53 de trofee monahale • Deblochează-le jucând orice mod!'
                       : 'All 53 monk achievements • Play any mode to unlock!')
+                  : activeTab === 'alltime'
+                  ? (language === 'ro'
+                      ? 'Profilurile tale, statistici all-time, sala trofeelor și prieteni'
+                      : 'Your profiles, all-time stats, trophy hall & friends')
                   : (language === 'ro'
-                      ? 'Evidența completă • Gură = 1 punct | Groapă = 25 puncte'
-                      : 'Full stats • 1 Sip = 1 point | 1 Chug = 25 points')}
+                      ? 'Evidența partidei curente • Gură = 1 punct | Groapă = 25 puncte'
+                      : 'Current match stats • 1 Sip = 1 point | 1 Chug = 25 points')}
               </p>
             </div>
           </div>
@@ -198,49 +227,47 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Selector (Hidden if Achievements Only) */}
-        {!isOnlyAchievements && (
-          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-[#0e0a06] p-1.5 rounded-2xl border border-[#2a2219]">
-            <button
-              onClick={() => setActiveTab('live')}
-              className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
-                activeTab === 'live'
-                  ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <span>🏆</span>
-              <span className="truncate">Scor Meci {activePlayers.length > 0 && `(${activePlayers.length})`}</span>
-            </button>
+        {/* Tab Selector */}
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-[#0e0a06] p-1.5 rounded-2xl border border-[#2a2219] flex-shrink-0">
+          <button
+            onClick={() => setActiveTab('live')}
+            className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
+              activeTab === 'live'
+                ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <span>🏆</span>
+            <span className="truncate">{language === 'ro' ? 'Scor Meci' : 'Live Score'} {activePlayers.length > 0 && `(${activePlayers.length})`}</span>
+          </button>
 
-            <button
-              onClick={() => setActiveTab('alltime')}
-              className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
-                activeTab === 'alltime'
-                  ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <span>👤</span>
-              <span className="truncate">Profiluri ({profiles.length})</span>
-            </button>
+          <button
+            onClick={() => setActiveTab('alltime')}
+            className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
+              activeTab === 'alltime'
+                ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <span>👤</span>
+            <span className="truncate">{language === 'ro' ? 'Profiluri și Statistici' : 'Profiles & Stats'} ({profiles.length})</span>
+          </button>
 
-            <button
-              onClick={() => setActiveTab('achievements')}
-              className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
-                activeTab === 'achievements'
-                  ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              <span>🏅</span>
-              <span className="truncate">Achievements</span>
-            </button>
-          </div>
-        )}
+          <button
+            onClick={() => setActiveTab('achievements')}
+            className={`py-2 px-2 rounded-xl font-cinzel font-bold text-[11px] sm:text-xs transition-all flex items-center justify-center gap-1 ${
+              activeTab === 'achievements'
+                ? 'bg-gradient-to-r from-[#d4af37] to-[#ffd700] text-black shadow-md'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <span>🏅</span>
+            <span className="truncate">{language === 'ro' ? 'Trofee' : 'Trophies'}</span>
+          </button>
+        </div>
 
-        {/* Scrollable Content Body */}
-        <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+        {/* Scrollable Content Body with Guaranteed Scrolling */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1 sm:pr-1.5 space-y-3 custom-scrollbar">
           
           {/* TAB 1: LIVE GAME SCORES */}
           {activeTab === 'live' && (
@@ -396,7 +423,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
               {/* Global Unified Drunken Coins Treasury Overview */}
               <div className="p-3 rounded-2xl bg-gradient-to-r from-[#20150a] via-[#160e06] to-[#0c0804] border border-[#ffd700]/50 flex items-center justify-between shadow-md">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-2xl">🍺🪙</span>
+                  <span className="text-2xl">🪙</span>
                   <div>
                     <div className="text-xs font-cinzel font-bold text-amber-200">
                       {language === 'ro' ? 'Tezaur Global de Bănuți' : 'Global Drunken Coins Treasury'}
@@ -408,7 +435,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-base sm:text-lg font-cinzel font-black text-[#ffd700] gold-text-glow">
-                    {drunkenCoins.toLocaleString()} 🍺🪙
+                    {drunkenCoins.toLocaleString()} 🪙
                   </span>
                   {onOpenBazaar && (
                     <button
@@ -420,6 +447,80 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
                     </button>
                   )}
                 </div>
+              </div>
+
+              {/* Unified Trophy Hall & Showcase for the Primary/Featured Profile */}
+              {sortedProfiles.length > 0 && (
+                <TrophyShowcase
+                  profile={sortedProfiles[0]}
+                  isEditable={true}
+                  onOpenShop={onOpenBazaar}
+                />
+              )}
+
+              {/* FRIENDS & FELLOW MONKS AVATARS / STATS SHOWCASE */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#1b1209] via-[#140c06] to-[#0c0804] border-2 border-[#e8c84a]/60 shadow-lg space-y-3">
+                <div className="flex items-center justify-between border-b border-[#2d1f13] pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">👥</span>
+                    <div>
+                      <h3 className="font-cinzel font-bold text-xs sm:text-sm text-[#ffd700] gold-text-glow">
+                        {language === 'ro' ? 'Prieteni & Frați de Pahar' : 'Friends & Tavern Companions'}
+                      </h3>
+                      <span className="text-[10px] text-gray-400 font-barlow">
+                        {friendsList.length > 0
+                          ? (language === 'ro'
+                              ? `${friendsList.length} prieteni conectați • Atinge poza pt. detalii & statistici`
+                              : `${friendsList.length} connected friends • Tap avatar for stats`)
+                          : (language === 'ro'
+                              ? 'Conectează-te cu contul Google pt. a vedea prietenii și avatarele lor'
+                              : 'Sign in with Google to link friends and their avatars')}
+                      </span>
+                    </div>
+                  </div>
+                  {friendsList.length > 0 && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-[#ffd700] font-mono font-bold border border-amber-500/40">
+                      {friendsList.length} 👤
+                    </span>
+                  )}
+                </div>
+
+                {friendsList.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {friendsList.map((friend) => (
+                      <button
+                        key={friend.friendUid}
+                        type="button"
+                        onClick={() => setSelectedFriendModal(friend)}
+                        className="p-2 rounded-xl bg-[#110a05] border border-[#2d1e11] hover:border-[#ffd700] hover:bg-[#1f140a] transition-all flex items-center gap-2 text-left cursor-pointer group shadow"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-[#1a120b] border border-[#e8c84a] flex items-center justify-center overflow-hidden flex-shrink-0 group-hover:scale-105 transition-transform">
+                          <AvatarDisplay avatarId={friend.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-cinzel font-bold text-xs text-[#f0ebe0] truncate group-hover:text-[#ffd700] transition-colors">
+                            {friend.displayName}
+                          </div>
+                          <div className="text-[9px] text-amber-400 font-barlow flex items-center gap-1 truncate">
+                            <span className="bg-amber-500/20 px-1 rounded text-amber-300 font-bold">Nv. {friend.currentLevel || 1}</span>
+                            <span className="text-gray-400 truncate">{friend.shortId ? `#${friend.shortId}` : ''}</span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-[#0d0905] border border-[#261a0e] rounded-xl flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-left">
+                      <span className="text-2xl">🍺</span>
+                      <div className="text-[11px] text-gray-400 font-barlow">
+                        {language === 'ro'
+                          ? 'Nu ai încă prieteni adăugați în chilie. Mergi la tabul Prieteni pentru a trimite cereri!'
+                          : 'No friends connected yet. Head to the Friends tab to share IDs and play together!'}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Add Profile Form with Avatar Selector Button [+] */}
@@ -719,7 +820,7 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
                           </span>
                         </div>
                         <span className="text-xs sm:text-sm font-cinzel font-black text-amber-300 group-hover:text-[#ffd700] flex items-center gap-1">
-                          <span>🍺🪙</span>
+                          <span>🪙</span>
                           <span>{(activeAchievementProfile?.drunkenCoins ?? 0).toLocaleString()}</span>
                         </span>
                       </button>
@@ -1078,6 +1179,75 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
           onSelectAvatar={handleSelectAvatarFromModal}
           playerName={avatarModalTarget.profileName}
         />
+      )}
+
+      {/* Friend Detail & Profile Showcase Modal */}
+      {selectedFriendModal && (
+        <div
+          onClick={() => setSelectedFriendModal(null)}
+          style={{ zIndex: 99999 }}
+          className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-gradient-to-b from-[#1c130b] via-[#140c06] to-[#0a0704] border-2 border-[#ffd700] rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl gold-glow text-left"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-[#2d1e11] pb-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-12 h-12 rounded-xl bg-[#1d1208] border-2 border-[#ffd700] overflow-hidden flex-shrink-0 shadow">
+                  <AvatarDisplay avatarId={selectedFriendModal.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
+                </div>
+                <div>
+                  <h3 className="font-cinzel font-black text-base text-[#ffd700] gold-text-glow">
+                    {selectedFriendModal.displayName}
+                  </h3>
+                  <div className="text-[10px] text-gray-300 font-barlow flex items-center gap-1.5">
+                    <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold border border-amber-500/30">
+                      Nv. {selectedFriendModal.currentLevel || 1}
+                    </span>
+                    <span className="text-gray-400">{selectedFriendModal.currentTitle_ro || 'Frate de Pahar'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedFriendModal(null)}
+                className="w-7 h-7 rounded-lg bg-[#22180e] hover:bg-[#332415] border border-[#ffd700]/40 text-gray-300 hover:text-white flex items-center justify-center text-sm font-bold transition-all"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Friend Stats & ID Details */}
+            <div className="space-y-2 bg-[#0e0905] p-3 rounded-xl border border-[#2b1e12]">
+              <div className="flex justify-between items-center text-xs font-cinzel">
+                <span className="text-gray-400">ID Unic de Prieten:</span>
+                <span className="text-[#ffd700] font-mono font-bold">#{selectedFriendModal.shortId || 'N/A'}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-cinzel">
+                <span className="text-gray-400">Rang Monahal:</span>
+                <span className="text-amber-300 font-bold">{selectedFriendModal.currentTitle_ro || 'Ucenic'}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-cinzel">
+                <span className="text-gray-400">Status Tavernă:</span>
+                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                  {selectedFriendModal.activeRoom ? 'În Meci / Lobby' : 'Activ'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSelectedFriendModal(null)}
+              className="w-full py-2 rounded-xl bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black font-cinzel font-black text-xs hover:brightness-110 shadow"
+            >
+              Închide ➔
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

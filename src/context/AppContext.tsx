@@ -106,6 +106,9 @@ interface AppContextType {
   deleteProfile: (id: string) => void;
   updateProfileAvatar: (id: string, avatarIcon: string) => void;
   updateProfileName: (id: string, name: string) => void;
+  updateProfileShowcase: (profileId: string, itemIds: string[]) => void;
+  recordCrashCashout: (playerName: string, multiplier: number) => void;
+  recordDrinksServed: (playerName: string, amount: number) => void;
   updateProfileStats: (playerName: string, sips: number, chugs: number, avatarIcon?: string, winMode?: 'boardgame' | 'duel' | 'casino' | 'pineapple', pineapplePoints?: number) => void;
   batchUpdateProfiles: (playerStats: Array<{ name: string; sips: number; chugs: number; avatarIcon?: string; winMode?: 'boardgame' | 'duel' | 'casino' | 'pineapple' }>) => void;
   recordWin: (playerName: string, mode: 'boardgame' | 'duel' | 'casino' | 'pineapple') => void;
@@ -365,7 +368,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
   });
 
-  // Global Unified Drunken Coins Treasury Pool (Bănuți Turmentați 🍺🪙) across all profiles
+  // Global Unified Drunken Coins Treasury Pool (Bănuți Turmentați 🪙) across all profiles
   const [drunkenCoins, setDrunkenCoins] = useState<number>(() => {
     try {
       const savedCoins = localStorage.getItem(STORAGE_KEYS.DRUNKEN_COINS);
@@ -409,11 +412,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           localStorage.setItem(STORAGE_KEYS.DRUNKEN_COINS, '999999');
         } catch (e) {}
-        console.log('💰 Infinite money granted: 999,999 🍺🪙');
+        console.log('💰 Infinite money granted: 999,999 🪙');
       };
       (window as any).addDrunkenCoins = (amt: number = 100000) => {
         setAndPersistDrunkenCoins(prev => prev + amt);
-        console.log(`💰 Added ${amt} 🍺🪙 to treasury!`);
+        console.log(`💰 Added ${amt} 🪙 to treasury!`);
       };
     }
   }, []);
@@ -1054,6 +1057,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setProfiles(prev => prev.map(p => (p.id === id ? { ...p, name: trimmed } : p)));
   };
 
+  const updateProfileShowcase = (profileId: string, itemIds: string[]) => {
+    const cleanIds = itemIds.slice(0, 3);
+    let updatedProfiles: Profile[] = [];
+    setProfiles(prev => {
+      const idx = prev.findIndex(p => p.id === profileId);
+      if (idx === -1) {
+        updatedProfiles = prev;
+        return prev;
+      }
+      const updated = [...prev];
+      updated[idx] = {
+        ...updated[idx],
+        showcasedItemIds: cleanIds,
+      };
+      updatedProfiles = updated;
+      try {
+        localStorage.setItem(STORAGE_KEYS.PROFILES, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    if (user && updatedProfiles.length > 0) {
+      syncAccountProfilesToCloud(updatedProfiles, drunkenCoins).catch(err => {
+        console.warn('Cloud sync after showcase update failed:', err);
+      });
+    }
+  };
+
+  const recordCrashCashout = (playerName: string, multiplier: number) => {
+    const trimmed = playerName.trim();
+    if (!trimmed || isBotPlayerName(trimmed)) return;
+    const lower = trimmed.toLowerCase();
+    const mult = Number(multiplier.toFixed(2));
+    if (mult <= 1) return;
+
+    setProfiles(prev => {
+      const masterIdx = prev.findIndex(p => p.isMaster) >= 0 ? prev.findIndex(p => p.isMaster) : 0;
+      return prev.map((p, idx) => {
+        const isTarget = p.name.trim().toLowerCase() === lower;
+        const isMaster = idx === masterIdx;
+        if (isTarget || isMaster) {
+          const currentPeak = p.highestCrashMultiplier || 0;
+          return {
+            ...p,
+            highestCrashMultiplier: Math.max(currentPeak, mult),
+          };
+        }
+        return p;
+      });
+    });
+  };
+
+  const recordDrinksServed = (playerName: string, amount: number) => {
+    const trimmed = playerName.trim();
+    if (!trimmed || isBotPlayerName(trimmed) || amount <= 0) return;
+    const lower = trimmed.toLowerCase();
+
+    setProfiles(prev => {
+      const masterIdx = prev.findIndex(p => p.isMaster) >= 0 ? prev.findIndex(p => p.isMaster) : 0;
+      return prev.map((p, idx) => {
+        const isTarget = p.name.trim().toLowerCase() === lower;
+        const isMaster = idx === masterIdx;
+        if (isTarget || isMaster) {
+          return {
+            ...p,
+            totalDrinksServedToFriends: (p.totalDrinksServedToFriends || 0) + amount,
+          };
+        }
+        return p;
+      });
+    });
+  };
+
   // Derived Master Profile and Sub-Profiles
   const masterProfile: Profile = profiles.find(p => p.isMaster) || profiles[0] || {
     id: 'profile_master_default',
@@ -1360,6 +1436,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           matched = true;
           const nextXP = (p.totalXP || 0) + baseMatchXp;
           const prog = calculateProgression(nextXP);
+          const isWin = Boolean(winMode);
+          const currentStreak = isWin ? (p.currentWinStreak || 0) + 1 : 0;
+          const peakStreak = Math.max(p.highestWinStreak || 0, currentStreak);
+          const served = (p.totalDrinksServedToFriends || 0) + sips + chugs * 5;
+
           return {
             ...p,
             avatarIcon: avatarIcon || p.avatarIcon || 'monk_drunk',
@@ -1370,6 +1451,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             currentLevel: prog.currentLevel,
             currentTitle_ro: prog.titleRo,
             currentTitle_en: prog.titleEn,
+            currentWinStreak: currentStreak,
+            highestWinStreak: peakStreak,
+            totalDrinksServedToFriends: served,
             winsBoardgame: winMode === 'boardgame' ? (p.winsBoardgame || 0) + 1 : (p.winsBoardgame || 0),
             winsDuel: winMode === 'duel' ? (p.winsDuel || 0) + 1 : (p.winsDuel || 0),
             winsCasino: winMode === 'casino' ? (p.winsCasino || 0) + 1 : (p.winsCasino || 0),
@@ -1667,6 +1751,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteProfile,
       updateProfileAvatar,
       updateProfileName,
+      updateProfileShowcase,
+      recordCrashCashout,
+      recordDrinksServed,
       updateProfileStats,
       batchUpdateProfiles,
       recordWin,

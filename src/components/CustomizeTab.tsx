@@ -114,7 +114,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
       descEn: 'Sacred crypt with spectral lanterns, mystic mists & ancient stone slabs',
       gradient: 'from-[#062016] via-[#04120e] to-[#020705]',
       fallbackPreview: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=600&auto=format&fit=crop',
-      cost: 300,
+      cost: 280,
     },
     {
       id: 'dragon_lair',
@@ -124,7 +124,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
       descEn: 'Volcanic cavern with magma lakes, ancient dragon gold and flying embers',
       gradient: 'from-[#2c0c08] via-[#1a0705] to-[#0f0302]',
       fallbackPreview: 'https://images.unsplash.com/photo-1508739773434-c26b3d09e071?q=80&w=600&auto=format&fit=crop',
-      cost: 350,
+      cost: 320,
     },
     {
       id: 'celestial_observatory',
@@ -134,7 +134,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
       descEn: 'Gothic indigo vaults, brass astrolabes and shimmering stellar constellations',
       gradient: 'from-[#0d112b] via-[#090a1a] to-[#04050f]',
       fallbackPreview: 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?q=80&w=600&auto=format&fit=crop',
-      cost: 400,
+      cost: 360,
     },
     {
       id: 'enchanted_forest',
@@ -144,7 +144,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
       descEn: 'Emerald canopy with glowing runic stones and mystical fireflies',
       gradient: 'from-[#062416] via-[#03140c] to-[#010a06]',
       fallbackPreview: 'https://images.unsplash.com/photo-1448375240586-882707db888b?q=80&w=600&auto=format&fit=crop',
-      cost: 350,
+      cost: 320,
     },
     {
       id: 'royal_treasury',
@@ -154,7 +154,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
       descEn: 'Royal treasury vault with gilded pillars, silver goblets and cascades of coins',
       gradient: 'from-[#2e2107] via-[#1a1304] to-[#0d0902]',
       fallbackPreview: 'https://images.unsplash.com/photo-1548625361-16eb1ea1e5d5?q=80&w=600&auto=format&fit=crop',
-      cost: 450,
+      cost: 420,
     },
     {
       id: 'custom_player',
@@ -164,7 +164,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
       descEn: '★ Custom Wallpaper: upload your own photo or wallpaper directly to your game screen',
       gradient: 'from-[#ffd700] via-[#7c3aed] to-[#1e1b4b]',
       fallbackPreview: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?q=80&w=600&auto=format&fit=crop',
-      cost: 500,
+      cost: 450,
     },
   ];
 
@@ -173,26 +173,26 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
     { id: 'gold', nameKey: 'diceGold', labelRo: 'Aur Lucios', labelEn: 'Polished Gold', previewColor: 'bg-gradient-to-r from-[#f8e178] to-[#b38f20] text-black', rarity: 'Standard' },
     { id: 'bone', nameKey: 'diceBone', labelRo: 'Os Străvechi', labelEn: 'Ancient Bone', previewColor: 'bg-gradient-to-r from-[#fdfbf7] to-[#d8cfbe] text-black', rarity: 'Standard' },
     { id: 'wood', nameKey: 'diceWood', labelRo: 'Lemn de Stejar', labelEn: 'Carved Oak', previewColor: 'bg-gradient-to-r from-[#a66a38] to-[#4e2f13] text-white', rarity: 'Standard' },
-    { id: 'tavern_oak', nameKey: 'diceTavernOak', labelRo: 'Stejar de Tavernă', labelEn: 'Tavern Oak', previewColor: 'bg-gradient-to-r from-[#8c531b] to-[#381a03] text-white', cost: 100, rarity: 'Standard' },
-    { id: 'copper', nameKey: 'diceCopper', labelRo: 'Cupru Patinat', labelEn: 'Weathered Copper', previewColor: 'bg-gradient-to-r from-[#d97706] to-[#152d22] text-white', cost: 120, rarity: 'Standard' },
-    { id: 'granite', nameKey: 'diceGranite', labelRo: 'Granit Monahal', labelEn: 'Monastic Granite', previewColor: 'bg-gradient-to-r from-[#9ca3af] to-[#374151] text-white', cost: 130, rarity: 'Standard' },
+    { id: 'tavern_oak', nameKey: 'diceTavernOak', labelRo: 'Stejar de Tavernă', labelEn: 'Tavern Oak', previewColor: 'bg-gradient-to-r from-[#8c531b] to-[#381a03] text-white', cost: 90, rarity: 'Standard' },
+    { id: 'copper', nameKey: 'diceCopper', labelRo: 'Cupru Patinat', labelEn: 'Weathered Copper', previewColor: 'bg-gradient-to-r from-[#d97706] to-[#152d22] text-white', cost: 110, rarity: 'Standard' },
+    { id: 'granite', nameKey: 'diceGranite', labelRo: 'Granit Monahal', labelEn: 'Monastic Granite', previewColor: 'bg-gradient-to-r from-[#9ca3af] to-[#374151] text-white', cost: 120, rarity: 'Standard' },
     // Rar
-    { id: 'ruby', nameKey: 'diceRuby', labelRo: 'Rubin Sângeriu', labelEn: 'Blood Ruby', previewColor: 'bg-gradient-to-r from-[#ef4444] to-[#7f1d1d] text-white', cost: 150, rarity: 'Rar' },
-    { id: 'ice', nameKey: 'diceIce', labelRo: 'Gheață Eternă', labelEn: 'Glacial Frost', previewColor: 'bg-gradient-to-r from-[#38bdf8] to-[#0369a1] text-white', cost: 200, rarity: 'Rar' },
-    { id: 'emerald_jade', nameKey: 'diceEmeraldJade', labelRo: 'Jad Smarald', labelEn: 'Emerald Jade', previewColor: 'bg-gradient-to-r from-[#6ee7b7] to-[#047857] text-white', cost: 250, rarity: 'Rar' },
+    { id: 'ruby', nameKey: 'diceRuby', labelRo: 'Rubin Sângeriu', labelEn: 'Blood Ruby', previewColor: 'bg-gradient-to-r from-[#ef4444] to-[#7f1d1d] text-white', cost: 140, rarity: 'Rar' },
+    { id: 'ice', nameKey: 'diceIce', labelRo: 'Gheață Eternă', labelEn: 'Glacial Frost', previewColor: 'bg-gradient-to-r from-[#38bdf8] to-[#0369a1] text-white', cost: 180, rarity: 'Rar' },
+    { id: 'emerald_jade', nameKey: 'diceEmeraldJade', labelRo: 'Jad Smarald', labelEn: 'Emerald Jade', previewColor: 'bg-gradient-to-r from-[#6ee7b7] to-[#047857] text-white', cost: 220, rarity: 'Rar' },
     // Epic
-    { id: 'obsidian', nameKey: 'diceObsidian', labelRo: 'Obsidian & Rune', labelEn: 'Runic Obsidian', previewColor: 'bg-gradient-to-r from-[#a855f7] to-[#3b0764] text-white', cost: 350, rarity: 'Epic' },
-    { id: 'amethyst', nameKey: 'diceAmethyst', labelRo: 'Ametist Regal', labelEn: 'Royal Amethyst', previewColor: 'bg-gradient-to-r from-[#c084fc] to-[#6b21a8] text-white', cost: 380, rarity: 'Epic' },
-    { id: 'emerald_hydra', nameKey: 'diceEmeraldHydra', labelRo: 'Hidra de Smarald', labelEn: 'Emerald Hydra', previewColor: 'bg-gradient-to-r from-[#10b981] via-[#059669] to-[#064e3b] text-white', cost: 420, rarity: 'Epic' },
-    { id: 'plasma_pink', nameKey: 'dicePlasmaPink', labelRo: 'Plasmă Spectrală', labelEn: 'Spectral Plasma', previewColor: 'bg-gradient-to-r from-[#f472b6] to-[#831843] text-white', cost: 430, rarity: 'Epic' },
+    { id: 'obsidian', nameKey: 'diceObsidian', labelRo: 'Obsidian & Rune', labelEn: 'Runic Obsidian', previewColor: 'bg-gradient-to-r from-[#a855f7] to-[#3b0764] text-white', cost: 300, rarity: 'Epic' },
+    { id: 'amethyst', nameKey: 'diceAmethyst', labelRo: 'Ametist Regal', labelEn: 'Royal Amethyst', previewColor: 'bg-gradient-to-r from-[#c084fc] to-[#6b21a8] text-white', cost: 320, rarity: 'Epic' },
+    { id: 'emerald_hydra', nameKey: 'diceEmeraldHydra', labelRo: 'Hidra de Smarald', labelEn: 'Emerald Hydra', previewColor: 'bg-gradient-to-r from-[#10b981] via-[#059669] to-[#064e3b] text-white', cost: 350, rarity: 'Epic' },
+    { id: 'plasma_pink', nameKey: 'dicePlasmaPink', labelRo: 'Plasmă Spectrală', labelEn: 'Spectral Plasma', previewColor: 'bg-gradient-to-r from-[#f472b6] to-[#831843] text-white', cost: 350, rarity: 'Epic' },
     // Legendar
-    { id: 'crimson_dragon', nameKey: 'diceCrimsonDragon', labelRo: 'Dragon Roșu', labelEn: 'Crimson Dragon', previewColor: 'bg-gradient-to-r from-[#f87171] to-[#991b1b] text-white', cost: 450, rarity: 'Legendar' },
-    { id: 'bloodfire', nameKey: 'diceBloodfire', labelRo: 'Dragon de Sânge', labelEn: 'Bloodfire Dragon', previewColor: 'bg-gradient-to-r from-[#f87171] to-[#200108] text-white', cost: 460, rarity: 'Legendar' },
-    { id: 'infernal_ember', nameKey: 'diceInfernalEmber', labelRo: 'Foc Infernal', labelEn: 'Infernal Ember', previewColor: 'bg-gradient-to-r from-[#f97316] via-[#dc2626] to-[#7f1d1d] text-white', cost: 480, rarity: 'Legendar' },
+    { id: 'crimson_dragon', nameKey: 'diceCrimsonDragon', labelRo: 'Dragon Roșu', labelEn: 'Crimson Dragon', previewColor: 'bg-gradient-to-r from-[#f87171] to-[#991b1b] text-white', cost: 400, rarity: 'Legendar' },
+    { id: 'bloodfire', nameKey: 'diceBloodfire', labelRo: 'Dragon de Sânge', labelEn: 'Bloodfire Dragon', previewColor: 'bg-gradient-to-r from-[#f87171] to-[#200108] text-white', cost: 420, rarity: 'Legendar' },
+    { id: 'infernal_ember', nameKey: 'diceInfernalEmber', labelRo: 'Foc Infernal', labelEn: 'Infernal Ember', previewColor: 'bg-gradient-to-r from-[#f97316] via-[#dc2626] to-[#7f1d1d] text-white', cost: 440, rarity: 'Legendar' },
     // Mistic
-    { id: 'void_cosmic', nameKey: 'diceVoidCosmic', labelRo: 'Vid Cosmic', labelEn: 'Cosmic Void', previewColor: 'bg-gradient-to-r from-[#38bdf8] via-[#6366f1] to-[#1e1b4b] text-white', cost: 550, rarity: 'Mistic' },
-    { id: 'celestial_gold', nameKey: 'diceCelestialGold', labelRo: 'Aur Celest', labelEn: 'Celestial Gold', previewColor: 'bg-gradient-to-r from-[#fef08a] via-[#eab308] to-[#ca8a04] text-black', cost: 700, rarity: 'Mistic' },
-    { id: 'imperial_gold', nameKey: 'diceImperialGold', labelRo: 'Aur Imperial & Smarald', labelEn: 'Imperial Gold & Emerald', previewColor: 'bg-gradient-to-r from-[#fef08a] via-[#d97706] to-[#047857] text-white', cost: 750, rarity: 'Mistic' },
+    { id: 'void_cosmic', nameKey: 'diceVoidCosmic', labelRo: 'Vid Cosmic', labelEn: 'Cosmic Void', previewColor: 'bg-gradient-to-r from-[#38bdf8] via-[#6366f1] to-[#1e1b4b] text-white', cost: 480, rarity: 'Mistic' },
+    { id: 'celestial_gold', nameKey: 'diceCelestialGold', labelRo: 'Aur Celest', labelEn: 'Celestial Gold', previewColor: 'bg-gradient-to-r from-[#fef08a] via-[#eab308] to-[#ca8a04] text-black', cost: 550, rarity: 'Mistic' },
+    { id: 'imperial_gold', nameKey: 'diceImperialGold', labelRo: 'Aur Imperial & Smarald', labelEn: 'Imperial Gold & Emerald', previewColor: 'bg-gradient-to-r from-[#fef08a] via-[#d97706] to-[#047857] text-white', cost: 600, rarity: 'Mistic' },
     // Exclusiv Cufăr
     { id: 'spectral_jade', nameKey: 'diceSpectralJade', labelRo: 'Jad Spectral', labelEn: 'Spectral Jade', previewColor: 'bg-gradient-to-r from-[#34d399] to-[#065f46] text-white', rarity: 'Exclusiv Cufăr' },
   ];
@@ -338,7 +338,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
             type="button"
             onClick={() => addDrunkenCoins(999999)}
             className="bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-600 hover:brightness-125 active:scale-95 text-black font-cinzel font-black text-[11px] sm:text-xs px-2.5 py-1 rounded-xl border border-yellow-200 shadow-md transition-all flex items-center gap-1 cursor-pointer"
-            title={isRo ? '+999,999 🍺🪙 Bani Infiniți' : '+999,999 🍺🪙 Infinite Coins'}
+            title={isRo ? '+999,999 🪙 Bani Infiniți' : '+999,999 🪙 Infinite Coins'}
           >
             <Zap className="w-3.5 h-3.5 fill-black text-black" />
             <span>+999k 🪙</span>
@@ -346,7 +346,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
 
           {/* Drunken Coins Display */}
           <div className="bg-[#1c1208] border border-[#ffd700]/60 px-2.5 py-1 rounded-xl flex items-center gap-1.5 text-xs font-mono font-bold text-[#ffd700] shadow-inner">
-            <span>🍺🪙</span>
+            <span>🪙</span>
             <span>{drunkenCoins.toLocaleString()}</span>
           </div>
 
@@ -574,7 +574,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
                         {!isCustomUnlocked && (
                           <span className="text-[10px] bg-[#3a1414] border border-red-500/60 text-red-200 font-cinzel font-bold px-2 py-0.5 rounded-full shadow flex items-center gap-1">
                             <Lock className="w-3 h-3" />
-                            <span>500 🍺🪙 / {isRo ? 'Drop Cufăr' : 'Chest Drop'}</span>
+                            <span>500 🪙 / {isRo ? 'Drop Cufăr' : 'Chest Drop'}</span>
                           </span>
                         )}
                       </div>
@@ -644,7 +644,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
                             }}
                             className="py-2 px-4 bg-gradient-to-r from-[#ffd700] to-[#f59e0b] text-black rounded-xl text-xs font-cinzel font-black shadow-lg hover:brightness-110 flex items-center gap-1.5 transition-all cursor-pointer"
                           >
-                            <span>🔓 {isRo ? 'Deblochează cu 500' : 'Unlock for 500'} 🍺🪙</span>
+                            <span>🔓 {isRo ? 'Deblochează cu 500' : 'Unlock for 500'} 🪙</span>
                           </button>
                         ) : (
                           <button
@@ -717,7 +717,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
                       {!isUnlocked && th.cost && (
                         <span className="absolute top-2 right-2 z-10 text-[11px] bg-[#3a1414] border border-red-500/60 text-red-200 font-cinzel font-bold px-2 py-0.5 rounded-full shadow flex items-center gap-1">
                           <Lock className="w-3 h-3" />
-                          <span>{th.cost} 🍺🪙</span>
+                          <span>{th.cost} 🪙</span>
                         </span>
                       )}
                     </div>
@@ -1079,7 +1079,7 @@ export const CustomizeTab: React.FC<{ onClose?: () => void }> = ({ onClose }) =>
                         }`}
                       >
                         <span>{item.cost}</span>
-                        <span>🍺🪙</span>
+                        <span>🪙</span>
                       </button>
                     )}
                   </div>

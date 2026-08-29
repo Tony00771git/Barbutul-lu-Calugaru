@@ -196,12 +196,14 @@ export const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose }) => {
                 </span>
               </div>
               <ul className="list-disc list-inside space-y-1.5 text-xs sm:text-sm text-stone-300">
-                <li>{isRo ? 'Toți jucătorii încep cu 30 de galbeni pe START. Arunci zarul și înaintezi pe cele 30 de pătrățele ale moșiei.' : 'Everyone starts with 30 gold at START. Roll dice and travel across 30 estate tiles.'}</li>
-                <li>{isRo ? 'Pătrățelele de guri/groapă sunt CUMPĂRABILE. Proprietarul e imun când pică acolo, iar ceilalți îi plătesc chirie în aur sau băutură!' : 'Sip & Chug tiles are BUYABLE. Owners are immune and collect rent from visitors!'}</li>
+                <li>{isRo ? 'Toți jucătorii încep cu 30 de galbeni pe START pe noua tablă pătrată 10x10 cu 36 de pătrățele și 4 gropi simetrice.' : 'Everyone starts with 30 gold at START on the square 10x10 board with 36 tiles and 4 symmetric chugs.'}</li>
+                <li>{isRo ? '5 Grupuri de Culoare: Când deții toate proprietățile dintr-un grup de culoare, chiria de bază se dublează automat!' : '5 Color Groups: Owning all properties in a color set automatically doubles the base rent!'}</li>
+                <li>{isRo ? 'Construcții & Upgrades 🏠: Cu grupul complet, poți construi până la 3 Clădiri pe fiecare pătrățică pentru chirii masive de băutură, iar la Nivelul 3 proprietatea devine GROAPĂ!' : 'Buildings & Upgrades 🏠: With a complete group, build up to 3 Houses on each tile for massive rent, and at Level 3 it turns into a CHUG!'}</li>
+                <li>{isRo ? 'Târg / Schimburi (Trade) 🤝: Pătrățica de Trade permite schimburi și licitații directe de galbeni, proprietăți, scrisori de iertare și chei cu oricare alt jucător!' : 'Trade & Auctions 🤝: The Trade tile enables direct asset and gold trading with any opponent!'}</li>
                 <li>{isRo ? 'Treci peste START -> primești +15 galbeni bonus de la vistierie.' : 'Passing START grants +15 bonus gold from the treasury.'}</li>
                 <li>{isRo ? 'Temniță 👮: stai 3 ture închis sau plătești 10 galbeni / folosești o Cheie de Temniță 🔓.' : 'Dungeon 👮: spend 3 turns locked or pay 10 gold / use a Dungeon Key 🔓.'}</li>
                 <li>{isRo ? 'Scrisoare de Iertare 🎟️: te scapă instant de orice penalizare de băutură când pici pe o proprietate străină.' : 'Pardon Scroll 🎟️: cancels any drink penalty when landing on foreign tiles.'}</li>
-                <li>{isRo ? 'Evenimente speciale: Trivia, Păcănele, 2 Adevăruri și 1 Minciună, Vrăjitorul Negustor, Rândul Casei, Comoară.' : 'Special tiles: Trivia questions, Slot machine, 2 Truths & 1 Lie, Wandering Merchant, House Round, Treasure.'}</li>
+                <li>{isRo ? 'Evenimente speciale: Trivia, Păcănele, 2 Adevăruri și 1 Minciună, Negustor Călător, Rândul Casei, Comoară, Berărie.' : 'Special tiles: Trivia questions, Slot machine, 2 Truths & 1 Lie, Wandering Merchant, House Round, Treasure, Brewery.'}</li>
               </ul>
             </section>
           )}

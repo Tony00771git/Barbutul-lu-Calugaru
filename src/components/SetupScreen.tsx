@@ -115,7 +115,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
   const [mode, setMode] = useState<GameMode>('normal');
   const [playerCount, setPlayerCount] = useState<number>(3);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
-  const [boardDiceCount, setBoardDiceCount] = useState<1 | 2>(1);
+  const [boardDiceCount, setBoardDiceCount] = useState<1 | 2>(2);
 
   const handleLaunchGameFromInvite = (
     gameMode: 'duel' | 'pineapple' | 'crash',
@@ -1304,34 +1304,6 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                     ))}
                   </div>
                 )}
-
-                {mode === 'boardgame' && (
-                  <div className="flex items-center justify-between gap-2 pt-0.5">
-                    <span className="text-[11px] font-cinzel font-bold text-[#e8c84a]">
-                      {t('diceOnBoard')}:
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setBoardDiceCount(1)}
-                        className={`py-1 px-3 rounded-lg font-cinzel text-xs ${
-                          boardDiceCount === 1 ? 'bg-[#ffd700] text-black font-bold' : 'bg-[#120d09] border border-[#2b1f13] text-gray-400'
-                        }`}
-                      >
-                        {t('oneDie')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBoardDiceCount(2)}
-                        className={`py-1 px-3 rounded-lg font-cinzel text-xs ${
-                          boardDiceCount === 2 ? 'bg-[#ffd700] text-black font-bold' : 'bg-[#120d09] border border-[#2b1f13] text-gray-400'
-                        }`}
-                      >
-                        {t('twoDice')}
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -1518,13 +1490,13 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
                 </span>
               </button>
 
-              {/* SECONDARY ACTION: PROFILURILE TALE BUTTON (NO EMOTICONS AS REQUESTED) */}
+              {/* SECONDARY ACTION: PROFILURI ȘI STATISTICI BUTTON */}
               <button
                 type="button"
                 onClick={() => setShowProfilesModal(true)}
                 className="w-full py-3 sm:py-3.5 rounded-xl font-cinzel font-black text-sm sm:text-base transition-all active:scale-98 shadow-md uppercase tracking-wider flex items-center justify-center bg-gradient-to-r from-[#20150b] via-[#2c1d10] to-[#20150b] border-2 border-[#e8c84a]/80 text-[#ffd700] hover:border-[#ffd700] hover:bg-[#342314] hover:brightness-110"
               >
-                {language === 'ro' ? 'Profilurile Tale' : 'Your Profiles'}
+                {language === 'ro' ? 'Profiluri și Statistici' : 'Profiles & Statistics'}
               </button>
 
               {/* DAILY QUESTS BUTTON / BANNER */}
@@ -1596,6 +1568,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
           <FriendsTab
             onClose={() => setMainTab('play')}
             onLaunchGameFromInvite={handleLaunchGameFromInvite}
+            onOpenProfiles={() => setShowProfilesModal(true)}
           />
           <button
             type="button"
@@ -1630,7 +1603,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
           onClick={onOpenCoinsModal}
           className="py-2 px-1.5 rounded-xl bg-gradient-to-r from-[#2a1708] to-[#1a1005] border border-amber-500/60 hover:border-[#ffd700] text-[11px] font-cinzel text-[#ffd700] hover:brightness-110 transition-all flex items-center justify-center gap-1 shadow"
         >
-          <span>🍺🪙</span>
+          <span>🪙</span>
           <span className="truncate">{language === 'ro' ? 'Bazar' : 'Bazaar'}</span>
         </button>
 
@@ -1652,6 +1625,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({
             handleNameChange(0, p.name);
             if (p.avatarIcon) handleAvatarChange(0, p.avatarIcon);
           }}
+          onOpenBazaar={onOpenCoinsModal}
         />
       )}
 

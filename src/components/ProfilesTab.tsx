@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { TrophyShowcase } from './TrophyShowcase';
 
 export const ProfilesTab: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const {
@@ -59,6 +60,11 @@ export const ProfilesTab: React.FC<{ onClose?: () => void }> = ({ onClose }) => 
           </button>
         )}
       </div>
+
+      {/* Unified Trophy Hall & Showcase */}
+      {sortedProfiles.length > 0 && (
+        <TrophyShowcase profile={sortedProfiles[0]} isEditable={true} />
+      )}
 
       {/* Add Profile Form */}
       <form onSubmit={handleAdd} className="w-full flex gap-2">

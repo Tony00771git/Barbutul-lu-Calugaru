@@ -49,7 +49,7 @@ export const CrashGame: React.FC<CrashGameProps> = ({
   isHost,
   onExit,
 }) => {
-  const { t, language, theme, diceSkin, recordGameStats, unlockAchievement, awardMatchXp, trackQuestEvent } = useApp();
+  const { t, language, theme, diceSkin, recordGameStats, unlockAchievement, awardMatchXp, trackQuestEvent, recordCrashCashout } = useApp();
   const { user } = useAuth();
 
   const [roomState, setRoomState] = useState<CrashRoomState | null>(null);
@@ -516,6 +516,7 @@ export const CrashGame: React.FC<CrashGameProps> = ({
 
     setOptimisticCashout(lockedMult);
     soundEffects.playCashOut();
+    recordCrashCashout(localPlayer.name, lockedMult);
 
     // Daily Quest Tracking
     trackQuestEvent({ type: 'crash_cashout', multiplier: lockedMult });

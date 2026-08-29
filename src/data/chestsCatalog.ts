@@ -881,7 +881,7 @@ export const ALL_CHEST_COSMETICS: CosmeticItem[] = [
 ];
 
 // =========================================================================
-// THEMATIC CHESTS CATALOG
+// THEMATIC CHESTS CATALOG (4 Distinct Cases: 3 Full-Rarity + 1 High-Tier Exclusive)
 // =========================================================================
 export const CHESTS_CATALOG: ChestDef[] = [
   {
@@ -889,12 +889,14 @@ export const CHESTS_CATALOG: ChestDef[] = [
     key: 'monastery_case',
     nameRo: 'Cufărul Mănăstirii',
     nameEn: 'Monastery Case',
-    descRo: 'Cufăr tradițional din stejar și fier forjat, cu relicve sacre, ucenici călugări și zaruri de aur.',
-    descEn: 'Traditional oak and iron chest with holy relics, monk avatars, and gold dice.',
-    cost: 50, // 50 Drunken Coins
+    descRo: 'Cufăr tradițional din stejar și fier forjat, cu relicve sacre, ucenici călugări, zaruri aurite și toate raritățile.',
+    descEn: 'Traditional oak and iron chest with holy relics, monk avatars, gilded dice, and all cosmetic rarities.',
+    cost: 35, // Balanced progression cost
     icon: '📦',
     color: '#ffd700',
     bannerGradient: 'from-amber-950 via-[#361f0b] to-[#1a0f05]',
+    badgeRo: 'Toate Raritățile',
+    badgeEn: 'All Rarities',
     items: ALL_CHEST_COSMETICS.filter(
       (item) =>
         item.id.includes('monk') ||
@@ -916,7 +918,8 @@ export const CHESTS_CATALOG: ChestDef[] = [
         item.id.includes('celestial_gold') ||
         item.id.includes('archimandrite') ||
         item.id.includes('patriarch') ||
-        item.id.includes('divine_friar')
+        item.id.includes('divine_friar') ||
+        item.id.includes('custom_player')
     ),
   },
   {
@@ -924,12 +927,14 @@ export const CHESTS_CATALOG: ChestDef[] = [
     key: 'night_case',
     nameRo: 'Cufărul Criptei & Nopții',
     nameEn: 'Crypt & Shadows Case',
-    descRo: 'Păstrat în străfundul criptei, învăluit în mistere violete, asasini și zaruri cosmice.',
-    descEn: 'Sealed in the crypt depths, imbued with arcane amethyst, shadows, and cosmic void dice.',
-    cost: 65, // 65 Drunken Coins
+    descRo: 'Păstrat în străfundul criptei, învăluit în mistere violete, asasini din umbră, vrăjitori și zaruri cosmice de toate raritățile.',
+    descEn: 'Sealed in the crypt depths, imbued with arcane amethyst, shadow assassins, wizards, and cosmic void dice across all rarities.',
+    cost: 40, // Balanced progression cost
     icon: '🔮',
-    color: '#8847ff',
+    color: '#a855f7',
     bannerGradient: 'from-purple-950 via-[#270e3d] to-[#11051c]',
+    badgeRo: 'Toate Raritățile',
+    badgeEn: 'All Rarities',
     items: ALL_CHEST_COSMETICS.filter(
       (item) =>
         item.id.includes('valkyrie') ||
@@ -958,12 +963,14 @@ export const CHESTS_CATALOG: ChestDef[] = [
     key: 'dragon_case',
     nameRo: 'Cufărul Dragonului de Aur',
     nameEn: 'Golden Dragon Case',
-    descRo: 'Comoară ascunsă în peștera vulcanului, cu marele paladin, solzi de dragon și zaruri imperiale.',
-    descEn: 'Volcanic dragon hoard with high paladins, dragonscales, royal treasury, and imperial gold.',
-    cost: 85, // 85 Drunken Coins
+    descRo: 'Comoară ascunsă în peștera vulcanului, cu marele paladin, solzi de foc, trezoreria regală și zaruri imperiale din toate raritățile.',
+    descEn: 'Volcanic dragon hoard with high paladins, dragonscales, royal treasury, and imperial gold across all rarities.',
+    cost: 45, // Balanced progression cost
     icon: '🐉',
     color: '#eb4b4b',
     bannerGradient: 'from-red-950 via-[#3d0d0d] to-[#1a0505]',
+    badgeRo: 'Toate Raritățile',
+    badgeEn: 'All Rarities',
     items: ALL_CHEST_COSMETICS.filter(
       (item) =>
         item.id.includes('dragon') ||
@@ -983,37 +990,77 @@ export const CHESTS_CATALOG: ChestDef[] = [
         item.id.includes('custom_player')
     ),
   },
+  {
+    id: 'chest_imperial_reliquary',
+    key: 'imperial_reliquary_case',
+    nameRo: '★ Tezaurul Imperial & Divin ★',
+    nameEn: '★ Imperial Divine Reliquary ★',
+    descRo: 'Cufăr legendar de elită supremă. Conține EXCLUSIV rarități superioare (Clasificat, Secret și ★ Obiecte Speciale Rare ★). Fără rarități joase!',
+    descEn: 'Legendary elite reliquary. Contains EXCLUSIVELY higher tier drops (Classified, Covert & ★ Rare Special Items ★). Zero low-tier drops!',
+    cost: 140, // Premium higher cost for guaranteed high-tier drops
+    icon: '👑',
+    color: '#ffd700',
+    bannerGradient: 'from-yellow-950 via-[#452e05] to-[#1f1402]',
+    isHighTierOnly: true,
+    badgeRo: '★ DOAR RARITĂȚI SUPERIOARE ★',
+    badgeEn: '★ HIGH-TIER ONLY ★',
+    items: ALL_CHEST_COSMETICS.filter(
+      (item) =>
+        item.rarity === 'classified' ||
+        item.rarity === 'covert' ||
+        item.rarity === 'rareSpecial'
+    ),
+  },
 ];
 
 // Helper: Pick a random cosmetic item from chest based on exact CS percentages
 export function rollChestItem(chest: ChestDef): { winningItem: CosmeticItem; rolledRarity: CosmeticRarity; rolledOdds: number } {
   const items = chest.items && chest.items.length > 0 ? chest.items : ALL_CHEST_COSMETICS;
-  
-  // CS Drop Rates:
-  // Mil-Spec: 45% (0 to 45)
-  // Restricted: 28% (45 to 73)
-  // Classified: 16% (73 to 89)
-  // Covert: 8% (89 to 97)
-  // Rare Special: 3% (97 to 100)
-  const roll = Math.random() * 100;
+  const isHighTier = Boolean(chest.isHighTierOnly || !items.some(i => i.rarity === 'milspec' || i.rarity === 'restricted'));
+
   let targetRarity: CosmeticRarity = 'milspec';
   let odds = 0.45;
 
-  if (roll < 45) {
-    targetRarity = 'milspec';
-    odds = 0.45;
-  } else if (roll < 73) {
-    targetRarity = 'restricted';
-    odds = 0.28;
-  } else if (roll < 89) {
-    targetRarity = 'classified';
-    odds = 0.16;
-  } else if (roll < 97) {
-    targetRarity = 'covert';
-    odds = 0.08;
+  if (isHighTier) {
+    // High Tier Exclusive Chest (Classified, Covert, Rare Special only)
+    // Classified: 60% (0 to 60)
+    // Covert: 30% (60 to 90)
+    // Rare Special: 10% (90 to 100)
+    const roll = Math.random() * 100;
+    if (roll < 60) {
+      targetRarity = 'classified';
+      odds = 0.60;
+    } else if (roll < 90) {
+      targetRarity = 'covert';
+      odds = 0.30;
+    } else {
+      targetRarity = 'rareSpecial';
+      odds = 0.10;
+    }
   } else {
-    targetRarity = 'rareSpecial';
-    odds = 0.03;
+    // Standard All-Rarities Chests:
+    // Mil-Spec: 45% (0 to 45)
+    // Restricted: 28% (45 to 73)
+    // Classified: 16% (73 to 89)
+    // Covert: 8% (89 to 97)
+    // Rare Special: 3% (97 to 100)
+    const roll = Math.random() * 100;
+    if (roll < 45) {
+      targetRarity = 'milspec';
+      odds = 0.45;
+    } else if (roll < 73) {
+      targetRarity = 'restricted';
+      odds = 0.28;
+    } else if (roll < 89) {
+      targetRarity = 'classified';
+      odds = 0.16;
+    } else if (roll < 97) {
+      targetRarity = 'covert';
+      odds = 0.08;
+    } else {
+      targetRarity = 'rareSpecial';
+      odds = 0.03;
+    }
   }
 
   // Filter available items in this chest of that rarity
@@ -1041,9 +1088,12 @@ export function generateCaseTape(
   totalItems = 75
 ): CosmeticItem[] {
   const pool = chest.items && chest.items.length > 0 ? chest.items : ALL_CHEST_COSMETICS;
+  const isHighTier = Boolean(chest.isHighTierOnly || !pool.some(i => i.rarity === 'milspec' || i.rarity === 'restricted'));
   const tape: CosmeticItem[] = [];
 
-  const covertItems = pool.filter((i) => i.rarity === 'covert' || i.rarity === 'rareSpecial');
+  const rareSpecialItems = pool.filter((i) => i.rarity === 'rareSpecial');
+  const covertItems = pool.filter((i) => i.rarity === 'covert');
+  const topTierItems = pool.filter((i) => i.rarity === 'covert' || i.rarity === 'rareSpecial');
   const classifiedItems = pool.filter((i) => i.rarity === 'classified');
   const restrictedItems = pool.filter((i) => i.rarity === 'restricted');
   const milspecItems = pool.filter((i) => i.rarity === 'milspec');
@@ -1059,31 +1109,53 @@ export function generateCaseTape(
       continue;
     }
 
-    // Near miss tension!
-    // If we didn't win a covert or rareSpecial, intentionally place a Covert or Rare Special
-    // immediately right before or after the winning slot (classic CS case opening near-miss thrill)
-    if (
-      (i === targetIndex - 1 || i === targetIndex + 1) &&
-      winningItem.rarity !== 'covert' &&
-      winningItem.rarity !== 'rareSpecial' &&
-      covertItems.length > 0
-    ) {
-      tape.push(getRandomFrom(covertItems));
-      continue;
-    }
+    if (isHighTier) {
+      // High-tier exclusive tape (classified, covert, rareSpecial)
+      if (
+        (i === targetIndex - 1 || i === targetIndex + 1) &&
+        winningItem.rarity !== 'rareSpecial' &&
+        rareSpecialItems.length > 0
+      ) {
+        tape.push(getRandomFrom(rareSpecialItems));
+        continue;
+      }
 
-    // Realistic item tape distribution (lots of milspec & restricted, occasional classified/covert tease)
-    const r = Math.random() * 100;
-    if (r < 50 && milspecItems.length > 0) {
-      tape.push(getRandomFrom(milspecItems));
-    } else if (r < 80 && restrictedItems.length > 0) {
-      tape.push(getRandomFrom(restrictedItems));
-    } else if (r < 94 && classifiedItems.length > 0) {
-      tape.push(getRandomFrom(classifiedItems));
-    } else if (covertItems.length > 0) {
-      tape.push(getRandomFrom(covertItems));
+      const r = Math.random() * 100;
+      if (r < 55 && classifiedItems.length > 0) {
+        tape.push(getRandomFrom(classifiedItems));
+      } else if (r < 85 && covertItems.length > 0) {
+        tape.push(getRandomFrom(covertItems));
+      } else if (rareSpecialItems.length > 0) {
+        tape.push(getRandomFrom(rareSpecialItems));
+      } else {
+        tape.push(getRandomFrom(pool));
+      }
     } else {
-      tape.push(getRandomFrom(pool));
+      // Standard Case Tape:
+      // Near miss tension: place topTier item adjacent to winning card if winner is lower rarity
+      if (
+        (i === targetIndex - 1 || i === targetIndex + 1) &&
+        winningItem.rarity !== 'covert' &&
+        winningItem.rarity !== 'rareSpecial' &&
+        topTierItems.length > 0
+      ) {
+        tape.push(getRandomFrom(topTierItems));
+        continue;
+      }
+
+      // Realistic item tape distribution (lots of milspec & restricted, occasional classified/covert tease)
+      const r = Math.random() * 100;
+      if (r < 48 && milspecItems.length > 0) {
+        tape.push(getRandomFrom(milspecItems));
+      } else if (r < 78 && restrictedItems.length > 0) {
+        tape.push(getRandomFrom(restrictedItems));
+      } else if (r < 93 && classifiedItems.length > 0) {
+        tape.push(getRandomFrom(classifiedItems));
+      } else if (topTierItems.length > 0) {
+        tape.push(getRandomFrom(topTierItems));
+      } else {
+        tape.push(getRandomFrom(pool));
+      }
     }
   }
 

@@ -361,7 +361,7 @@ export interface MatchXpBreakdown {
   didLevelUp: boolean;
   levelsGainedCount: number;
   newTitleUnlocked: RankTitle | null;
-  // Ingame Currency: Drunken Coins (Bănuți Turmentați 🍺🪙)
+  // Ingame Currency: Drunken Coins (Bănuți Turmentați 🪙)
   drunkenCoinsGained: number;
   oldDrunkenCoins: number;
   newDrunkenCoins: number;
@@ -495,7 +495,7 @@ export const calculateMatchXpGain = (
   const levelsGainedCount = Math.max(0, newProg.currentLevel - oldProg.currentLevel);
   const newTitleUnlocked = getNewlyUnlockedTitle(oldProg.currentLevel, newProg.currentLevel);
 
-  // 5. Drunken Coins (Bănuți Turmentați 🍺🪙) Formula
+  // 5. Drunken Coins (Bănuți Turmentați 🪙) Formula
   const coinsBreakdown: Array<{ icon: string; reasonRo: string; reasonEn: string; amount: number }> = [];
 
   // Match completion base coins

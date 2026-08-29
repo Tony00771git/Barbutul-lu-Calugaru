@@ -27,7 +27,6 @@ import {
   subscribeToPineappleRoom,
   updatePineapplePlayerBoard,
   sendPineappleEmote,
-  autoPlayPineappleTimeout,
 } from '../lib/pineappleFirestoreService';
 import { checkIsFoul } from '../lib/pineapplePokerEvaluator';
 import { getHeadToHeadStats, recordHeadToHeadMatch } from '../lib/headToHeadService';
@@ -53,7 +52,6 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
 }) => {
   const { language, t, theme, diceSkin, addXpForPlayer, recordWin, checkAchievement, updateProfileStats, awardMatchXp, trackQuestEvent } = useApp();
   const [roomState, setRoomState] = useState<PineappleRoomState | null>(null);
-  const [turnSecondsRemaining, setTurnSecondsRemaining] = useState<number | null>(null);
 
   // Save active session for auto-reconnection
   useEffect(() => {
@@ -207,43 +205,6 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
 
   const myState = roomState?.players.find(p => p.id === localPlayer.id);
   const opponentState = roomState?.players.find(p => p.id !== localPlayer.id);
-
-  // 15-second Auto-Play Timeout Shield for active turn
-  useEffect(() => {
-    if (
-      !roomState ||
-      roomState.status !== 'in_hand' ||
-      !myState ||
-      myState.handLocked ||
-      !myState.currentHandCards ||
-      myState.currentHandCards.length === 0
-    ) {
-      setTurnSecondsRemaining(null);
-      return;
-    }
-
-    setTurnSecondsRemaining(15);
-    const interval = setInterval(() => {
-      setTurnSecondsRemaining((prev) => {
-        if (prev === null) return null;
-        if (prev <= 1) {
-          clearInterval(interval);
-          autoPlayPineappleTimeout(roomCode, localPlayer.id);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [
-    roomState?.currentHand,
-    roomState?.currentRoundInHand,
-    roomState?.status,
-    myState?.handLocked,
-    roomCode,
-    localPlayer.id,
-  ]);
 
   // Match completion XP, Win & Achievements award
   useEffect(() => {
@@ -1367,16 +1328,17 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
           </div>
         </div>
 
-        {/* Center: Live Sips Tracker & Turn Countdown */}
+        {/* Center: Live Sips Tracker & Turn Status */}
         <div className="flex items-center gap-2">
-          {turnSecondsRemaining !== null && (
-            <div className={`px-2 py-0.5 rounded-lg border text-[11px] font-cinzel font-bold flex items-center gap-1 animate-pulse ${
-              turnSecondsRemaining <= 5
-                ? 'bg-red-950/80 border-red-500/80 text-red-300'
-                : 'bg-amber-950/80 border-amber-500/60 text-amber-300'
-            }`}>
-              <span>⏳</span>
-              <span>{turnSecondsRemaining}s {language === 'ro' ? '(Auto-Play)' : '(Auto-Play)'}</span>
+          {myState?.handLocked ? (
+            <div className="px-2 py-0.5 rounded-lg border border-emerald-500/60 bg-emerald-950/80 text-emerald-300 text-[10px] sm:text-[11px] font-cinzel font-bold flex items-center gap-1">
+              <span>✓</span>
+              <span>{language === 'ro' ? 'Rundă Blocată' : 'Round Locked'}</span>
+            </div>
+          ) : (
+            <div className="px-2 py-0.5 rounded-lg border border-amber-500/60 bg-amber-950/80 text-amber-300 text-[10px] sm:text-[11px] font-cinzel font-bold flex items-center gap-1 animate-pulse">
+              <span>🃏</span>
+              <span>{language === 'ro' ? 'Plasează cărțile' : 'Place cards'}</span>
             </div>
           )}
 
@@ -1723,16 +1685,45 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
           </div>
         </div>
       ) : (
-        <div className="bg-[#120d07] border border-[#2d1e12] rounded-xl p-2.5 sm:p-3 text-center space-y-1">
-          <div className="text-xs font-cinzel text-emerald-400 font-bold flex items-center justify-center gap-1.5">
-            <span>✓</span>
-            <span>{language === 'ro' ? 'Ai confirmat runda!' : 'Round locked!'}</span>
+        /* Waiting Barrier Screen: Displayed when player has confirmed round and is waiting for opponent */
+        <div className="bg-gradient-to-r from-[#18110a] via-[#24170d] to-[#18110a] border-2 border-[#ffd700]/70 rounded-2xl p-4 sm:p-5 text-center space-y-3 shadow-2xl animate-fade-in">
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-2xl animate-pulse">⏳</span>
+            <h3 className="text-sm sm:text-base font-cinzel font-black text-[#ffd700] gold-text-glow">
+              {opponentState?.handLocked
+                ? language === 'ro'
+                  ? '✓ Ambii Jucători sunt Gata!'
+                  : '✓ Both Players Ready!'
+                : language === 'ro'
+                ? `Așteptăm ca ${opponentState?.name || 'adversarul'} să își termine runda...`
+                : `Waiting for ${opponentState?.name || 'opponent'} to place cards...`}
+            </h3>
           </div>
-          <p className="text-[10px] sm:text-[11px] font-cinzel text-gray-400">
+
+          <p className="text-xs font-barlow text-gray-300 max-w-md mx-auto">
             {opponentState?.handLocked
-              ? 'Ambii jucători sunt gata! Se calculează rezultatul...'
-              : `Așteptăm ca ${opponentState?.name || 'adversarul'} să își termine runda...`}
+              ? language === 'ro'
+                ? 'Se sincronizează datele și se inițiază următoarea etapă a mâinii.'
+                : 'Synchronizing data and initiating the next stage of the hand.'
+              : language === 'ro'
+              ? `Plasările tale pentru runda #${roomState.currentRoundInHand} sunt securizate pe tablă. Runda următoare va începe automat doar după ce ${opponentState?.name || 'adversarul'} confirmă.`
+              : `Your card placements for round #${roomState.currentRoundInHand} are locked on the board. The next round will start only after ${opponentState?.name || 'opponent'} confirms.`}
           </p>
+
+          <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto text-xs font-cinzel pt-1">
+            <div className="bg-emerald-950/70 border border-emerald-500/60 p-2 rounded-xl flex items-center justify-center gap-1.5 text-emerald-300 font-bold">
+              <span>✓</span>
+              <span>{myState?.name} (Tu): Gata</span>
+            </div>
+            <div className={`p-2 rounded-xl flex items-center justify-center gap-1.5 font-bold transition-all ${
+              opponentState?.handLocked
+                ? 'bg-emerald-950/70 border border-emerald-500/60 text-emerald-300'
+                : 'bg-amber-950/60 border border-amber-500/50 text-amber-300 animate-pulse'
+            }`}>
+              <span>{opponentState?.handLocked ? '✓' : '⏳'}</span>
+              <span>{opponentState?.name}: {opponentState?.handLocked ? 'Gata' : 'Plasează...'}</span>
+            </div>
+          </div>
         </div>
       )}
 

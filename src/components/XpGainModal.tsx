@@ -228,7 +228,7 @@ export const XpGainModal: React.FC<XpGainModalProps> = ({
                   {isRo ? 'Bonus Avansare' : 'Level-Up Bonus'}
                 </div>
                 <div className="text-base font-cinzel font-black text-[#ffd700]">
-                  +20 🍺🪙
+                  +20 🪙
                 </div>
               </div>
 
@@ -237,7 +237,7 @@ export const XpGainModal: React.FC<XpGainModalProps> = ({
                   {isRo ? 'Sold Tezaur' : 'Total Treasury'}
                 </div>
                 <div className="text-base font-cinzel font-black text-amber-300">
-                  {breakdown.newDrunkenCoins.toLocaleString()} 🍺🪙
+                  {breakdown.newDrunkenCoins.toLocaleString()} 🪙
                 </div>
               </div>
             </div>
@@ -345,13 +345,13 @@ export const XpGainModal: React.FC<XpGainModalProps> = ({
               {/* Drunken Coins Gained Box */}
               <div className="py-2 px-3 bg-gradient-to-br from-[#2a1c0d] to-[#180e05] border border-amber-500/50 rounded-2xl text-center shadow-inner relative overflow-hidden">
                 <div className="text-[10px] font-barlow uppercase tracking-wider text-amber-300 font-bold flex items-center justify-center gap-1">
-                  <span>🍺🪙</span> {isRo ? 'Bănuți Turmentați' : 'Drunken Coins'}
+                  <span>🪙</span> {isRo ? 'Bănuți Turmentați' : 'Drunken Coins'}
                 </div>
                 <div className="text-2xl sm:text-3xl font-cinzel font-black text-amber-300 gold-text-glow mt-0.5">
                   +{animatedCoins} <span className="text-xs font-bebas text-yellow-500">🪙</span>
                 </div>
                 <div className="text-[9px] text-amber-400/80 mt-0.5">
-                  Tezaur: {breakdown.newDrunkenCoins.toLocaleString()} 🍺🪙
+                  Tezaur: {breakdown.newDrunkenCoins.toLocaleString()} 🪙
                 </div>
               </div>
             </div>
@@ -460,7 +460,7 @@ export const XpGainModal: React.FC<XpGainModalProps> = ({
               {/* Drunken Coins detailed breakdown */}
               <div className="mt-2 pt-2 border-t border-[#261a0f] space-y-1">
                 <div className="text-[10px] font-cinzel font-bold text-amber-400/90 uppercase tracking-wider">
-                  🍺🪙 {isRo ? 'Bănuți Turmentați Primiți:' : 'Drunken Coins Earned:'}
+                  🪙 {isRo ? 'Bănuți Turmentați Primiți:' : 'Drunken Coins Earned:'}
                 </div>
                 {breakdown.coinsBreakdown.map((c, idx) => (
                   <div key={idx} className="flex justify-between items-center text-[11px] text-stone-400 px-1">

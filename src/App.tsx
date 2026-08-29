@@ -417,8 +417,8 @@ function MainAppContent() {
       {/* Dynamic Themed Visual Background */}
       <ThemeBackground theme={theme} />
 
-      {/* Persistent Navigation Header Bar with notch safe-area support */}
-      {currentScreen !== 'pineapple' && (
+      {/* Persistent Navigation Header Bar with notch safe-area support (hidden in boardgame and pineapple to maximize screen space) */}
+      {currentScreen !== 'pineapple' && currentScreen !== 'boardgame' && (
         <header className="w-full bg-[#161616]/85 border-b border-[#2a2a2a] backdrop-blur-md sticky top-0 z-40 px-3 sm:px-4 py-2 safe-top-padding flex items-center justify-between shadow-md">
           <button
             onClick={handleHomeClick}
@@ -454,7 +454,7 @@ function MainAppContent() {
               className="py-1.5 px-2.5 sm:px-3 rounded-xl bg-gradient-to-r from-amber-950 via-[#261509] to-[#1a0e05] border border-[#ffd700]/70 text-xs font-cinzel font-bold text-[#ffd700] hover:brightness-125 flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
               title={language === 'ro' ? 'Bazarul Călugăresc & Tezaur Total (Bănuți Turmentați)' : 'Monastic Bazaar & Total Treasury (Drunken Coins)'}
             >
-              <span className="text-sm">🍺🪙</span>
+              <span className="text-sm">🪙</span>
               <span className="font-mono font-bold text-[#ffd700]">
                 {drunkenCoins.toLocaleString()}
               </span>

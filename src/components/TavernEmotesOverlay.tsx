@@ -84,8 +84,8 @@ export const TavernEmotesOverlay: React.FC<TavernEmotesOverlayProps> = ({
       } else {
         alert(
           isRo
-            ? `Ai nevoie de ${def.cost} 🍺🪙 pentru a debloca acest emoticon din Bazar!`
-            : `You need ${def.cost} 🍺🪙 to unlock this emote from the Monastic Bazaar!`
+            ? `Ai nevoie de ${def.cost} 🪙 pentru a debloca acest emoticon din Bazar!`
+            : `You need ${def.cost} 🪙 to unlock this emote from the Monastic Bazaar!`
         );
         return;
       }
@@ -176,7 +176,7 @@ export const TavernEmotesOverlay: React.FC<TavernEmotesOverlayProps> = ({
                   <span>{isRo ? 'Reacții Rapide de Tavernă' : 'Tavern Quick Emotes'}</span>
                 </span>
                 <span className="text-[10px] text-amber-400/80 font-mono">
-                  {drunkenCoins} 🍺🪙
+                  {drunkenCoins} 🪙
                 </span>
               </div>
 
@@ -222,7 +222,7 @@ export const TavernEmotesOverlay: React.FC<TavernEmotesOverlayProps> = ({
                         >
                           <span>🔒</span>
                           <span>{emote.cost}</span>
-                          <span>🍺🪙</span>
+                          <span>🪙</span>
                         </span>
                       )}
                     </button>

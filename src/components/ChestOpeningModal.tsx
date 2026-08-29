@@ -106,8 +106,8 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
     if (drunkenCoins < selectedChest.cost) {
       setErrorMsg(
         isRo
-          ? `❌ Fonduri insuficiente! Ai nevoie de ${selectedChest.cost} 🍺🪙 (ai doar ${drunkenCoins} 🍺🪙).`
-          : `❌ Insufficient coins! You need ${selectedChest.cost} 🍺🪙 (you have ${drunkenCoins} 🍺🪙).`
+          ? `❌ Fonduri insuficiente! Ai nevoie de ${selectedChest.cost} 🪙 (ai doar ${drunkenCoins} 🪙).`
+          : `❌ Insufficient coins! You need ${selectedChest.cost} 🪙 (you have ${drunkenCoins} 🪙).`
       );
       return;
     }
@@ -301,7 +301,7 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
               <h2 className="text-sm sm:text-xl font-cinzel font-black text-[#ffd700] tracking-wider flex items-center gap-2 truncate">
                 <span>{isRo ? selectedChest.nameRo : selectedChest.nameEn}</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono border border-amber-500/40 flex-shrink-0">
-                  {selectedChest.cost} 🍺🪙
+                  {selectedChest.cost} 🪙
                 </span>
               </h2>
               <p className="text-xs text-gray-400 font-barlow hidden sm:block truncate">
@@ -317,7 +317,7 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
             <button
               onClick={() => addDrunkenCoins(999999)}
               className="bg-gradient-to-r from-yellow-500 via-amber-400 to-yellow-600 hover:brightness-125 active:scale-95 text-black font-cinzel font-black text-[10px] sm:text-xs px-2.5 py-1 rounded-xl border border-yellow-200 shadow-[0_0_12px_rgba(234,179,8,0.4)] transition-all flex items-center gap-1 cursor-pointer"
-              title={isRo ? '+999,999 🍺🪙 Bani Infiniți' : '+999,999 🍺🪙 Infinite Coins'}
+              title={isRo ? '+999,999 🪙 Bani Infiniți' : '+999,999 🪙 Infinite Coins'}
             >
               <span>⚡</span>
               <span>+999k 🪙</span>
@@ -325,7 +325,7 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
 
             {/* Treasury Balance */}
             <div className="bg-[#0b0704] border border-[#ffd700]/40 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-2 shadow-inner">
-              <span className="text-sm">🍺🪙</span>
+              <span className="text-sm">🪙</span>
               <span className="font-mono font-black text-xs sm:text-sm text-[#ffd700]">{drunkenCoins.toLocaleString()}</span>
             </div>
 
@@ -343,26 +343,37 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
 
         {/* Chest Selector Tabs (When Idle) */}
         {phase === 'idle' && (
-          <div className="grid grid-cols-3 gap-2 py-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 py-3">
             {CHESTS_CATALOG.map((chest) => {
               const isSelected = selectedChest.id === chest.id;
+              const isHighTier = chest.isHighTierOnly;
+
               return (
                 <button
                   key={chest.id}
                   onClick={() => setSelectedChest(chest)}
-                  className={`p-2.5 rounded-2xl border transition-all flex flex-col items-center gap-1.5 relative overflow-hidden ${
+                  className={`p-2.5 rounded-2xl border transition-all flex flex-col items-center gap-1.5 relative overflow-hidden text-left ${
                     isSelected
-                      ? 'border-[#ffd700] bg-[#2a1a0b] shadow-[0_0_20px_rgba(255,215,0,0.35)] scale-[1.02]'
+                      ? isHighTier
+                        ? 'border-[#ffd700] bg-gradient-to-b from-[#3d2906] to-[#1f1402] shadow-[0_0_25px_rgba(255,215,0,0.5)] scale-[1.03] ring-2 ring-[#ffd700]'
+                        : 'border-[#ffd700] bg-[#2a1a0b] shadow-[0_0_20px_rgba(255,215,0,0.35)] scale-[1.02]'
+                      : isHighTier
+                      ? 'border-yellow-700/60 bg-[#1c1303] text-amber-200 hover:border-[#ffd700]'
                       : 'border-stone-800 bg-[#120b06] text-gray-400 hover:border-stone-600'
                   }`}
                 >
+                  {isHighTier && (
+                    <span className="absolute top-1 right-1 text-[8px] font-cinzel font-black uppercase px-1.5 py-0.5 rounded-full bg-gradient-to-r from-yellow-500 to-amber-600 text-black shadow">
+                      HIGH-TIER
+                    </span>
+                  )}
                   <span className="text-2xl sm:text-3xl">{chest.icon}</span>
-                  <div className="text-center">
-                    <div className="text-xs font-cinzel font-bold text-[#ffd700] leading-tight">
+                  <div className="text-center w-full">
+                    <div className="text-xs font-cinzel font-bold text-[#ffd700] leading-tight truncate">
                       {isRo ? chest.nameRo : chest.nameEn}
                     </div>
-                    <div className="text-[10px] font-mono text-amber-300/80 mt-0.5">
-                      {chest.cost} 🍺🪙
+                    <div className="text-[10px] font-mono text-amber-300/90 mt-0.5 font-bold">
+                      {chest.cost} 🪙
                     </div>
                   </div>
                 </button>
@@ -544,8 +555,8 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
                   <span>♻️</span>
                   <span>
                     {isRo
-                      ? `Obiect duplicat deținut deja! Ai primit o rambursare de +${openResult.refundAmount} 🍺🪙!`
-                      : `Duplicate item already owned! You received a refund of +${openResult.refundAmount} 🍺🪙!`}
+                      ? `Obiect duplicat deținut deja! Ai primit o rambursare de +${openResult.refundAmount} 🪙!`
+                      : `Duplicate item already owned! You received a refund of +${openResult.refundAmount} 🪙!`}
                   </span>
                 </div>
               )}
@@ -583,8 +594,8 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
                   <RotateCcw className="w-4 h-4" />
                   <span>
                     {isRo
-                      ? `Deschide din nou (${selectedChest.cost} 🍺🪙)`
-                      : `Open again (${selectedChest.cost} 🍺🪙)`}
+                      ? `Deschide din nou (${selectedChest.cost} 🪙)`
+                      : `Open again (${selectedChest.cost} 🪙)`}
                   </span>
                 </button>
 
@@ -620,15 +631,29 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
             {/* CS Rarity Chances Pill Bar */}
             <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-cinzel">
               <span className="text-gray-400 mr-1">{isRo ? 'Șanse:' : 'Odds:'}</span>
-              {Object.values(RARITY_DEFINITIONS).map((r) => (
-                <span
-                  key={r.rarity}
-                  style={{ color: r.color, borderColor: r.color }}
-                  className="px-2 py-0.5 rounded-md bg-black/60 border font-bold"
-                >
-                  {isRo ? r.nameRo : r.nameEn}: {r.dropChance}%
-                </span>
-              ))}
+              {selectedChest.isHighTierOnly ? (
+                <>
+                  <span className="px-2 py-0.5 rounded-md bg-purple-950/80 border border-purple-500 text-purple-300 font-bold">
+                    {isRo ? 'Clasificat' : 'Classified'}: 60%
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-red-950/80 border border-red-500 text-red-400 font-bold">
+                    {isRo ? 'Secret' : 'Covert'}: 30%
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-yellow-950/80 border border-[#ffd700] text-[#ffd700] font-black shadow-[0_0_8px_rgba(255,215,0,0.5)]">
+                    {isRo ? '★ Rar Special ★' : '★ Rare Special ★'}: 10%
+                  </span>
+                </>
+              ) : (
+                Object.values(RARITY_DEFINITIONS).map((r) => (
+                  <span
+                    key={r.rarity}
+                    style={{ color: r.color, borderColor: r.color }}
+                    className="px-2 py-0.5 rounded-md bg-black/60 border font-bold"
+                  >
+                    {isRo ? r.nameRo : r.nameEn}: {r.dropChance}%
+                  </span>
+                ))
+              )}
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -649,8 +674,8 @@ export const ChestOpeningModal: React.FC<ChestOpeningModalProps> = ({
                 <Gift className="w-5 h-5" />
                 <span>
                   {isRo
-                    ? `Deschide Cufărul (${selectedChest.cost} 🍺🪙)`
-                    : `Open Chest (${selectedChest.cost} 🍺🪙)`}
+                    ? `Deschide Cufărul (${selectedChest.cost} 🪙)`
+                    : `Open Chest (${selectedChest.cost} 🪙)`}
                 </span>
               </button>
             </div>

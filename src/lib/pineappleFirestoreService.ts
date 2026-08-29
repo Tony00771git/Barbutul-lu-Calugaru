@@ -340,6 +340,7 @@ export async function startPineappleMatch(code: string): Promise<void> {
         currentHandCards: dealtCards,
         discarded: [],
         handLocked: false,
+        roundReady: false,
         isReadyNextHand: false,
       };
     });
@@ -393,8 +394,8 @@ export async function updatePineapplePlayerBoard(
 }
 
 /**
- * Locks the current round for the player.
- * If both players have locked, advances to next round OR triggers scoring!
+ * Locks the current round for the player with strict two-player barrier.
+ * Advancement to the next round ONLY occurs when BOTH players have confirmed their placement (roundReady: true).
  */
 export async function lockPineapplePlayerHand(
   code: string,
@@ -402,38 +403,51 @@ export async function lockPineapplePlayerHand(
   board: PineappleBoard,
   discarded: PlayingCard[]
 ): Promise<void> {
-  const roomRef = doc(db, 'pineapple_rooms', code);
+  const roomRef = doc(db, 'pineapple_rooms', code.trim().toUpperCase());
 
   await runTransaction(db, async transaction => {
     const snap = await transaction.get(roomRef);
     if (!snap.exists()) return;
     const data = snap.data() as PineappleRoomState;
 
+    if (data.status !== 'in_hand') return;
+
     const pIdx = data.players.findIndex(p => p.id === playerId);
     if (pIdx === -1) return;
 
+    // 1. Mark this player's round as locked and ready
     data.players[pIdx].board = board;
     data.players[pIdx].currentHandCards = [];
     data.players[pIdx].discarded = discarded;
     data.players[pIdx].handLocked = true;
+    data.players[pIdx].roundReady = true;
 
-    // Check if the other player is already locked (or if bot needs to auto-lock)
+    // 2. Check if the other player is an AI Bot and needs to place its cards
     const otherIdx = pIdx === 0 ? 1 : 0;
     const otherPlayer = data.players[otherIdx];
 
-    // If other player is a Bot and not locked, auto-play bot move!
     if (otherPlayer?.isBot && !otherPlayer.handLocked) {
       const botMove = executeBotPlacement(otherPlayer, data.currentRoundInHand, data.players[pIdx]);
       data.players[otherIdx].board = botMove.board;
       data.players[otherIdx].currentHandCards = [];
       data.players[otherIdx].discarded = botMove.discarded;
       data.players[otherIdx].handLocked = true;
+      data.players[otherIdx].roundReady = true;
     }
 
-    const allLocked = data.players.every(p => p.handLocked);
+    // 3. Check barrier: BOTH players must be roundReady for the round to advance!
+    const isPlayerReady = (p: PineapplePlayerState) => {
+      if (p.inFantasyLand) {
+        const totalPlaced = (p.board?.top?.length || 0) + (p.board?.middle?.length || 0) + (p.board?.bottom?.length || 0);
+        return p.handLocked || totalPlaced === 13;
+      }
+      return p.roundReady === true && p.handLocked === true;
+    };
 
-    if (!allLocked) {
-      // Just save this player's lock
+    const allReady = data.players.length === 2 && data.players.every(isPlayerReady);
+
+    if (!allReady) {
+      // Barrier NOT reached: only save this player's lock. Do NOT advance round or deal cards!
       transaction.update(roomRef, {
         players: data.players,
         updatedAt: serverTimestamp(),
@@ -441,152 +455,148 @@ export async function lockPineapplePlayerHand(
       return;
     }
 
-    // Both players have locked their hand for the current round!
-    // Advance rounds / execute bot turns until human input is required or hand is complete
+    // 4. Barrier reached! Both players confirmed current round.
     let deckCopy = [...data.deck];
 
-    while (true) {
-      const p0Count =
-        data.players[0].board.top.length +
-        data.players[0].board.middle.length +
-        data.players[0].board.bottom.length;
-      const p1Count =
-        data.players[1].board.top.length +
-        data.players[1].board.middle.length +
-        data.players[1].board.bottom.length;
+    const p0Count =
+      data.players[0].board.top.length +
+      data.players[0].board.middle.length +
+      data.players[0].board.bottom.length;
+    const p1Count =
+      data.players[1].board.top.length +
+      data.players[1].board.middle.length +
+      data.players[1].board.bottom.length;
 
-      const handComplete = p0Count === 13 && p1Count === 13;
+    const handComplete = p0Count === 13 && p1Count === 13;
 
-      if (handComplete) {
-        // SCORING PHASE!
-        const handResult = calculatePineappleHandScore(
-          data.currentHand,
-          data.players[0],
-          data.players[1],
-          data.settings
-        );
+    if (handComplete) {
+      // SCORING PHASE!
+      const handResult = calculatePineappleHandScore(
+        data.currentHand,
+        data.players[0],
+        data.players[1],
+        data.settings
+      );
 
-        // Accumulate sips and points
-        data.players[0].sipsAccumulated += handResult.sipsAddedA;
-        data.players[1].sipsAccumulated += handResult.sipsAddedB;
-        data.players[0].pointsAccumulated = (data.players[0].pointsAccumulated || 0) + (handResult.grossPointsA || 0);
-        data.players[1].pointsAccumulated = (data.players[1].pointsAccumulated || 0) + (handResult.grossPointsB || 0);
+      // Accumulate sips and points
+      data.players[0].sipsAccumulated += handResult.sipsAddedA;
+      data.players[1].sipsAccumulated += handResult.sipsAddedB;
+      data.players[0].pointsAccumulated = (data.players[0].pointsAccumulated || 0) + (handResult.grossPointsA || 0);
+      data.players[1].pointsAccumulated = (data.players[1].pointsAccumulated || 0) + (handResult.grossPointsB || 0);
 
-        // Check Fantasy Land triggers for next hand
-        const foulAData = checkIsFoul(
-          data.players[0].board.top,
-          data.players[0].board.middle,
-          data.players[0].board.bottom
-        );
-        const foulBData = checkIsFoul(
-          data.players[1].board.top,
-          data.players[1].board.middle,
-          data.players[1].board.bottom
-        );
+      // Check Fantasy Land triggers for next hand
+      const foulAData = checkIsFoul(
+        data.players[0].board.top,
+        data.players[0].board.middle,
+        data.players[0].board.bottom
+      );
+      const foulBData = checkIsFoul(
+        data.players[1].board.top,
+        data.players[1].board.middle,
+        data.players[1].board.bottom
+      );
 
-        const flTriggerA = checkFantasyLandTriggers(
-          foulAData.isFoul,
-          data.players[0].inFantasyLand,
-          foulAData.topEval,
-          foulAData.middleEval,
-          foulAData.bottomEval
-        );
+      const flTriggerA = checkFantasyLandTriggers(
+        foulAData.isFoul,
+        data.players[0].inFantasyLand,
+        foulAData.topEval,
+        foulAData.middleEval,
+        foulAData.bottomEval
+      );
 
-        const flTriggerB = checkFantasyLandTriggers(
-          foulBData.isFoul,
-          data.players[1].inFantasyLand,
-          foulBData.topEval,
-          foulBData.middleEval,
-          foulBData.bottomEval
-        );
+      const flTriggerB = checkFantasyLandTriggers(
+        foulBData.isFoul,
+        data.players[1].inFantasyLand,
+        foulBData.topEval,
+        foulBData.middleEval,
+        foulBData.bottomEval
+      );
 
-        data.players[0].qualifiesNextFantasyLand = flTriggerA.qualifies;
-        data.players[1].qualifiesNextFantasyLand = flTriggerB.qualifies;
+      data.players[0].qualifiesNextFantasyLand = flTriggerA.qualifies;
+      data.players[1].qualifiesNextFantasyLand = flTriggerB.qualifies;
 
-        // Check Game Over threshold
-        const threshold = data.settings.sipsToEndGame || 30;
-        const p0Over = data.players[0].sipsAccumulated >= threshold;
-        const p1Over = data.players[1].sipsAccumulated >= threshold;
+      // Check Game Over threshold
+      const threshold = data.settings.sipsToEndGame || 30;
+      const p0Over = data.players[0].sipsAccumulated >= threshold;
+      const p1Over = data.players[1].sipsAccumulated >= threshold;
 
-        let isFinished = false;
-        let winnerId: string | null = null;
-        let loserId: string | null = null;
+      let isFinished = false;
+      let winnerId: string | null = null;
+      let loserId: string | null = null;
 
-        if (p0Over || p1Over) {
-          isFinished = true;
-          if (p0Over && !p1Over) {
+      if (p0Over || p1Over) {
+        isFinished = true;
+        if (p0Over && !p1Over) {
+          loserId = data.players[0].id;
+          winnerId = data.players[1].id;
+        } else if (p1Over && !p0Over) {
+          loserId = data.players[1].id;
+          winnerId = data.players[0].id;
+        } else {
+          // If both hit threshold, the one with more sips loses
+          if (data.players[0].sipsAccumulated > data.players[1].sipsAccumulated) {
             loserId = data.players[0].id;
             winnerId = data.players[1].id;
-          } else if (p1Over && !p0Over) {
+          } else {
             loserId = data.players[1].id;
             winnerId = data.players[0].id;
-          } else {
-            // If both hit threshold, the one with more sips loses
-            if (data.players[0].sipsAccumulated > data.players[1].sipsAccumulated) {
-              loserId = data.players[0].id;
-              winnerId = data.players[1].id;
-            } else {
-              loserId = data.players[1].id;
-              winnerId = data.players[0].id;
-            }
           }
         }
-
-        transaction.update(roomRef, {
-          status: isFinished ? 'finished' : 'hand_scoring',
-          players: data.players,
-          lastHandResult: handResult,
-          winnerId,
-          loserId,
-          updatedAt: serverTimestamp(),
-        });
-        return;
       }
 
-      // ADVANCE TO NEXT ROUND (Deal 3 cards to non-Fantasy Land players)
-      data.currentRoundInHand += 1;
-
-      data.players.forEach(p => {
-        if (p.inFantasyLand) {
-          p.handLocked = true;
-          p.currentHandCards = [];
-        } else {
-          p.handLocked = false;
-          const dealt = deckCopy.slice(0, 3);
-          deckCopy = deckCopy.slice(3);
-          p.currentHandCards = dealt;
-        }
-      });
-
-      // Check if an unlocked bot can play immediately (e.g. if other player is in Fantasy Land or already locked)
-      const unlockedBotIdx = data.players.findIndex(p => p.isBot && !p.handLocked);
-      if (unlockedBotIdx !== -1) {
-        const otherPlayerIdx = unlockedBotIdx === 0 ? 1 : 0;
-        if (data.players[otherPlayerIdx].handLocked) {
-          const botPlayer = data.players[unlockedBotIdx];
-          const botMove = executeBotPlacement(
-            botPlayer,
-            data.currentRoundInHand,
-            data.players[otherPlayerIdx]
-          );
-          data.players[unlockedBotIdx].board = botMove.board;
-          data.players[unlockedBotIdx].currentHandCards = [];
-          data.players[unlockedBotIdx].discarded = botMove.discarded;
-          data.players[unlockedBotIdx].handLocked = true;
-          // Continue loop to evaluate if all 13 cards are placed or if next round is needed
-          continue;
-        }
-      }
-
-      // Waiting for human player to act in the new round
       transaction.update(roomRef, {
-        currentRoundInHand: data.currentRoundInHand,
+        status: isFinished ? 'finished' : 'hand_scoring',
         players: data.players,
-        deck: deckCopy,
+        lastHandResult: handResult,
+        winnerId,
+        loserId,
         updatedAt: serverTimestamp(),
       });
       return;
     }
+
+    // ADVANCE TO NEXT ROUND (Deal 3 cards to non-Fantasy Land players)
+    data.currentRoundInHand += 1;
+
+    data.players.forEach(p => {
+      if (p.inFantasyLand) {
+        p.handLocked = true;
+        p.roundReady = true;
+        p.currentHandCards = [];
+      } else {
+        p.handLocked = false;
+        p.roundReady = false;
+        const dealt = deckCopy.slice(0, 3);
+        deckCopy = deckCopy.slice(3);
+        p.currentHandCards = dealt;
+      }
+    });
+
+    // If there is an unlocked bot and the other player is in Fantasy Land (meaning human doesn't need to place in round 2..5), bot can place
+    const unlockedBotIdx = data.players.findIndex(p => p.isBot && !p.handLocked);
+    if (unlockedBotIdx !== -1) {
+      const otherPlayerIdx = unlockedBotIdx === 0 ? 1 : 0;
+      if (data.players[otherPlayerIdx].inFantasyLand) {
+        const botPlayer = data.players[unlockedBotIdx];
+        const botMove = executeBotPlacement(
+          botPlayer,
+          data.currentRoundInHand,
+          data.players[otherPlayerIdx]
+        );
+        data.players[unlockedBotIdx].board = botMove.board;
+        data.players[unlockedBotIdx].currentHandCards = [];
+        data.players[unlockedBotIdx].discarded = botMove.discarded;
+        data.players[unlockedBotIdx].handLocked = true;
+        data.players[unlockedBotIdx].roundReady = true;
+      }
+    }
+
+    transaction.update(roomRef, {
+      currentRoundInHand: data.currentRoundInHand,
+      players: data.players,
+      deck: deckCopy,
+      updatedAt: serverTimestamp(),
+    });
   });
 }
 
@@ -626,6 +636,7 @@ export async function startNextPineappleHand(code: string): Promise<void> {
         currentHandCards: dealt,
         discarded: [],
         handLocked: false,
+        roundReady: false,
         isReadyNextHand: false,
       };
     });
@@ -735,48 +746,6 @@ export async function sendPineappleEmote(code: string, emote: TavernEmoteMessage
     });
   } catch (e) {
     console.warn('[Pineapple] Error sending emote:', e);
-  }
-}
-
-/**
- * Auto-plays default safe moves if player times out (15s AFK shield).
- */
-export async function autoPlayPineappleTimeout(code: string, playerId: string): Promise<void> {
-  const roomRef = doc(db, 'pineapple_rooms', code.trim().toUpperCase());
-  try {
-    const snap = await getDoc(roomRef);
-    if (!snap.exists()) return;
-    const data = snap.data() as PineappleRoomState;
-    if (data.status !== 'in_hand') return;
-
-    const player = data.players.find(p => p.id === playerId);
-    if (!player || player.handLocked || !player.currentHandCards || player.currentHandCards.length === 0) return;
-
-    const board: PineappleBoard = {
-      top: [...player.board.top],
-      middle: [...player.board.middle],
-      bottom: [...player.board.bottom],
-    };
-    const hand = [...player.currentHandCards];
-    const discarded = [...(player.discarded || [])];
-
-    // Safely place cards on available slots
-    while (hand.length > 0) {
-      const card = hand.shift()!;
-      if (board.bottom.length < 5) {
-        board.bottom.push(card);
-      } else if (board.middle.length < 5) {
-        board.middle.push(card);
-      } else if (board.top.length < 3) {
-        board.top.push(card);
-      } else {
-        discarded.push(card);
-      }
-    }
-
-    await lockPineapplePlayerHand(code, playerId, board, discarded);
-  } catch (e) {
-    console.warn('[Pineapple] Error in autoPlayPineappleTimeout:', e);
   }
 }
 

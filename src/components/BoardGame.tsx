@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Player, BoardTile, MonkState } from '../types';
-import { boardTilesData } from '../data/boardTiles';
+import { Player, BoardTile, MonkState, PropertyGroup, TradeAsset } from '../types';
+import { boardTilesData, PROPERTY_GROUPS, calculateUpgradedValues } from '../data/boardTiles';
 import { mysteryCards, riskCards, GameCardDef } from '../data/cards';
 import { triviaQuestions } from '../i18n/translations';
 import { useApp, generateUniqueId } from '../context/AppContext';
@@ -19,6 +19,9 @@ import {
   MerchantModal,
   SelectPlayerModal,
   TurnEndDrinkModal,
+  UpgradeBuildingsModal,
+  TradeAuctionModal,
+  MonkDiceDuelModal,
 } from './Popups';
 import { ScoreModal } from './ScoreModal';
 import { AvatarDisplay } from './AvatarDisplay';
@@ -91,11 +94,22 @@ export const BoardGame: React.FC<BoardGameProps> = ({
   const [showSlotModal, setShowSlotModal] = useState<boolean>(false);
   const [showTwoTruthsModal, setShowTwoTruthsModal] = useState<boolean>(false);
   const [showMerchantModal, setShowMerchantModal] = useState<boolean>(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState<boolean>(false);
+  const [showTradeModal, setShowTradeModal] = useState<boolean>(false);
+  const [showDiceDuelModal, setShowDiceDuelModal] = useState<boolean>(false);
+  const [focusMyProperties, setFocusMyProperties] = useState<boolean>(false);
   const [selectPlayerPrompt, setSelectPlayerPrompt] = useState<{ title: string; sipsToGive: number } | null>(null);
   const [showGiveUpConfirm, setShowGiveUpConfirm] = useState<boolean>(false);
   const [showInventoryDrawer, setShowInventoryDrawer] = useState<boolean>(false);
 
   const activePlayer = players[activePlayerIndex];
+
+  // Check if active player owns any complete color group to enable upgrades
+  const playerOwnedCompleteGroups = (Object.keys(PROPERTY_GROUPS) as PropertyGroup[]).filter(gKey => {
+    const meta = PROPERTY_GROUPS[gKey];
+    return meta.tileIndices.every(idx => activePlayer.properties.includes(idx));
+  });
+  const canUpgradeBuildings = playerOwnedCompleteGroups.length > 0;
 
   // Helper to add to action logs
   const addLog = (text: string, type: ActionLogEntry['type'] = 'drink') => {
@@ -106,6 +120,162 @@ export const BoardGame: React.FC<BoardGameProps> = ({
   // Map tile owner
   const getOwnerOfTile = (tileIndex: number): Player | undefined => {
     return players.find(p => p.properties.includes(tileIndex));
+  };
+
+  // Upgrade building level on a property tile
+  const handleUpgradeTile = (tileIndex: number, cost: number) => {
+    if (activePlayer.gold < cost) return;
+
+    const targetTile = tiles[tileIndex];
+    const nextLevel = ((targetTile.buildingLevel || 0) + 1) as 1 | 2;
+    const basePrice = targetTile.basePrice || targetTile.price || 10;
+    const baseSips = targetTile.baseSipsCount || targetTile.sipsCount || 4;
+    const upgradedVals = calculateUpgradedValues(basePrice, baseSips, nextLevel);
+
+    // Deduct gold from active player
+    setPlayers(prev => prev.map((p, idx) => {
+      if (idx === activePlayerIndex) {
+        return {
+          ...p,
+          gold: p.gold - cost,
+        };
+      }
+      return p;
+    }));
+
+    // Update tile in tiles state
+    setTiles(prev => prev.map(t => {
+      if (t.index === tileIndex) {
+        return {
+          ...t,
+          buildingLevel: nextLevel,
+          sipsCount: upgradedVals.sipsCount,
+          isGroapa: upgradedVals.isGroapa,
+          type: upgradedVals.isGroapa ? 'chug' : t.type,
+        };
+      }
+      return t;
+    }));
+
+    if (upgradedVals.isGroapa) {
+      setParticleType('chug');
+    }
+
+    const tileName = language === 'ro' ? targetTile.nameRo : targetTile.nameEn;
+    setFloatingNotification({
+      text: upgradedVals.isGroapa ? `🔥 GROAPĂ creată la ${tileName}!` : `🏗️ Clădire Nivel ${nextLevel} la ${tileName}!`,
+      color: upgradedVals.isGroapa ? 'text-red-400' : 'text-[#ffd700]',
+    });
+    setTimeout(() => setFloatingNotification(null), 3000);
+
+    addLog(
+      language === 'ro'
+        ? `${activePlayer.name} a construit Clădire Nivel ${nextLevel} la ${tileName} (${cost} 🪙)! ${upgradedVals.isGroapa ? '🔥 A DEVENIT GROAPĂ!' : `(Chirie: ${upgradedVals.sipsCount} guri)`}`
+        : `${activePlayer.name} upgraded building Level ${nextLevel} at ${tileName} (${cost} 🪙)! ${upgradedVals.isGroapa ? '🔥 BECAME A CHUG TILE!' : `(Rent: ${upgradedVals.sipsCount} sips)`}`,
+      'buy'
+    );
+  };
+
+  // Handle Trade Execution between active player (auctioneer) and a bidder
+  const handleExecuteTrade = (
+    bidderId: string,
+    auctioneerAsset: TradeAsset,
+    bidderAssets: TradeAsset[]
+  ) => {
+    const bidder = players.find(p => p.id === bidderId);
+    if (!bidder) return;
+
+    setPlayers(prev => prev.map(p => {
+      if (p.id === activePlayer.id) {
+        let nextProps = [...p.properties];
+        let nextPardons = p.pardonLetters;
+        let nextKeys = p.jailKeys;
+
+        // Deduct auctioneer asset
+        if (auctioneerAsset.type === 'property') {
+          nextProps = nextProps.filter(idx => idx !== auctioneerAsset.tileIndex);
+        } else if (auctioneerAsset.itemType === 'pardonLetter') {
+          nextPardons = Math.max(0, nextPardons - 1);
+        } else if (auctioneerAsset.itemType === 'jailKey') {
+          nextKeys = Math.max(0, nextKeys - 1);
+        }
+
+        // Add bidder assets
+        bidderAssets.forEach(a => {
+          if (a.type === 'property') {
+            if (!nextProps.includes(a.tileIndex)) nextProps.push(a.tileIndex);
+          } else if (a.itemType === 'pardonLetter') {
+            nextPardons += 1;
+          } else if (a.itemType === 'jailKey') {
+            nextKeys += 1;
+          }
+        });
+
+        return {
+          ...p,
+          properties: nextProps,
+          pardonLetters: nextPardons,
+          jailKeys: nextKeys,
+        };
+      }
+
+      if (p.id === bidderId) {
+        let nextProps = [...p.properties];
+        let nextPardons = p.pardonLetters;
+        let nextKeys = p.jailKeys;
+
+        // Deduct bidder assets
+        bidderAssets.forEach(a => {
+          if (a.type === 'property') {
+            nextProps = nextProps.filter(idx => idx !== a.tileIndex);
+          } else if (a.itemType === 'pardonLetter') {
+            nextPardons = Math.max(0, nextPardons - 1);
+          } else if (a.itemType === 'jailKey') {
+            nextKeys = Math.max(0, nextKeys - 1);
+          }
+        });
+
+        // Add auctioneer asset
+        if (auctioneerAsset.type === 'property') {
+          if (!nextProps.includes(auctioneerAsset.tileIndex)) nextProps.push(auctioneerAsset.tileIndex);
+        } else if (auctioneerAsset.itemType === 'pardonLetter') {
+          nextPardons += 1;
+        } else if (auctioneerAsset.itemType === 'jailKey') {
+          nextKeys += 1;
+        }
+
+        return {
+          ...p,
+          properties: nextProps,
+          pardonLetters: nextPardons,
+          jailKeys: nextKeys,
+        };
+      }
+
+      return p;
+    }));
+
+    setShowTradeModal(false);
+
+    setTurnResult({
+      title: language === 'ro' ? '🤝 SCHIMB EFECTUAT CU SUCCES!' : '🤝 TRADE SUCCESSFULLY COMPLETED!',
+      reason: language === 'ro'
+        ? `${activePlayer.name} a finalizat un târg cu ${bidder.name}!`
+        : `${activePlayer.name} finished a deal with ${bidder.name}!`,
+      sipsToDrink: 0,
+      isChug: false,
+      isImmune: true,
+      specialNote: language === 'ro'
+        ? `Bunurile au fost transferate cu succes între călugări.`
+        : `Assets have been transferred successfully between monks.`,
+    });
+
+    addLog(
+      language === 'ro'
+        ? `🤝 TÂRG ÎNCHEIAT: ${activePlayer.name} a făcut schimb cu ${bidder.name}!`
+        : `🤝 DEAL CLOSED: ${activePlayer.name} traded with ${bidder.name}!`,
+      'card'
+    );
   };
 
   // Advance turn to next non-given-up player
@@ -180,7 +350,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
     let passedStart = false;
 
     const moveInterval = setInterval(() => {
-      currentPos = (currentPos + 1) % 30;
+      currentPos = (currentPos + 1) % 36;
       setHoppingTileIndex(currentPos);
 
       if (currentPos === 0 && stepsLeft < totalSteps) {
@@ -200,14 +370,14 @@ export const BoardGame: React.FC<BoardGameProps> = ({
         clearInterval(moveInterval);
         setIsMoving(false);
 
-        // Process passing START bonus
+        // Process passing START bonus (+20 coins)
         if (passedStart) {
           setPlayers(prev => prev.map((p, idx) => {
-            if (idx === activePlayerIndex) return { ...p, gold: p.gold + 15 };
+            if (idx === activePlayerIndex) return { ...p, gold: p.gold + 20 };
             return p;
           }));
-          setFloatingNotification({ text: '+15 🪙 (Trecere START)', color: 'text-[#ffd700]' });
-          addLog(`${activePlayer.name} a trecut peste START (+15 Galbeni 🪙)!`, 'gold');
+          setFloatingNotification({ text: '+20 🪙 (Trecere START)', color: 'text-[#ffd700]' });
+          addLog(`${activePlayer.name} a trecut peste START (+20 Galbeni 🪙)!`, 'gold');
           setTimeout(() => setFloatingNotification(null), 2500);
         }
 
@@ -417,8 +587,17 @@ export const BoardGame: React.FC<BoardGameProps> = ({
         addLog(`🍻 TOATĂ LUMEA BEA 5 GURI! Toți cei ${players.length} jucători beau 5 guri!`, 'drink');
         break;
 
-      case 'give_sips':
-        setSelectPlayerPrompt({ title: '👉 Alege cine bea 2 guri!', sipsToGive: 2 });
+      case 'give_sips': {
+        const giveCount = tile.sipsCount || 2;
+        setSelectPlayerPrompt({
+          title: language === 'ro' ? `👉 Alege cine bea ${giveCount} guri!` : `👉 Choose who drinks ${giveCount} sips!`,
+          sipsToGive: giveCount,
+        });
+        break;
+      }
+
+      case 'dice_roll':
+        setShowDiceDuelModal(true);
         break;
 
       case 'biggest_drinker': {
@@ -444,6 +623,10 @@ export const BoardGame: React.FC<BoardGameProps> = ({
         addLog(`${highestPlayer.name} a fost desemnat cel mai băut (+2 guri)!`, 'drink');
         break;
       }
+
+      case 'trade':
+        setShowTradeModal(true);
+        break;
 
       default:
         setTurnResult({
@@ -555,12 +738,24 @@ export const BoardGame: React.FC<BoardGameProps> = ({
     }
   };
 
-  // Property Color theme mapper for Monopoly style visual groups
-  const getTileThemeColor = (idx: number) => {
-    if (idx >= 1 && idx <= 7) return { border: 'border-amber-600/70', colorBar: 'bg-amber-500', badge: 'bg-amber-800/80', text: 'text-amber-300' };
-    if (idx >= 8 && idx <= 14) return { border: 'border-sky-600/70', colorBar: 'bg-sky-500', badge: 'bg-sky-800/80', text: 'text-sky-300' };
-    if (idx >= 15 && idx <= 22) return { border: 'border-emerald-600/70', colorBar: 'bg-emerald-500', badge: 'bg-emerald-800/80', text: 'text-emerald-300' };
-    return { border: 'border-purple-600/70', colorBar: 'bg-purple-500', badge: 'bg-purple-800/80', text: 'text-purple-300' };
+  // Property Color theme mapper for the 5 Monopoly color groups
+  const getTileThemeColor = (tile: BoardTile) => {
+    if (tile.group && PROPERTY_GROUPS[tile.group]) {
+      const grp = PROPERTY_GROUPS[tile.group];
+      return {
+        border: grp.borderClass,
+        colorBar: grp.colorBarClass,
+        badge: grp.badgeClass,
+        text: grp.textClass,
+      };
+    }
+    if (tile.type === 'trade') {
+      return { border: 'border-yellow-500/80', colorBar: 'bg-yellow-500', badge: 'bg-yellow-800/80', text: 'text-yellow-300' };
+    }
+    if (tile.type === 'chug' || tile.isGroapa) {
+      return { border: 'border-red-600/80', colorBar: 'bg-red-600', badge: 'bg-red-900/80', text: 'text-red-300' };
+    }
+    return { border: 'border-stone-700/60', colorBar: 'bg-stone-600', badge: 'bg-stone-800/80', text: 'text-stone-300' };
   };
 
   // Keyboard Shortcuts for Desktop: Space/Enter = Roll / Next Turn / Confirm
@@ -601,7 +796,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
   ]);
 
   return (
-    <div className="flex flex-col items-center justify-between min-h-[92vh] px-2 py-2 max-w-3xl mx-auto relative select-none">
+    <div className="flex flex-col items-center justify-between min-h-[92vh] px-1 sm:px-2 py-1 sm:py-2 max-w-4xl mx-auto w-full relative select-none">
       <ParticleOverlay type={particleType} onComplete={() => setParticleType(null)} />
 
       {/* Floating Animated Notification for Gold / Bonus */}
@@ -626,11 +821,11 @@ export const BoardGame: React.FC<BoardGameProps> = ({
         </div>
       )}
 
-      {/* Modern Medieval Top HUD Bar */}
-      <div className="w-full bg-gradient-to-r from-[#1c1611] via-[#241c14] to-[#1c1611] border-2 border-[#e8c84a]/60 rounded-3xl p-3 shadow-2xl flex items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2.5">
+      {/* Modern Medieval Clean Top HUD Bar (Fără buton de construcții & statistici redundante) */}
+      <div className="w-full bg-gradient-to-r from-[#1c1611] via-[#241c14] to-[#1c1611] border-2 border-[#e8c84a]/60 rounded-2xl sm:rounded-3xl p-2 sm:p-2.5 shadow-2xl flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+        <div className="flex items-center gap-2 sm:gap-2.5">
           <div className="relative">
-            <div className="w-10 h-10 rounded-2xl bg-[#2e2217] border border-[#ffd700] overflow-hidden shadow-inner flex-shrink-0 animate-pulse">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#2e2217] border border-[#ffd700] overflow-hidden shadow-inner flex-shrink-0 animate-pulse">
               <AvatarDisplay avatarId={activePlayer.avatarIcon} className="w-full h-full" />
             </div>
             {activePlayer.inJail && (
@@ -638,74 +833,96 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             )}
           </div>
           <div>
-            <div className="text-[10px] text-gray-400 font-cinzel uppercase tracking-wider">{t('turnOf')}</div>
-            <div className="text-base font-cinzel font-bold text-[#ffd700] gold-text-glow flex items-center gap-1">
+            <div className="text-[9px] sm:text-[10px] text-gray-400 font-cinzel uppercase tracking-wider">{t('turnOf')}</div>
+            <div className="text-sm sm:text-base font-cinzel font-bold text-[#ffd700] gold-text-glow flex items-center gap-1">
               <span>{activePlayer.name}</span>
               {activePlayer.inJail && <span className="text-xs text-red-400 font-bold">(Închis: {activePlayer.jailTurnsLeft}t)</span>}
             </div>
           </div>
         </div>
 
-        {/* Player Inventory Badges */}
-        <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-barlow">
-          <div className="bg-[#14100b] border border-[#ffd700]/60 px-2.5 py-1.5 rounded-xl text-[#ffd700] font-bold flex items-center gap-1 shadow">
+        {/* Player Inventory Badges & Quick Property Filter */}
+        <div className="flex items-center gap-1 sm:gap-2 text-xs font-barlow">
+          <div className="bg-[#14100b] border border-[#ffd700]/60 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl text-[#ffd700] font-bold flex items-center gap-1 shadow text-xs">
             <span>🪙</span>
             <span>{activePlayer.gold}</span>
           </div>
 
-          <div className="bg-[#14100b] border border-blue-400/50 px-2 py-1.5 rounded-xl text-blue-300 font-bold flex items-center gap-1 shadow" title="Scrisori de Iertare">
+          <div className="bg-[#14100b] border border-blue-400/50 px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-xl text-blue-300 font-bold flex items-center gap-1 shadow text-xs" title="Scrisori de Iertare">
             <span>🎟️</span>
             <span>{activePlayer.pardonLetters}</span>
           </div>
 
-          <div className="bg-[#14100b] border border-emerald-400/50 px-2 py-1.5 rounded-xl text-emerald-300 font-bold flex items-center gap-1 shadow" title="Chei de Temniță">
+          <div className="bg-[#14100b] border border-emerald-400/50 px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-xl text-emerald-300 font-bold flex items-center gap-1 shadow text-xs" title="Chei de Temniță">
             <span>🔓</span>
             <span>{activePlayer.jailKeys}</span>
           </div>
 
+          {/* Property Focus Toggle (Maschează proprietățile altora / Highlight ale mele) */}
           <button
-            onClick={() => setShowInventoryDrawer(!showInventoryDrawer)}
-            className="p-1.5 rounded-xl bg-[#2b2014] border border-[#e8c84a]/40 text-[#ffd700] hover:bg-[#3d2e1c]"
-            title="Inventar & Proprietăți"
+            onClick={() => setFocusMyProperties(!focusMyProperties)}
+            className={`px-2 py-1 sm:py-1.5 rounded-xl border text-xs font-cinzel font-bold flex items-center gap-1 transition-all ${
+              focusMyProperties
+                ? 'bg-[#ffd700] text-black border-yellow-300 shadow-[0_0_10px_rgba(255,215,0,0.8)] font-black'
+                : 'bg-[#201810] border-stone-700 text-stone-400 hover:text-stone-200'
+            }`}
+            title={language === 'ro' ? 'Filtru: Evidențiază proprietățile mele & maschează pe ale altora' : 'Toggle: Highlight my properties & mask others'}
           >
-            🏰
+            <span>{focusMyProperties ? '👁️' : '🕶️'}</span>
+            <span className="hidden sm:inline">
+              {language === 'ro' ? (focusMyProperties ? 'Ale Mele' : 'Toate') : (focusMyProperties ? 'My Lands' : 'All')}
+            </span>
           </button>
         </div>
       </div>
 
-      {/* 30-Tile 9x8 Monastery Board Frame (Optimized for Android / Mobile screens) */}
-      <div className="w-full aspect-[9/8] grid grid-cols-9 grid-rows-8 gap-0.5 sm:gap-1 bg-[#0c0906] border-3 sm:border-4 border-[#3d2a19] rounded-2xl sm:rounded-3xl p-1 sm:p-1.5 shadow-[0_0_35px_rgba(0,0,0,0.9)] relative overflow-hidden">
+      {/* 36-Tile 10x10 Monastery Board Frame (Square 10x10 Grid with Max Screen Utilization on Mobile) */}
+      <div className="w-full max-w-[98vw] sm:max-w-2xl md:max-w-3xl aspect-square grid grid-cols-10 grid-rows-10 gap-0.5 sm:gap-1 bg-[#0c0906] border-2 sm:border-4 border-[#3d2a19] rounded-xl sm:rounded-3xl p-0.5 sm:p-1.5 shadow-[0_0_35px_rgba(0,0,0,0.9)] relative overflow-hidden flex-1 max-h-[75vh] sm:max-h-none">
         
         {/* Background Wood Inlay Pattern */}
         <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#e8c84a_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
 
-        {/* 30 Perimeter Tiles */}
+        {/* 36 Perimeter Tiles */}
         {tiles.map(tile => {
           const owner = getOwnerOfTile(tile.index);
           const landedPlayers = players.filter(p => !p.hasGivenUp && p.position === tile.index);
           const isLandedHere = landedPlayers.length > 0;
           const isHopping = hoppingTileIndex === tile.index;
-          const theme = getTileThemeColor(tile.index);
+          const theme = getTileThemeColor(tile);
 
-          const isCorner = tile.index === 0 || tile.index === 8 || tile.index === 15 || tile.index === 23;
+          const isCorner = tile.index === 0 || tile.index === 9 || tile.index === 18 || tile.index === 27;
+          const isMyProperty = owner && owner.id === activePlayer.id;
+          const isOtherProperty = owner && owner.id !== activePlayer.id;
+
+          // Focus highlight / mask styling
+          const focusStyle = focusMyProperties
+            ? isMyProperty
+              ? 'ring-2 sm:ring-3 ring-[#ffd700] border-[#ffd700] bg-[#3a270e] shadow-[0_0_16px_rgba(255,215,0,0.9)] scale-[1.04] z-30 brightness-125'
+              : isOtherProperty
+              ? 'opacity-20 grayscale brightness-50 contrast-50 border-stone-800 pointer-events-none'
+              : 'opacity-40 brightness-75'
+            : '';
 
           // Action label badge for non-buyable tiles
           const getActionBadge = () => {
-            if (tile.type === 'start') return <span className="text-[6.5px] sm:text-[8px] font-cinzel font-black text-emerald-400 leading-none">START</span>;
-            if (tile.type === 'treasure') return <span className="text-[6.5px] sm:text-[8px] font-cinzel font-black text-amber-300 leading-none">+🪙</span>;
-            if (tile.type === 'give_sips') return <span className="text-[6.5px] sm:text-[8px] font-cinzel font-black text-sky-300 leading-none">DĂ {tile.sipsCount || 2}</span>;
-            if (tile.type === 'mystery') return <span className="text-[7.5px] sm:text-[9px] font-cinzel font-black text-amber-300 leading-none">?</span>;
-            if (tile.type === 'risk') return <span className="text-[7.5px] sm:text-[9px] font-cinzel font-black text-orange-400 leading-none">!</span>;
-            if (tile.type === 'police') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-red-400 leading-none">TEMNIȚĂ</span>;
-            if (tile.type === 'round_house') return <span className="text-[6.5px] sm:text-[8px] font-cinzel font-black text-amber-300 leading-none">TOȚI 🍻</span>;
-            if (tile.type === 'trivia') return <span className="text-[6.5px] sm:text-[8px] font-cinzel font-black text-purple-300 leading-none">TRIVIA</span>;
-            if (tile.type === 'slot') return <span className="text-[6.5px] sm:text-[8px] font-cinzel font-black text-yellow-400 leading-none">SLOT</span>;
-            if (tile.type === 'safe') return <span className="text-[6.5px] sm:text-[8px] font-cinzel font-black text-blue-300 leading-none">SAFE</span>;
-            if (tile.type === 'biggest_drinker') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-rose-300 leading-none">TOP 🥴</span>;
-            if (tile.type === 'merchant') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-emerald-300 leading-none">TÂRG</span>;
-            if (tile.type === 'two_truths') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-indigo-300 leading-none">2T 1L</span>;
-            if (tile.type === 'skip_turn') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-red-400 leading-none">PAS</span>;
-            if (tile.type === 'drink_more') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-amber-400 leading-none">BERĂRIE</span>;
+            if (tile.type === 'start') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-emerald-400 leading-none">START</span>;
+            if (tile.type === 'treasure') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-amber-300 leading-none">+🪙</span>;
+            if (tile.type === 'give_sips') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-sky-300 leading-none">DĂ {tile.sipsCount || 2}</span>;
+            if (tile.type === 'dice_roll') return <span className="text-[5.5px] sm:text-[7px] font-cinzel font-black text-amber-400 leading-none">ZAR 🎲</span>;
+            if (tile.type === 'mystery') return <span className="text-[7px] sm:text-[8.5px] font-cinzel font-black text-amber-300 leading-none">?</span>;
+            if (tile.type === 'risk') return <span className="text-[7px] sm:text-[8.5px] font-cinzel font-black text-orange-400 leading-none">!</span>;
+            if (tile.type === 'police') return <span className="text-[5.5px] sm:text-[7px] font-cinzel font-black text-red-400 leading-none">TEMNIȚĂ</span>;
+            if (tile.type === 'round_house') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-amber-300 leading-none">TOȚI 🍻</span>;
+            if (tile.type === 'trivia') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-purple-300 leading-none">TRIVIA</span>;
+            if (tile.type === 'slot') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-yellow-400 leading-none">SLOT</span>;
+            if (tile.type === 'safe') return <span className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-blue-300 leading-none">SAFE</span>;
+            if (tile.type === 'biggest_drinker') return <span className="text-[5.5px] sm:text-[7px] font-cinzel font-black text-rose-300 leading-none">TOP 🥴</span>;
+            if (tile.type === 'merchant') return <span className="text-[5.5px] sm:text-[7px] font-cinzel font-black text-emerald-300 leading-none">TÂRG</span>;
+            if (tile.type === 'trade') return <span className="text-[5.5px] sm:text-[7px] font-cinzel font-black text-amber-300 leading-none">TRADE 🤝</span>;
+            if (tile.type === 'chug' || tile.isGroapa) return <span className="text-[5.5px] sm:text-[7px] font-cinzel font-black text-red-400 leading-none">GROAPĂ 🔥</span>;
+            if (tile.type === 'two_truths') return <span className="text-[5.5px] sm:text-[7px] font-cinzel font-black text-indigo-300 leading-none">2T 1L</span>;
+            if (tile.type === 'skip_turn') return <span className="text-[5.5px] sm:text-[7px] font-cinzel font-black text-red-400 leading-none">PAS</span>;
+            if (tile.type === 'drink_more') return <span className="text-[5.5px] sm:text-[7px] font-cinzel font-black text-amber-400 leading-none">BERĂRIE</span>;
             return null;
           };
 
@@ -715,6 +932,8 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               onClick={() => setInspectTile(tile)}
               style={{ gridRow: tile.gridRow, gridColumn: tile.gridCol }}
               className={`relative rounded-lg sm:rounded-xl border flex flex-col items-center justify-between p-0.5 sm:p-1 cursor-pointer transition-all duration-200 overflow-hidden ${
+                focusStyle ? focusStyle : ''
+              } ${
                 isHopping
                   ? 'border-[#ffd700] bg-[#3d2e16] scale-105 z-20 shadow-[0_0_15px_rgba(255,215,0,0.8)]'
                   : isLandedHere
@@ -723,8 +942,10 @@ export const BoardGame: React.FC<BoardGameProps> = ({
                   ? 'bg-gradient-to-br from-[#2b1f13] to-[#17100a] border-[#e8c84a]/80 shadow-md'
                   : owner
                   ? 'bg-gradient-to-b from-[#182618] to-[#0c140c] border-emerald-500/80 shadow-sm'
-                  : tile.type === 'chug'
+                  : tile.type === 'chug' || tile.isGroapa
                   ? 'bg-gradient-to-b from-[#2e1310] to-[#140605] border-red-600/80'
+                  : tile.type === 'trade'
+                  ? 'bg-gradient-to-b from-[#2e2310] to-[#140f06] border-yellow-500/70'
                   : tile.type === 'treasure'
                   ? 'bg-gradient-to-b from-[#2d2511] to-[#141006] border-yellow-500/60'
                   : `bg-[#15110c] ${theme.border}`
@@ -737,6 +958,17 @@ export const BoardGame: React.FC<BoardGameProps> = ({
                 <div className="w-full h-0.5" />
               )}
 
+              {/* Building Level / Upgraded House Indicators */}
+              {tile.buyable && (tile.buildingLevel || 0) > 0 && (
+                <div className="absolute top-0.5 left-0.5 flex items-center space-x-0.5 bg-black/80 px-0.5 rounded text-[7px] leading-none z-10">
+                  {tile.isGroapa ? (
+                    <span title="Upgradat la Groapă!">🔥</span>
+                  ) : (
+                    <span title={`Clădire Nivel ${tile.buildingLevel}`}>{'🏠'.repeat(tile.buildingLevel || 0)}</span>
+                  )}
+                </div>
+              )}
+
               {/* Main Tile Icon (Cleanly centered, no text cramming) */}
               <div className="flex items-center justify-center my-auto">
                 <span className="text-xs sm:text-base leading-none drop-shadow select-none transform transition-transform group-hover:scale-110">
@@ -747,9 +979,9 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               {/* Bottom Badge: Sleek Gold Price or Action Hint */}
               <div className="w-full flex items-center justify-center mb-0.5">
                 {tile.buyable ? (
-                  <div className="text-[6.5px] sm:text-[8px] font-cinzel font-black text-[#ffd700] bg-black/85 px-1 py-0.2 rounded border border-[#ffd700]/30 leading-none shadow-sm flex items-center gap-0.5">
+                  <div className="text-[6px] sm:text-[7.5px] font-cinzel font-black text-[#ffd700] bg-black/85 px-1 py-0.2 rounded border border-[#ffd700]/30 leading-none shadow-sm flex items-center gap-0.5">
                     <span>{tile.price}</span>
-                    <span className="text-[5.5px] sm:text-[7px]">🪙</span>
+                    <span className="text-[5px] sm:text-[6.5px]">🪙</span>
                   </div>
                 ) : (
                   <div className="bg-black/70 px-1 py-0.2 rounded leading-none flex items-center justify-center">
@@ -775,7 +1007,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
                   {landedPlayers.map(p => (
                     <div
                       key={p.id}
-                      className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#120f0a] border-2 border-[#ffd700] overflow-hidden shadow-[0_0_8px_rgba(255,215,0,0.6)] transform animate-bounce flex-shrink-0"
+                      className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-[#120f0a] border-2 border-[#ffd700] overflow-hidden shadow-[0_0_8px_rgba(255,215,0,0.6)] transform animate-bounce flex-shrink-0"
                       style={{ animationDuration: '1.2s' }}
                       title={p.name}
                     >
@@ -788,8 +1020,8 @@ export const BoardGame: React.FC<BoardGameProps> = ({
           );
         })}
 
-        {/* Board Center Tavern Courtyard */}
-        <div className="col-start-2 col-span-7 row-start-2 row-span-6 bg-gradient-to-b from-[#19130d]/95 via-[#140e08]/95 to-[#19130d]/95 border-2 border-[#3d2a19] rounded-2xl p-2 sm:p-2.5 flex flex-col items-center justify-between text-center backdrop-blur-md relative shadow-inner overflow-hidden">
+        {/* Board Center Tavern Courtyard (10x10 interior is 8x8) */}
+        <div className="col-start-2 col-span-8 row-start-2 row-span-8 bg-gradient-to-b from-[#19130d]/95 via-[#140e08]/95 to-[#19130d]/95 border-2 border-[#3d2a19] rounded-2xl p-2 sm:p-2.5 flex flex-col items-center justify-between text-center backdrop-blur-md relative shadow-inner overflow-hidden">
           
           {/* Top Title Banner */}
           <div className="w-full flex items-center justify-between border-b border-[#382717] pb-1">
@@ -800,7 +1032,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               </span>
             </div>
             <div className="text-[9px] sm:text-[10px] font-cinzel text-gray-400 flex items-center gap-1">
-              <span>{language === 'ro' ? '↻ 30 Chilii' : '↻ 30 Cells'}</span>
+              <span>{language === 'ro' ? '↻ 36 Chilii' : '↻ 36 Cells'}</span>
             </div>
           </div>
 
@@ -918,6 +1150,8 @@ export const BoardGame: React.FC<BoardGameProps> = ({
         <TileDetailModal
           tile={inspectTile}
           ownerName={getOwnerOfTile(inspectTile.index)?.name}
+          player={activePlayer}
+          onUpgrade={handleUpgradeTile}
           onClose={() => setInspectTile(null)}
         />
       )}
@@ -1180,15 +1414,15 @@ export const BoardGame: React.FC<BoardGameProps> = ({
         />
       )}
 
-      {/* Merchant Modal */}
+      {/* Merchant Modal (Târgul cu Scrisori & Chei) */}
       {showMerchantModal && (
         <MerchantModal
           player={activePlayer}
-          onBuy={() => {
+          onBuyPardon={() => {
             setShowMerchantModal(false);
             setPlayers(prev => prev.map((p, idx) => idx === activePlayerIndex ? { ...p, gold: p.gold - 30, pardonLetters: p.pardonLetters + 1 } : p));
             setTurnResult({
-              title: language === 'ro' ? '🧙 AFACERE CU VRĂJITORUL!' : '🧙 DEAL WITH THE WIZARD!',
+              title: language === 'ro' ? '🧙 SCRISOARE DE IERTARE CUMPĂRATĂ!' : '🧙 PARDON LETTER BOUGHT!',
               reason: language === 'ro' ? 'Ai cumpărat o Scrisoare de Iertare pentru 30 Galbeni.' : 'You purchased a Pardon Letter for 30 Gold.',
               sipsToDrink: 0,
               isChug: false,
@@ -1197,15 +1431,33 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             });
             addLog(
               language === 'ro'
-                ? `${activePlayer.name} a cumpărat o Scrisoare de Iertare 🎟️ de la Vrăjitor.`
-                : `${activePlayer.name} bought a Pardon Letter 🎟️ from the Wizard.`,
+                ? `${activePlayer.name} a cumpărat o Scrisoare de Iertare 🎟️ de la Târgul de Scrisori.`
+                : `${activePlayer.name} bought a Pardon Letter 🎟️ from the Bazaar.`,
+              'card'
+            );
+          }}
+          onBuyKey={() => {
+            setShowMerchantModal(false);
+            setPlayers(prev => prev.map((p, idx) => idx === activePlayerIndex ? { ...p, gold: p.gold - 20, jailKeys: p.jailKeys + 1 } : p));
+            setTurnResult({
+              title: language === 'ro' ? '🔓 CHEIE DE TEMNIȚĂ CUMPĂRATĂ!' : '🔓 DUNGEON KEY BOUGHT!',
+              reason: language === 'ro' ? 'Ai cumpărat o Cheie de Temniță pentru 20 Galbeni.' : 'You purchased a Dungeon Key for 20 Gold.',
+              sipsToDrink: 0,
+              isChug: false,
+              isImmune: true,
+              specialNote: language === 'ro' ? 'Ai adăugat 1 Cheie 🔓 în inventar! O poți folosi dacă ajungi la temniță.' : 'Added 1 Key 🔓 to inventory!',
+            });
+            addLog(
+              language === 'ro'
+                ? `${activePlayer.name} a cumpărat o Cheie de Temniță 🔓 de la Târgul de Scrisori.`
+                : `${activePlayer.name} bought a Dungeon Key 🔓 from the Bazaar.`,
               'card'
             );
           }}
           onDecline={() => {
             setShowMerchantModal(false);
             setTurnResult({
-              title: language === 'ro' ? '🧙 AI TRECUT DE VRĂJITOR' : '🧙 PASSED THE WIZARD',
+              title: language === 'ro' ? '🧙 AI TRECUT DE TÂRG' : '🧙 PASSED THE BAZAAR',
               reason: language === 'ro' ? 'Ai refuzat oferta negustorului.' : 'You declined the merchant offer.',
               sipsToDrink: 0,
               isChug: false,
@@ -1249,6 +1501,89 @@ export const BoardGame: React.FC<BoardGameProps> = ({
                 language === 'ro'
                   ? `${activePlayer.name} i-a păcălit pe toți la 2 Adevăruri (ceilalți beau 3 guri)!`
                   : `${activePlayer.name} fooled everyone in 2 Truths (others drink 3 sips)!`,
+                'drink'
+              );
+            }
+          }}
+        />
+      )}
+
+      {/* Monk Dice Duel Modal (Zarurile Călugărului) */}
+      {showDiceDuelModal && (
+        <MonkDiceDuelModal
+          player={activePlayer}
+          onComplete={result => {
+            setShowDiceDuelModal(false);
+
+            if (result.isDoubleSix) {
+              // 6-6: All other players drink full glass / groapă!
+              setPlayers(prev => prev.map((p, idx) => idx !== activePlayerIndex ? { ...p, chugsTotal: p.chugsTotal + 1 } : p));
+              setTurnResult({
+                title: language === 'ro' ? '🔥 DUBLĂ 6! TOȚI CEILALȚI DAU GROAPĂ!' : '🔥 DOUBLE 6! ALL OTHERS CHUG!',
+                reason: language === 'ro' ? 'Ai dat 6 - 6 la Zarurile Călugărului!' : 'You rolled 6 - 6 in the Monk Dice Duel!',
+                sipsToDrink: 0,
+                isChug: false,
+                isImmune: true,
+                specialNote: language === 'ro'
+                  ? '🔥 SENTINȚĂ SUPREMĂ! Toți ceilalți frați călugări dau tot paharul groapă la porunca ta!'
+                  : '🔥 SUPREME COMMAND! All other monks must chug their entire glass!',
+              });
+              addLog(
+                language === 'ro'
+                  ? `🔥 DUBLĂ 6! ${activePlayer.name} a dat 6-6 și toți ceilalți dau GROAPĂ!`
+                  : `🔥 DOUBLE 6! ${activePlayer.name} rolled 6-6 and all others CHUG!`,
+                'drink'
+              );
+            } else if (result.isDoubleOne) {
+              // 1-1: Active player drinks full glass / groapă!
+              setTurnResult({
+                title: language === 'ro' ? '💀 DUBLĂ 1! GROAPĂ PENTRU TINE!' : '💀 DOUBLE 1! CHUG FOR YOU!',
+                reason: language === 'ro' ? 'Ai dat 1 - 1 la Zarurile Călugărului!' : 'You rolled 1 - 1 in the Monk Dice Duel!',
+                sipsToDrink: 25,
+                isChug: true,
+                isImmune: false,
+                specialNote: language === 'ro'
+                  ? '💀 BLESTEMUL ZARURILOR! Bei tot paharul până la fund (Groapă)!'
+                  : '💀 DICE CURSE! Chug your entire glass right now!',
+              });
+              addLog(
+                language === 'ro'
+                  ? `💀 DUBLĂ 1! ${activePlayer.name} a dat 1-1 și dă GROAPĂ!`
+                  : `💀 DOUBLE 1! ${activePlayer.name} rolled 1-1 and CHUGS!`,
+                'drink'
+              );
+            } else if (result.sum < 6) {
+              // Sum < 6: Active player drinks that sum
+              setTurnResult({
+                title: language === 'ro' ? `🍺 ZARURILE CĂLUGĂRULUI (${result.sum} GURI)` : `🍺 MONK DICE (${result.sum} SIPS)`,
+                reason: language === 'ro'
+                  ? `Ai dat ${result.die1} + ${result.die2} = ${result.sum} (sub 6).`
+                  : `You rolled ${result.die1} + ${result.die2} = ${result.sum} (under 6).`,
+                sipsToDrink: result.sum,
+                isChug: false,
+                isImmune: false,
+                specialNote: language === 'ro'
+                  ? `Pedeapsă de zar: Bei tu cele ${result.sum} ${result.sum === 1 ? 'gură' : 'guri'}!`
+                  : `Dice penalty: Drink ${result.sum} ${result.sum === 1 ? 'sip' : 'sips'}!`,
+              });
+              addLog(
+                language === 'ro'
+                  ? `${activePlayer.name} a dat suma ${result.sum} (<6) și bea ${result.sum} guri.`
+                  : `${activePlayer.name} rolled ${result.sum} (<6) and drinks ${result.sum} sips.`,
+                'drink'
+              );
+            } else {
+              // Sum >= 6: Active player gives that sum to someone else
+              setSelectPlayerPrompt({
+                title: language === 'ro'
+                  ? `👉 Alege cine bea cele ${result.sum} guri (Suma zarurilor ≥ 6)!`
+                  : `👉 Choose who drinks ${result.sum} sips (Dice sum ≥ 6)!`,
+                sipsToGive: result.sum,
+              });
+              addLog(
+                language === 'ro'
+                  ? `${activePlayer.name} a dat suma ${result.sum} (≥6) și alege cine bea ${result.sum} guri.`
+                  : `${activePlayer.name} rolled ${result.sum} (≥6) and chooses who drinks ${result.sum} sips.`,
                 'drink'
               );
             }
@@ -1318,6 +1653,37 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Upgrade Buildings Modal */}
+      {showUpgradeModal && (
+        <UpgradeBuildingsModal
+          player={activePlayer}
+          tiles={tiles}
+          onUpgrade={handleUpgradeTile}
+          onClose={() => setShowUpgradeModal(false)}
+        />
+      )}
+
+      {/* Trade Auction Modal */}
+      {showTradeModal && (
+        <TradeAuctionModal
+          activePlayer={activePlayer}
+          allPlayers={players}
+          tiles={tiles}
+          onExecuteTrade={handleExecuteTrade}
+          onClose={() => {
+            setShowTradeModal(false);
+            setTurnResult({
+              title: language === 'ro' ? '🤝 TÂRG ÎNCHEIAT' : '🤝 TRADE CONCLUDED',
+              reason: language === 'ro' ? 'Ai părăsit Târgul Mănăstiresc fără o tranzacție.' : 'You left the monastery market without a deal.',
+              sipsToDrink: 0,
+              isChug: false,
+              isImmune: true,
+              specialNote: language === 'ro' ? 'Tura ta continuă în pace!' : 'Your turn continues peacefully!',
+            });
+          }}
+        />
       )}
 
       {/* Live Score & Inventory Drawer Modal */}

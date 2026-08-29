@@ -295,7 +295,22 @@ export async function ensureUserPublicProfile(
   currentLevel: number = 1,
   currentTitle_ro: string = 'Frate Pelerin',
   currentTitle_en: string = 'Pilgrim Brother',
-  customShortId?: string
+  customShortId?: string,
+  extraStats?: {
+    winsBoardgame?: number;
+    winsDuel?: number;
+    winsCasino?: number;
+    winsPineapple?: number;
+    winsCrash?: number;
+    highestCrashMultiplier?: number;
+    highestWinStreak?: number;
+    totalDrinksServedToFriends?: number;
+    totalSips?: number;
+    totalChugs?: number;
+    gamesPlayed?: number;
+    totalXP?: number;
+    showcasedItemIds?: string[];
+  }
 ): Promise<UserFriendProfile | null> {
   if (!auth.currentUser || auth.currentUser.uid !== uid) {
     return null;
@@ -306,7 +321,7 @@ export async function ensureUserPublicProfile(
 
   try {
     const snap = await getDoc(profileDocRef);
-    const profileData: UserFriendProfile = {
+    const profileData: any = {
       uid,
       shortId,
       displayName: displayName || auth.currentUser.displayName || 'Călugăr Pelerin',
@@ -316,13 +331,14 @@ export async function ensureUserPublicProfile(
       currentTitle_ro: currentTitle_ro || 'Frate Pelerin',
       currentTitle_en: currentTitle_en || 'Pilgrim Brother',
       updatedAt: serverTimestamp(),
+      ...(extraStats || {}),
     };
 
     if (!snap.exists() || snap.data()?.uid === uid) {
       await setDoc(profileDocRef, profileData, { merge: true });
     }
 
-    return profileData;
+    return profileData as UserFriendProfile;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `public_profiles/${shortId}`);
     return null;
