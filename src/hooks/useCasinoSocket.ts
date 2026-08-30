@@ -90,13 +90,19 @@ export function useCasinoSocket(): UseCasinoSocketReturn {
             if (updatedRoom) {
               setRoom(updatedRoom);
               setIsConnected(true);
-              reconnectionService.notifyConnected('casino', updatedRoom.code);
+              if (updatedRoom.status === 'finished') {
+                clearActiveSession();
+                reconnectionService.cancelAndExit();
+              } else {
+                reconnectionService.notifyConnected('casino', updatedRoom.code);
+              }
               if (!hasResolved) {
                 hasResolved = true;
                 resolve(true);
               }
             } else {
               setIsConnected(false);
+              clearActiveSession();
               reconnectionService.notifyDisconnected('casino', 'Camera de cazino a fost închisă.');
               if (!hasResolved) {
                 hasResolved = true;
@@ -107,7 +113,9 @@ export function useCasinoSocket(): UseCasinoSocketReturn {
           (error) => {
             setIsConnecting(false);
             setIsConnected(false);
-            reconnectionService.notifyDisconnected('casino', error?.message || 'Eroare la conectare.');
+            if (getActiveSession()) {
+              reconnectionService.notifyDisconnected('casino', error?.message || 'Eroare la conectare.');
+            }
             if (!hasResolved) {
               hasResolved = true;
               resolve(false);
@@ -175,25 +183,54 @@ export function useCasinoSocket(): UseCasinoSocketReturn {
     };
   }, [isConnected, startListening]);
 
-  // Host-authoritative actions:
-  // 1. Resolve rolling phase after 3.2s
-  // 2. Automated betting timeout if 25s expires
+  // Host-authoritative & Guest-fallback safeguards:
+  // 1. Resolve rolling phase after 3.2s (Host) with 4.8s Guest fallback (never stuck in rolling!)
+  // 2. Automated betting timeout if 25s expires (Host + Guest fallback)
   // 3. AI Bot bet simulator
   useEffect(() => {
     if (!room || !playerId) return;
     const isHost = room.hostPlayerId === playerId;
+    const localPlayer = room.players.find((p) => p.id === playerId);
 
-    // Handle rolling phase transition to resolved
-    if (room.status === 'in_game' && room.round.phase === 'rolling' && isHost) {
+    // Save active session for resilient reconnection
+    if (room.status === 'in_game' || room.status === 'lobby') {
+      if (localPlayer) {
+        saveActiveSession('casino', room.code, {
+          id: localPlayer.id,
+          name: localPlayer.name,
+          avatarIcon: localPlayer.avatarIcon,
+          color: localPlayer.color,
+        }, isHost);
+      }
+    }
+
+    // Handle rolling phase transition to resolved (Host primary @ 3.2s, Guest fallback @ 4.8s)
+    if (room.status === 'in_game' && room.round.phase === 'rolling') {
       if (!rollingTimeoutRef.current) {
+        const delay = isHost ? 3200 : 4800;
         rollingTimeoutRef.current = setTimeout(() => {
           resolveCasinoRound(room.code).catch(console.error);
           rollingTimeoutRef.current = null;
-        }, 3200);
+        }, delay);
       }
     } else if (room.round.phase !== 'rolling' && rollingTimeoutRef.current) {
       clearTimeout(rollingTimeoutRef.current);
       rollingTimeoutRef.current = null;
+    }
+
+    // Betting timeout safeguard: if bettingEndsAt has passed by > 1.5s, trigger timeout
+    if (room.status === 'in_game' && room.round.phase === 'betting' && room.round.bettingEndsAt) {
+      const now = Date.now();
+      const timeRemaining = room.round.bettingEndsAt - now;
+      const triggerDelay = Math.max(0, timeRemaining) + (isHost ? 500 : 3500);
+
+      const bettingTimeoutTimer = setTimeout(() => {
+        if (activeRoomCodeRef.current === room.code) {
+          triggerBettingTimeout(room.code).catch(() => {});
+        }
+      }, triggerDelay);
+
+      return () => clearTimeout(bettingTimeoutTimer);
     }
 
     // Bot bet simulator (Host executes bot bets)

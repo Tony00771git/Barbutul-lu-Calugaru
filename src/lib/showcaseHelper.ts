@@ -133,12 +133,7 @@ export function getTopRarestInventoryItems(
     if (id && id.trim()) candidateIds.add(id.trim());
   });
 
-  // 2. Add default / baseline avatars so inventory is never empty
-  MEDIEVAL_AVATARS.forEach((av) => {
-    candidateIds.add(av.id);
-  });
-
-  // 3. Score and sort all candidates
+  // 2. Score and sort all owned candidates
   const scoredItems: Array<{ id: string; score: number }> = [];
 
   candidateIds.forEach((id) => {

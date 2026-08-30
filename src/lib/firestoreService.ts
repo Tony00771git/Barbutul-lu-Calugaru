@@ -299,6 +299,36 @@ export async function syncAccountProfilesToCloud(profiles: Profile[], drunkenCoi
 
       await setDoc(doc(db, 'leaderboards', entryId), cleanForFirestore(leaderboardData), { merge: true });
     }
+
+    // Also sync the master profile's latest stats to public_profiles for search & friend stats inspection
+    const userDocSnap = existing.exists() ? existing.data() : null;
+    const shortId = userDocSnap?.customShortId || userDocSnap?.shortId || (userId ? `M${userId.substring(0, 5).toUpperCase()}` : null);
+    if (shortId && sanitizedMaster) {
+      const publicProfileData = {
+        uid: userId,
+        shortId,
+        displayName: ((sanitizedMaster && sanitizedMaster.name) || accountName).substring(0, 100),
+        avatarIcon: ((sanitizedMaster && sanitizedMaster.avatarIcon) || 'monk_drunk').substring(0, 50000),
+        currentLevel: sanitizedMaster.currentLevel || masterProg.currentLevel,
+        currentTitle_ro: sanitizedMaster.currentTitle_ro || masterProg.titleRo,
+        currentTitle_en: sanitizedMaster.currentTitle_en || masterProg.titleEn,
+        winsBoardgame: sanitizedMaster.winsBoardgame ?? 0,
+        winsDuel: sanitizedMaster.winsDuel ?? 0,
+        winsCasino: sanitizedMaster.winsCasino ?? 0,
+        winsPineapple: sanitizedMaster.winsPineapple ?? 0,
+        winsCrash: sanitizedMaster.winsCrash ?? 0,
+        highestCrashMultiplier: sanitizedMaster.highestCrashMultiplier ?? 0,
+        highestWinStreak: sanitizedMaster.highestWinStreak ?? 0,
+        totalDrinksServedToFriends: sanitizedMaster.totalDrinksServedToFriends ?? 0,
+        totalSips: sanitizedMaster.totalSips ?? 0,
+        totalChugs: sanitizedMaster.totalChugs ?? 0,
+        gamesPlayed: sanitizedMaster.gamesPlayed ?? 0,
+        totalXP: sanitizedMaster.totalXP ?? 0,
+        showcasedItemIds: (sanitizedMaster.showcasedItemIds || []).slice(0, 3),
+        updatedAt: now,
+      };
+      await setDoc(doc(db, 'public_profiles', shortId), cleanForFirestore(publicProfileData), { merge: true });
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }

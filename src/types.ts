@@ -499,6 +499,20 @@ export interface UserFriendProfile {
   currentTitle_ro?: string;
   currentTitle_en?: string;
   activeRoom?: ActiveRoomInfo | null;
+  winsBoardgame?: number;
+  winsDuel?: number;
+  winsCasino?: number;
+  winsPineapple?: number;
+  winsCrash?: number;
+  highestCrashMultiplier?: number;
+  highestWinStreak?: number;
+  totalDrinksServedToFriends?: number;
+  totalSips?: number;
+  totalChugs?: number;
+  gamesPlayed?: number;
+  totalXP?: number;
+  showcasedItemIds?: string[];
+  unlockedAchievements?: string[];
   updatedAt?: any;
 }
 

@@ -36,12 +36,16 @@ export const TrophyShowcase: React.FC<TrophyShowcaseProps> = ({
     (profile.winsPineapple || 0) +
     (profile.winsCrash || 0);
 
-  // Showcase items (Automatically resolve top 3 rarest if empty, with customization)
-  const resolvedShowcasedIds = getResolvedProfileShowcase(
-    profile.showcasedItemIds,
-    purchasedItems,
-    isRo ? 'ro' : 'en'
-  );
+  // Showcase items: when editable (own profile), use user's owned items; when viewing a friend, strictly use friend's own showcased items or avatar
+  const resolvedShowcasedIds = isEditable
+    ? getResolvedProfileShowcase(
+        profile.showcasedItemIds,
+        purchasedItems,
+        isRo ? 'ro' : 'en'
+      )
+    : (profile.showcasedItemIds && profile.showcasedItemIds.length > 0
+        ? profile.showcasedItemIds.slice(0, 3)
+        : (profile.avatarIcon ? [profile.avatarIcon] : []));
 
   const slot0Id = resolvedShowcasedIds[0] || null;
   const slot1Id = resolvedShowcasedIds[1] || null;

@@ -37,9 +37,14 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
 
   // Fetch full public stats and records for this friend
   useEffect(() => {
-    if (!isOpen || !friend) return;
+    if (!isOpen || !friend) {
+      setDetailedStats(null);
+      setIsLoading(false);
+      return;
+    }
 
     let isMounted = true;
+    setDetailedStats(null);
     setIsLoading(true);
 
     const fetchFriendDetails = async () => {
@@ -54,12 +59,32 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
               statsFound = pubSnap.data();
             }
           } catch (e) {
-            console.warn('Could not read public_profiles:', e);
+            console.warn('Could not read public_profiles by shortId:', e);
           }
         }
 
-        // 2. Try querying leaderboards by userId if missing stats
-        if (!statsFound?.winsDuel && friendUid) {
+        // 2. If not found or missing fields, try searching public_profiles by uid
+        if ((!statsFound || statsFound.totalXP === undefined) && friendUid) {
+          try {
+            const q = query(
+              collection(db, 'public_profiles'),
+              where('uid', '==', friendUid),
+              limit(1)
+            );
+            const pubByUidSnap = await getDocs(q);
+            if (!pubByUidSnap.empty) {
+              statsFound = {
+                ...pubByUidSnap.docs[0].data(),
+                ...(statsFound || {}),
+              };
+            }
+          } catch (e) {
+            console.warn('Could not query public_profiles by uid:', e);
+          }
+        }
+
+        // 3. Try querying leaderboards by userId if missing stats
+        if (friendUid) {
           try {
             const q = query(
               collection(db, 'leaderboards'),
@@ -70,8 +95,8 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
             if (!lbSnap.empty) {
               const lbData = lbSnap.docs[0].data();
               statsFound = {
-                ...statsFound,
                 ...lbData,
+                ...(statsFound || {}),
               };
             }
           } catch (e) {
@@ -80,17 +105,15 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
         }
 
         if (isMounted) {
-          if (statsFound) {
-            setDetailedStats(statsFound);
-          } else {
-            // Graceful fallback based on level and rank
-            setDetailedStats(null);
-          }
+          setDetailedStats(statsFound);
           setIsLoading(false);
         }
       } catch (err) {
         console.warn('Error fetching friend profile stats:', err);
-        if (isMounted) setIsLoading(false);
+        if (isMounted) {
+          setDetailedStats(null);
+          setIsLoading(false);
+        }
       }
     };
 
@@ -104,19 +127,19 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
   if (!isOpen || !friend) return null;
 
   const currentLevel = detailedStats?.currentLevel || friend.currentLevel || 1;
-  const progression = calculateProgression(detailedStats?.totalXP || (currentLevel - 1) * 200);
+  const progression = calculateProgression(detailedStats?.totalXP || 0);
   const title = isRo
     ? detailedStats?.currentTitle_ro || friend.currentTitle_ro || progression.titleRo
     : detailedStats?.currentTitle_en || (friend as UserFriendProfile).currentTitle_en || progression.titleEn;
 
-  // Synthesize rich Profile object for TrophyShowcase & stats
-  const friendTotalSips = detailedStats?.totalSips ?? (currentLevel * 14 + 7);
-  const friendTotalChugs = detailedStats?.totalChugs ?? Math.floor(currentLevel * 1.8);
-  const friendWinsBoardgame = detailedStats?.winsBoardgame ?? Math.floor(currentLevel * 0.8);
-  const friendWinsDuel = detailedStats?.winsDuel ?? Math.floor(currentLevel * 1.4);
-  const friendWinsCasino = detailedStats?.winsCasino ?? Math.floor(currentLevel * 0.6);
-  const friendWinsPineapple = detailedStats?.winsPineapple ?? Math.floor(currentLevel * 0.7);
-  const friendWinsCrash = detailedStats?.winsCrash ?? Math.floor(currentLevel * 1.1);
+  // Real stats for this friend (0 if not played/available, rather than identical fabricated mock numbers)
+  const friendTotalSips = detailedStats?.totalSips ?? 0;
+  const friendTotalChugs = detailedStats?.totalChugs ?? 0;
+  const friendWinsBoardgame = detailedStats?.winsBoardgame ?? 0;
+  const friendWinsDuel = detailedStats?.winsDuel ?? 0;
+  const friendWinsCasino = detailedStats?.winsCasino ?? 0;
+  const friendWinsPineapple = detailedStats?.winsPineapple ?? 0;
+  const friendWinsCrash = detailedStats?.winsCrash ?? 0;
 
   const totalWins =
     friendWinsBoardgame +
@@ -125,32 +148,24 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
     friendWinsPineapple +
     friendWinsCrash;
 
-  const friendCrashMult = detailedStats?.highestCrashMultiplier || (2.2 + (currentLevel % 5) * 0.85);
-  const friendWinStreak = detailedStats?.highestWinStreak || Math.max(2, Math.floor(currentLevel * 0.9));
-  const friendDrinksServed =
-    detailedStats?.totalDrinksServedToFriends || friendTotalSips + friendTotalChugs * 10;
-
-  // Friend showcased items (or 3 rarest items matching their rank)
-  const defaultRarestForFriend = getTopRarestInventoryItems(
-    detailedStats?.showcasedItemIds || [],
-    3,
-    isRo ? 'ro' : 'en'
-  );
+  const friendCrashMult = detailedStats?.highestCrashMultiplier ?? 0;
+  const friendWinStreak = detailedStats?.highestWinStreak ?? 0;
+  const friendDrinksServed = detailedStats?.totalDrinksServedToFriends ?? 0;
 
   const friendShowcasedIds =
     detailedStats?.showcasedItemIds && detailedStats.showcasedItemIds.length > 0
       ? detailedStats.showcasedItemIds
-      : defaultRarestForFriend;
+      : (detailedStats?.avatarIcon || friend.avatarIcon ? [detailedStats?.avatarIcon || friend.avatarIcon || 'monk_drunk'] : []);
 
   const synthesizedProfile: Profile = {
     id: `friend_${friendUid}`,
-    name: friend.displayName,
+    name: detailedStats?.displayName || friend.displayName,
     avatarIcon: detailedStats?.avatarIcon || friend.avatarIcon || 'monk_drunk',
     isMaster: true,
-    gamesPlayed: detailedStats?.gamesPlayed || currentLevel * 5 + 4,
+    gamesPlayed: detailedStats?.gamesPlayed ?? (totalWins > 0 ? totalWins : (friendTotalSips > 0 ? 1 : 0)),
     totalSips: friendTotalSips,
     totalChugs: friendTotalChugs,
-    totalXP: detailedStats?.totalXP || (currentLevel - 1) * 200 + 75,
+    totalXP: detailedStats?.totalXP ?? 0,
     currentLevel,
     currentTitle_ro: detailedStats?.currentTitle_ro || friend.currentTitle_ro || progression.titleRo,
     currentTitle_en: detailedStats?.currentTitle_en || (friend as UserFriendProfile).currentTitle_en || progression.titleEn,

@@ -55,7 +55,8 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
   onOpenProfiles,
 }) => {
   const { user, cloudProfile, signInWithGoogle, isSigningIn, authError, clearAuthError } = useAuth();
-  const { language, t } = useApp();
+  const { language, t, profiles } = useApp();
+  const masterProfile = profiles.find((p) => p.isMaster) || profiles[0];
 
   const [myFriendProfile, setMyFriendProfile] = useState<UserFriendProfile | null>(null);
   const [friends, setFriends] = useState<FriendEntry[]>([]);
@@ -95,14 +96,33 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
   // Ensure public profile registration whenever user is logged in
   useEffect(() => {
     if (user) {
+      const extraStats = masterProfile
+        ? {
+            winsBoardgame: masterProfile.winsBoardgame ?? 0,
+            winsDuel: masterProfile.winsDuel ?? 0,
+            winsCasino: masterProfile.winsCasino ?? 0,
+            winsPineapple: masterProfile.winsPineapple ?? 0,
+            winsCrash: masterProfile.winsCrash ?? 0,
+            highestCrashMultiplier: masterProfile.highestCrashMultiplier ?? 0,
+            highestWinStreak: masterProfile.highestWinStreak ?? 0,
+            totalDrinksServedToFriends: masterProfile.totalDrinksServedToFriends ?? 0,
+            totalSips: masterProfile.totalSips ?? 0,
+            totalChugs: masterProfile.totalChugs ?? 0,
+            gamesPlayed: masterProfile.gamesPlayed ?? 0,
+            totalXP: masterProfile.totalXP ?? 0,
+            showcasedItemIds: (masterProfile.showcasedItemIds || []).slice(0, 3),
+          }
+        : undefined;
+
       ensureUserPublicProfile(
         user.uid,
-        cloudProfile?.displayName || user.displayName || 'Călugăr Pelerin',
-        cloudProfile?.avatarIcon || 'monk_drunk',
-        cloudProfile?.currentLevel || 1,
-        cloudProfile?.currentTitle_ro || 'Frate Pelerin',
-        cloudProfile?.currentTitle_en || 'Pilgrim Brother',
-        cloudProfile?.customShortId || cloudProfile?.shortId
+        cloudProfile?.displayName || masterProfile?.name || user.displayName || 'Călugăr Pelerin',
+        cloudProfile?.avatarIcon || masterProfile?.avatarIcon || 'monk_drunk',
+        masterProfile?.currentLevel || cloudProfile?.currentLevel || 1,
+        masterProfile?.currentTitle_ro || cloudProfile?.currentTitle_ro || 'Frate Pelerin',
+        masterProfile?.currentTitle_en || cloudProfile?.currentTitle_en || 'Pilgrim Brother',
+        cloudProfile?.customShortId || cloudProfile?.shortId,
+        extraStats
       ).then((p) => {
         if (p) setMyFriendProfile(p);
       });
@@ -112,7 +132,7 @@ export const FriendsTab: React.FC<FriendsTabProps> = ({
       setIncomingRequests([]);
       setIncomingInvites([]);
     }
-  }, [user, cloudProfile]);
+  }, [user, cloudProfile, masterProfile]);
 
   // Real-time subscriptions for friends, requests, and game invites
   useEffect(() => {

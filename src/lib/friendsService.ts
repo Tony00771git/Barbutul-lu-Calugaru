@@ -360,6 +360,7 @@ export async function searchPlayerByShortId(
     if (snap.exists()) {
       const data = snap.data();
       return {
+        ...data,
         uid: data.uid,
         shortId: data.shortId || cleanId,
         displayName: data.displayName || 'Călugăr Pelerin',
@@ -367,7 +368,7 @@ export async function searchPlayerByShortId(
         currentLevel: data.currentLevel || 1,
         currentTitle_ro: data.currentTitle_ro || 'Frate Pelerin',
         currentTitle_en: data.currentTitle_en || 'Pilgrim Brother',
-      };
+      } as UserFriendProfile;
     }
     return null;
   } catch (error) {

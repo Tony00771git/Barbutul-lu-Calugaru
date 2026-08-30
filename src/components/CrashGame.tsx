@@ -599,6 +599,8 @@ export const CrashGame: React.FC<CrashGameProps> = ({
   };
 
   const handleExit = async () => {
+    clearActiveSession();
+    reconnectionService.cancelAndExit();
     await leaveCrashRoom(roomCode, localPlayer.id);
     onExit();
   };
