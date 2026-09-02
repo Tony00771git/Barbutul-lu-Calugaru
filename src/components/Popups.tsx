@@ -19,25 +19,45 @@ export const TileDetailModal: React.FC<{
 
   const groupMeta = tile.group ? PROPERTY_GROUPS[tile.group] : null;
   const isOwner = player && player.properties.includes(tile.index);
+  const isGroapa = Boolean(tile.isGroapa || tile.type === 'chug');
+
+  // Check if player owns all properties of this color group
+  const ownedInGroup = groupMeta && player
+    ? groupMeta.tileIndices.filter(idx => player.properties.includes(idx)).length
+    : 0;
+  const totalInGroup = groupMeta ? groupMeta.tileIndices.length : 0;
+  const hasCompleteGroup = groupMeta ? ownedInGroup === totalInGroup : false;
+
   const currentLvl = tile.buildingLevel || 0;
   const isMaxLevel = currentLvl >= 2;
-  const upgradeCost = Math.round((tile.price || 5) * (currentLvl === 0 ? 1.0 : 1.5));
+  const basePrice = tile.basePrice || tile.price || 10;
+  const baseSips = tile.baseSipsCount || tile.sipsCount || 4;
+  const upgradeMeta = calculateUpgradedValues(basePrice, baseSips, currentLvl as 0 | 1 | 2);
+  const upgradeCost = upgradeMeta.nextUpgradeCost || Math.round(basePrice * (currentLvl === 0 ? 1.0 : 1.5));
   const canAfford = player ? player.gold >= upgradeCost : false;
-  const nextPreview = tile.buyable ? calculateUpgradedValues(tile.price || 5, tile.baseSipsCount || tile.sipsCount || 2, Math.min(2, currentLvl + 1) as 1 | 2) : null;
+  const nextLevel = Math.min(2, currentLvl + 1) as 1 | 2;
+  const nextPreview = tile.buyable ? calculateUpgradedValues(basePrice, baseSips, nextLevel) : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl p-5 max-w-sm w-full space-y-4 gold-glow text-center">
-        <div className="text-4xl">{tile.isGroapa ? '🔥' : tile.emoji}</div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="bg-[#16130e] border-2 border-[#ffd700] rounded-2xl p-5 max-w-sm w-full space-y-4 gold-glow text-center shadow-2xl">
+        <div className="text-4xl">{isGroapa ? '🔥' : tile.emoji}</div>
         <div className="space-y-1">
           {groupMeta && (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-cinzel font-bold border"
-                 style={{ backgroundColor: `${groupMeta.colorHex}22`, borderColor: groupMeta.colorHex, color: groupMeta.colorHex }}>
+            <div
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-cinzel font-bold border shadow-sm"
+              style={{ backgroundColor: `${groupMeta.colorHex}22`, borderColor: groupMeta.colorHex, color: groupMeta.colorHex }}
+            >
               <span>●</span>
               <span>{language === 'ro' ? groupMeta.nameRo : groupMeta.nameEn}</span>
+              {hasCompleteGroup && (
+                <span className="text-[10px] bg-emerald-950 text-emerald-300 px-1 rounded border border-emerald-500/50">
+                  {language === 'ro' ? 'Set Complet 👑' : 'Monopoly 👑'}
+                </span>
+              )}
             </div>
           )}
-          <h3 className="text-xl font-cinzel font-bold text-[#e8c84a]">
+          <h3 className="text-xl font-cinzel font-bold text-[#ffd700]">
             {language === 'ro' ? tile.nameRo : tile.nameEn}
           </h3>
         </div>
@@ -46,56 +66,120 @@ export const TileDetailModal: React.FC<{
         </p>
 
         {tile.buyable && (
-          <div className="bg-[#1e1e1e] border border-[#2a2a2a] p-3 rounded-xl text-xs space-y-2">
+          <div className="bg-[#1c1610] border border-[#2d2215] p-3.5 rounded-xl text-xs space-y-2.5 text-left">
             <div className="flex justify-between items-center text-gray-400 font-cinzel">
               <span>{language === 'ro' ? 'Preț de achiziție:' : 'Purchase Price:'}</span>
-              <span className="text-[#e8c84a] font-bold">{tile.price} 🪙</span>
+              <span className="text-[#ffd700] font-bold font-mono text-sm">{tile.price} 🪙</span>
             </div>
             <div className="flex justify-between items-center text-gray-400 font-cinzel">
               <span>{language === 'ro' ? 'Pedeapsă / Chirie:' : 'Penalty / Rent:'}</span>
-              {tile.isGroapa ? (
-                <span className="text-red-400 font-bold">🔥 GROAPĂ (CHUG)</span>
-              ) : (
-                <span className="text-yellow-300 font-bold">🍺 {tile.sipsCount} guri</span>
-              )}
-            </div>
-            {tile.buildingLevel !== undefined && (
-              <div className="flex justify-between items-center text-gray-400 font-cinzel">
-                <span>{language === 'ro' ? 'Nivel Clădire:' : 'Building Level:'}</span>
-                <span className="text-amber-300 font-bold">
-                  {tile.buildingLevel === 0 ? 'Fără clădiri' : tile.buildingLevel === 1 ? 'Nivel 1 🏠' : 'Nivel 2 🏠🏠'}
+              {isGroapa ? (
+                <span className="text-red-400 font-black animate-pulse flex items-center gap-1">
+                  <span>🔥</span>
+                  <span>GROAPĂ (CHUG)</span>
                 </span>
-              </div>
-            )}
-            <div className="border-t border-[#333] pt-1.5 flex justify-between items-center">
-              <span className="text-gray-400">{language === 'ro' ? 'Proprietar:' : 'Owner:'}</span>
-              {ownerName ? (
-                <span className="text-green-400 font-bold">{ownerName} 👑</span>
               ) : (
-                <span className="text-gray-400 italic">{language === 'ro' ? 'Liberă' : 'Available'}</span>
+                <span className="text-amber-300 font-bold font-mono text-sm">🍺 {tile.sipsCount} guri</span>
               )}
             </div>
 
-            {/* Direct Upgrade Option if active player owns this tile */}
+            {/* Building level display for regular properties */}
+            {!isGroapa && (
+              <div className="flex justify-between items-center text-gray-400 font-cinzel">
+                <span>{language === 'ro' ? 'Nivel Clădire:' : 'Building Level:'}</span>
+                <span className="text-amber-300 font-bold flex items-center gap-1">
+                  {currentLvl === 0 ? (
+                    <span className="text-gray-400 font-normal">{language === 'ro' ? 'Fără clădiri' : 'No buildings'}</span>
+                  ) : currentLvl === 1 ? (
+                    <span className="text-amber-300 font-bold">Nivel 1 🏠 (+80% chirie)</span>
+                  ) : (
+                    <span className="text-emerald-400 font-bold">Nivel 2 🏠🏠 (Maxim)</span>
+                  )}
+                </span>
+              </div>
+            )}
+
+            <div className="border-t border-[#332517] pt-2 flex justify-between items-center font-cinzel">
+              <span className="text-gray-400">{language === 'ro' ? 'Proprietar:' : 'Owner:'}</span>
+              {ownerName ? (
+                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                  <span>{ownerName}</span>
+                  <span>👑</span>
+                </span>
+              ) : (
+                <span className="text-gray-400 italic">{language === 'ro' ? 'Liberă (Necumpărată)' : 'Available'}</span>
+              )}
+            </div>
+
+            {/* Upgrade Section for Owner */}
             {isOwner && onUpgrade && (
-              <div className="pt-2 border-t border-[#333]">
-                {isMaxLevel ? (
-                  <div className="text-center text-emerald-400 font-cinzel font-bold text-[11px] py-1 bg-emerald-950/40 rounded-lg">
-                    ✨ Nivel Maxim de Clădire
+              <div className="pt-2 border-t border-[#332517] space-y-2">
+                {isGroapa ? (
+                  <div className="text-center text-red-400/90 font-cinzel text-[11px] py-1.5 px-2 bg-red-950/40 rounded-lg border border-red-900/50">
+                    🔥 {language === 'ro' ? 'Pătrățica de Groapă nu poate fi upgradată.' : 'Chug / Pit tiles cannot be upgraded.'}
+                  </div>
+                ) : !groupMeta ? (
+                  <div className="text-center text-gray-400 font-cinzel text-[11px] py-1 bg-stone-900/40 rounded-lg">
+                    {language === 'ro' ? 'Această proprietate nu face parte dintr-un grup upgradabil.' : 'Not part of an upgradable group.'}
+                  </div>
+                ) : !hasCompleteGroup ? (
+                  <div className="text-center text-amber-300/90 font-cinzel text-[11px] py-2 px-2.5 bg-amber-950/40 rounded-xl border border-amber-800/40 space-y-0.5">
+                    <div className="font-bold flex items-center justify-center gap-1">
+                      <span>🔒</span>
+                      <span>{language === 'ro' ? 'Set Incomplet' : 'Incomplete Set'}</span>
+                    </div>
+                    <div className="text-[10px] text-gray-300 font-barlow">
+                      {language === 'ro'
+                        ? `Trebuie să deții toate proprietățile din ${groupMeta.nameRo} (${ownedInGroup}/${totalInGroup}) pentru a putea upgrada.`
+                        : `Must own all properties in ${groupMeta.nameEn} (${ownedInGroup}/${totalInGroup}) to upgrade.`}
+                    </div>
+                  </div>
+                ) : isMaxLevel ? (
+                  <div className="text-center text-emerald-300 font-cinzel font-bold text-xs py-2 bg-emerald-950/50 rounded-xl border border-emerald-600/50 flex items-center justify-center gap-1.5">
+                    <span>✨</span>
+                    <span>{language === 'ro' ? 'Clădire la Nivel Maxim (🏠🏠)' : 'Maximum Building Level (🏠🏠)'}</span>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => onUpgrade(tile.index, upgradeCost)}
-                    disabled={!canAfford}
-                    className={`w-full py-2 px-3 rounded-xl font-cinzel font-bold text-xs flex items-center justify-between transition-all ${
-                      canAfford
-                        ? 'bg-gradient-to-r from-[#ffd700] to-[#f59e0b] text-black hover:brightness-110 shadow'
-                        : 'bg-stone-800 text-gray-500 border border-stone-700 cursor-not-allowed'
-                    }`}
-                  >
-                    <span>🏗️ Upgrade la Nivel {currentLvl + 1}</span>
-                    <span>{upgradeCost} 🪙 {nextPreview?.isGroapa ? '(🔥 Groapă)' : `(🍺 ${nextPreview?.sipsCount} guri)`}</span>
-                  </button>
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onUpgrade(tile.index, upgradeCost)}
+                      disabled={!canAfford}
+                      className={`w-full py-2.5 px-3 rounded-xl font-cinzel font-bold text-xs transition-all shadow-md flex flex-col gap-1 ${
+                        canAfford
+                          ? 'bg-gradient-to-r from-emerald-500 via-amber-400 to-[#ffd700] text-black hover:brightness-110 active:scale-[0.98] cursor-pointer'
+                          : 'bg-stone-800 text-gray-500 border border-stone-700 cursor-not-allowed'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="flex items-center gap-1 text-xs">
+                          <span>🏗️</span>
+                          <span>{language === 'ro' ? `Upgrade Nivel ${nextLevel}` : `Upgrade to Level ${nextLevel}`} ({nextLevel === 1 ? '🏠' : '🏠🏠'})</span>
+                        </span>
+                        <span className="font-mono font-black text-sm">{upgradeCost} 🪙</span>
+                      </div>
+                      {nextPreview && (
+                        <div className="flex items-center justify-between w-full text-[10px] opacity-95">
+                          <span>
+                            {language === 'ro' ? 'Chirie nouă:' : 'New rent:'}{' '}
+                            <strong className="text-black font-black">
+                              {nextPreview.isGroapa ? '🔥 GROAPĂ' : `🍺 ${nextPreview.sipsCount} guri`}
+                            </strong>
+                          </span>
+                          <span className="text-[9px] italic font-barlow">
+                            {language === 'ro' ? '(nu consumă tura)' : '(turn continues)'}
+                          </span>
+                        </div>
+                      )}
+                    </button>
+                    {!canAfford && (
+                      <p className="text-[10px] text-red-400 text-center font-barlow">
+                        {language === 'ro'
+                          ? `Ai nevoie de ${upgradeCost} 🪙 (ai ${player?.gold || 0} 🪙)`
+                          : `Requires ${upgradeCost} 🪙 (you have ${player?.gold || 0} 🪙)`}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -103,8 +187,9 @@ export const TileDetailModal: React.FC<{
         )}
 
         <button
+          type="button"
           onClick={onClose}
-          className="w-full py-2.5 rounded-xl bg-[#e8c84a] text-black font-cinzel font-bold text-sm hover:brightness-110"
+          className="w-full py-2.5 rounded-xl bg-[#ffd700] text-black font-cinzel font-bold text-sm hover:brightness-110 shadow transition-all cursor-pointer"
         >
           {t('close')}
         </button>
@@ -831,28 +916,27 @@ export const TwoTruthsModal: React.FC<{
   );
 };
 
-// --- Merchant Modal (Târgul cu Scrisori & Chei) ---
+// --- Merchant Modal (Târgul cu Scrisori) ---
 export const MerchantModal: React.FC<{
   player: Player;
   onBuyPardon?: () => void;
-  onBuyKey?: () => void;
   onBuy?: () => void;
   onDecline: () => void;
-}> = ({ player, onBuyPardon, onBuyKey, onBuy, onDecline }) => {
+}> = ({ player, onBuyPardon, onBuy, onDecline }) => {
   const { language } = useApp();
   const buyPardon = onBuyPardon || onBuy || (() => {});
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none">
       <div className="bg-[#16130e] border-2 border-[#ffd700] rounded-3xl p-6 max-w-sm w-full space-y-4 text-center shadow-2xl gold-glow">
-        <div className="text-4xl">🧙 📜 🔓</div>
+        <div className="text-4xl">🧙 🎟️ ✨</div>
         <h3 className="text-xl font-cinzel font-black text-[#ffd700] gold-text-glow">
-          {language === 'ro' ? 'Târgul cu Scrisori & Chei' : 'Pardon & Keys Bazaar'}
+          {language === 'ro' ? 'Târgul de Iertare' : 'Pardon Letter Bazaar'}
         </h3>
         <p className="text-xs font-barlow text-gray-300">
           {language === 'ro'
-            ? 'Negustorul misterios al mănăstirii îți pune la dispoziție relicve valoroase de scăpare:'
-            : 'The monastery mystic offers valuable escape relics for your journey:'}
+            ? 'Negustorul misterios al mănăstirii îți pune la dispoziție Scrisoarea de Iertare pentru a anula pedepsele de băutură:'
+            : 'The monastery mystic offers the Pardon Letter to cancel drinking penalties:'}
         </p>
 
         <div className="p-2 rounded-xl bg-[#201911] border border-[#ffd700]/30 text-xs font-cinzel text-amber-300 font-bold">
@@ -863,36 +947,18 @@ export const MerchantModal: React.FC<{
           <button
             disabled={player.gold < 30}
             onClick={buyPardon}
-            className={`w-full py-2.5 px-3 rounded-2xl font-cinzel font-bold text-xs flex items-center justify-between transition-all ${
+            className={`w-full py-3 px-4 rounded-2xl font-cinzel font-bold text-xs flex items-center justify-between transition-all ${
               player.gold >= 30
-                ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black hover:brightness-110 shadow-md'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black hover:brightness-110 shadow-md gold-glow'
                 : 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
             }`}
           >
-            <span className="flex items-center gap-1">
-              <span>🎟️</span>
-              <span>{language === 'ro' ? 'Scrisoare de Iertare' : 'Pardon Letter'}</span>
+            <span className="flex items-center gap-1.5">
+              <span className="text-base">🎟️</span>
+              <span className="text-sm">{language === 'ro' ? 'Scrisoare de Iertare' : 'Pardon Letter'}</span>
             </span>
-            <span className="font-black">30 🪙</span>
+            <span className="font-black text-sm">30 🪙</span>
           </button>
-
-          {onBuyKey && (
-            <button
-              disabled={player.gold < 20}
-              onClick={onBuyKey}
-              className={`w-full py-2.5 px-3 rounded-2xl font-cinzel font-bold text-xs flex items-center justify-between transition-all ${
-                player.gold >= 20
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white hover:brightness-110 shadow-md'
-                  : 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
-              }`}
-            >
-              <span className="flex items-center gap-1">
-                <span>🔓</span>
-                <span>{language === 'ro' ? 'Cheie de Temniță' : 'Dungeon Key'}</span>
-              </span>
-              <span className="font-black">20 🪙</span>
-            </button>
-          )}
 
           <button
             onClick={onDecline}
@@ -906,40 +972,180 @@ export const MerchantModal: React.FC<{
   );
 };
 
-// --- Select Player Modal ---
+// --- Select Player Modal (Supports 1 or multiple players with closest equal random split) ---
+export interface SipDistributionItem {
+  player: Player;
+  sips: number;
+}
+
 export const SelectPlayerModal: React.FC<{
   title: string;
+  sipsToGive: number;
   players: Player[];
   activePlayerId: string;
-  onSelect: (targetPlayerId: string) => void;
-}> = ({ title, players, activePlayerId, onSelect }) => {
-  const { t } = useApp();
+  onConfirm: (distribution: SipDistributionItem[]) => void;
+  onSelect?: (targetPlayerId: string) => void;
+}> = ({ title, sipsToGive, players, activePlayerId, onConfirm, onSelect }) => {
+  const { language } = useApp();
   const eligible = players.filter(p => p.id !== activePlayerId && !p.hasGivenUp);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const togglePlayer = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(pId => pId !== id) : [...prev, id]
+    );
+  };
+
+  const selectAll = () => {
+    setSelectedIds(eligible.map(p => p.id));
+  };
+
+  const deselectAll = () => {
+    setSelectedIds([]);
+  };
+
+  const selectedCount = selectedIds.length;
+  const baseSips = selectedCount > 0 ? Math.floor(sipsToGive / selectedCount) : 0;
+  const remainder = selectedCount > 0 ? sipsToGive % selectedCount : 0;
+
+  const handleApply = () => {
+    if (selectedCount === 0) return;
+
+    const selectedPlayers = eligible.filter(p => selectedIds.includes(p.id));
+
+    // Distribution algorithm:
+    // Shuffle selected players so remainder extra sips are allocated randomly
+    const shuffled = [...selectedPlayers].sort(() => Math.random() - 0.5);
+
+    const distribution: SipDistributionItem[] = shuffled.map((player, idx) => {
+      const extra = idx < remainder ? 1 : 0;
+      return {
+        player,
+        sips: baseSips + extra,
+      };
+    });
+
+    onConfirm(distribution);
+    if (onSelect && selectedPlayers.length === 1) {
+      onSelect(selectedPlayers[0].id);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
-      <div className="bg-[#161616] border-2 border-[#e8c84a] rounded-2xl p-6 max-w-sm w-full space-y-4 gold-glow text-center">
-        <h3 className="text-xl font-cinzel font-bold text-[#e8c84a] gold-text-glow">
-          {title}
-        </h3>
-
-        <div className="space-y-2 max-h-60 overflow-y-auto">
-          {eligible.map(p => (
-            <button
-              key={p.id}
-              onClick={() => onSelect(p.id)}
-              className="w-full p-3 rounded-xl border border-[#2a2a2a] bg-[#121212] hover:border-[#e8c84a] text-left font-cinzel text-sm text-[#f0ebe0] flex items-center justify-between"
-            >
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#22180f] border border-[#e8c84a]/30 flex-shrink-0">
-                  <AvatarDisplay avatarId={p.avatarIcon} className="w-full h-full" />
-                </div>
-                <span>{p.name}</span>
-              </div>
-              <span className="text-xs text-gray-400">🍺 {p.sipsTotal}</span>
-            </button>
-          ))}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none">
+      <div className="bg-[#14120e] border-2 border-[#ffd700] rounded-3xl p-5 sm:p-6 max-w-md w-full space-y-4 shadow-2xl gold-glow text-center">
+        {/* Header */}
+        <div className="space-y-1">
+          <div className="text-3xl">👉 🍺 🎲</div>
+          <h3 className="text-xl sm:text-2xl font-cinzel font-black text-[#ffd700] gold-text-glow">
+            {title}
+          </h3>
+          <p className="text-xs text-gray-300 font-barlow">
+            {language === 'ro'
+              ? `Selectează 1 sau mai mulți jucători pentru a împărți cele ${sipsToGive} guri.`
+              : `Select 1 or more players to share the ${sipsToGive} sips.`}
+          </p>
         </div>
+
+        {/* Quick select buttons */}
+        <div className="flex items-center justify-between text-xs font-cinzel pt-1 border-t border-[#2a2218]">
+          <span className="text-gray-400">
+            {language === 'ro' ? `${selectedCount} selectați` : `${selectedCount} selected`}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={selectAll}
+              className="px-2.5 py-1 rounded-lg bg-[#241c14] border border-[#ffd700]/30 text-amber-300 hover:bg-[#34281c] transition-colors"
+            >
+              {language === 'ro' ? 'Toți' : 'All'}
+            </button>
+            <button
+              onClick={deselectAll}
+              className="px-2.5 py-1 rounded-lg bg-[#241c14] border border-stone-700 text-gray-400 hover:text-white transition-colors"
+            >
+              {language === 'ro' ? 'Niciunul' : 'None'}
+            </button>
+          </div>
+        </div>
+
+        {/* Players List */}
+        <div className="space-y-2 max-h-56 overflow-y-auto pr-0.5">
+          {eligible.map(p => {
+            const isSelected = selectedIds.includes(p.id);
+            return (
+              <div
+                key={p.id}
+                onClick={() => togglePlayer(p.id)}
+                className={`w-full p-3 rounded-2xl border cursor-pointer text-left font-cinzel text-sm flex items-center justify-between transition-all ${
+                  isSelected
+                    ? 'border-[#ffd700] bg-[#2a2012] shadow-[0_0_12px_rgba(255,215,0,0.25)] text-[#fdf8e6]'
+                    : 'border-[#2d241a] bg-[#17120c] hover:border-stone-600 text-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-5 h-5 rounded-md border flex items-center justify-center text-xs font-bold ${
+                    isSelected
+                      ? 'border-[#ffd700] bg-[#ffd700] text-black'
+                      : 'border-stone-600 bg-black/40 text-transparent'
+                  }`}>
+                    ✓
+                  </div>
+                  <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#22180f] border border-[#e8c84a]/30 flex-shrink-0">
+                    <AvatarDisplay avatarId={p.avatarIcon} className="w-full h-full" />
+                  </div>
+                  <span className="font-bold">{p.name}</span>
+                </div>
+                <span className="text-xs text-amber-400/80 font-mono">🍺 {p.sipsTotal} guri</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Dynamic Division Preview Box */}
+        <div className="p-3 rounded-2xl bg-[#1c150e] border border-[#ffd700]/30 text-xs font-barlow text-left space-y-1">
+          <div className="font-cinzel font-bold text-amber-300 flex items-center gap-1.5">
+            <span>⚖️</span>
+            <span>{language === 'ro' ? 'Previzualizare Împărțire Gurilor:' : 'Sips Division Preview:'}</span>
+          </div>
+          {selectedCount === 0 ? (
+            <p className="text-stone-400 italic">
+              {language === 'ro'
+                ? 'Selectează cel puțin 1 jucător pentru a trimite gurile.'
+                : 'Select at least 1 player to distribute sips.'}
+            </p>
+          ) : selectedCount === 1 ? (
+            <p className="text-emerald-300">
+              {language === 'ro'
+                ? `Jucătorul selectat va bea toate cele ${sipsToGive} guri!`
+                : `The selected player will drink all ${sipsToGive} sips!`}
+            </p>
+          ) : remainder === 0 ? (
+            <p className="text-emerald-300">
+              {language === 'ro'
+                ? `Împărțire exactă: fiecare dintre cei ${selectedCount} jucători va bea exact ${baseSips} guri!`
+                : `Exact split: each of the ${selectedCount} players will drink exactly ${baseSips} sips!`}
+            </p>
+          ) : (
+            <p className="text-amber-200">
+              {language === 'ro'
+                ? `Împărțire cât mai apropiată (${sipsToGive} guri la ${selectedCount} oameni): ${remainder} ${remainder === 1 ? 'jucător va bea' : 'jucători vor bea'} ${baseSips + 1} guri, iar ${selectedCount - remainder} ${selectedCount - remainder === 1 ? 'jucător va bea' : 'jucători vor bea'} ${baseSips} guri (alese aleatoriu de joc).`
+                : `Closest split (${sipsToGive} sips among ${selectedCount} players): ${remainder} player(s) drink ${baseSips + 1} sips, and ${selectedCount - remainder} player(s) drink ${baseSips} sips (randomly assigned).`}
+            </p>
+          )}
+        </div>
+
+        {/* Action Button */}
+        <button
+          onClick={handleApply}
+          disabled={selectedCount === 0}
+          className={`w-full py-3.5 rounded-2xl font-cinzel font-bold text-sm sm:text-base transition-all shadow-lg flex items-center justify-center gap-2 ${
+            selectedCount === 0
+              ? 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
+              : 'bg-gradient-to-r from-[#ffd700] to-[#e8c84a] text-black hover:brightness-110 active:scale-95 gold-glow'
+          }`}
+        >
+          <span>{language === 'ro' ? `Distribuie ${sipsToGive} guri ➔` : `Distribute ${sipsToGive} sips ➔`}</span>
+        </button>
       </div>
     </div>
   );
@@ -1089,7 +1295,11 @@ export const UpgradeBuildingsModal: React.FC<{
 
                         {/* Upgrade Action Button */}
                         <div>
-                          {isMaxLevel ? (
+                          {tile.isGroapa || tile.type === 'chug' ? (
+                            <span className="text-[11px] font-cinzel font-bold text-red-400 bg-red-950/80 px-3 py-1.5 rounded-xl border border-red-600/40 inline-block text-center">
+                              🔥 Groapă (Fără Upgrade)
+                            </span>
+                          ) : isMaxLevel ? (
                             <span className="text-[11px] font-cinzel font-bold text-emerald-400 bg-emerald-950/80 px-3 py-1.5 rounded-xl border border-emerald-600/40 inline-block text-center">
                               ✨ Nivel Maxim
                             </span>
@@ -1700,6 +1910,14 @@ export const TradeAuctionModal: React.FC<TradeAuctionModalProps> = ({
 };
 
 // --- Turn End Drink Modal (Popup after every player's turn) ---
+export interface TurnDrinkerItem {
+  playerId: string;
+  name: string;
+  avatarIcon: string;
+  sips: number;
+  color?: string;
+}
+
 export const TurnEndDrinkModal: React.FC<{
   player: Player;
   title?: string;
@@ -1708,6 +1926,7 @@ export const TurnEndDrinkModal: React.FC<{
   isChug?: boolean;
   isImmune?: boolean;
   specialNote?: string;
+  drinkersList?: TurnDrinkerItem[];
   onUsePardonLetter?: () => void;
   onConfirm: () => void;
 }> = ({
@@ -1718,6 +1937,7 @@ export const TurnEndDrinkModal: React.FC<{
   isChug = false,
   isImmune = false,
   specialNote,
+  drinkersList,
   onUsePardonLetter,
   onConfirm,
 }) => {
@@ -1734,7 +1954,7 @@ export const TurnEndDrinkModal: React.FC<{
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in select-none">
       <div
-        className={`relative bg-[#14120e] border-2 rounded-3xl p-6 max-w-sm w-full space-y-5 text-center shadow-2xl ${
+        className={`relative bg-[#14120e] border-2 rounded-3xl p-6 max-w-sm w-full space-y-4 text-center shadow-2xl ${
           isChug
             ? 'border-red-600 flame-glow'
             : isDrinking
@@ -1790,7 +2010,35 @@ export const TurnEndDrinkModal: React.FC<{
           )}
         </div>
 
-        {/* Sips / Drinking Outcome Highlight */}
+        {/* Distributed Drinkers List if Multiple/Others drink */}
+        {drinkersList && drinkersList.length > 0 && (
+          <div className="bg-[#19130c] border border-[#3d2e1b] rounded-2xl p-3 text-left space-y-2 shadow-inner">
+            <div className="text-xs font-cinzel font-bold text-amber-300 flex items-center justify-between">
+              <span>🍺 {language === 'ro' ? 'Cine bea după această tură:' : 'Who drinks after this turn:'}</span>
+              <span className="text-[10px] text-gray-400 font-barlow">{drinkersList.length} {language === 'ro' ? 'jucători' : 'players'}</span>
+            </div>
+            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-0.5">
+              {drinkersList.map(drinker => (
+                <div
+                  key={drinker.playerId}
+                  className="flex items-center justify-between p-2 rounded-xl bg-[#231b11] border border-[#3d2e1b]/70 text-xs font-cinzel"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md overflow-hidden bg-[#120d07] border border-amber-500/30 flex-shrink-0">
+                      <AvatarDisplay avatarId={drinker.avatarIcon} className="w-full h-full" />
+                    </div>
+                    <span className="text-stone-200 font-bold">{drinker.name}</span>
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-lg bg-amber-950 text-amber-300 border border-amber-500/50 font-mono font-bold">
+                    🍺 {drinker.sips} {language === 'ro' ? (drinker.sips === 1 ? 'gură' : 'guri') : (drinker.sips === 1 ? 'sip' : 'sips')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Sips / Drinking Outcome Highlight for active player */}
         <div
           className={`py-3.5 px-4 rounded-2xl border flex flex-col items-center justify-center ${
             isChug
@@ -1830,10 +2078,12 @@ export const TurnEndDrinkModal: React.FC<{
           ) : (
             <div className="space-y-1">
               <div className="text-xl font-cinzel font-bold text-emerald-400">
-                🛡️ {language === 'ro' ? 'ZERO GURI!' : 'ZERO SIPS!'}
+                🛡️ {language === 'ro' ? 'Gata de Următorul Pas!' : 'Ready for Next Turn!'}
               </div>
               <div className="text-xs text-gray-300 font-barlow">
-                {language === 'ro' ? 'Ești în siguranță! Nu trebuie să bei nimic în această tură.' : 'You are safe! No drinks required this turn.'}
+                {drinkersList && drinkersList.length > 0
+                  ? (language === 'ro' ? 'Gurile au fost date adversarilor! Tu nu bei nimic acum.' : 'Sips were given to opponents! You drink nothing now.')
+                  : (language === 'ro' ? 'Ești în siguranță! Nu trebuie să bei nimic în această tură.' : 'You are safe! No drinks required this turn.')}
               </div>
             </div>
           )}

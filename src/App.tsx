@@ -30,6 +30,7 @@ import { GameInvitePopup } from './components/GameInvitePopup';
 import { getActiveSession, clearActiveSession } from './lib/sessionManager';
 import { ReconnectingOverlay } from './components/ReconnectingOverlay';
 import { reconnectionService } from './lib/reconnectionService';
+import { getUserCurrentShortId, setUserActiveRoom, startUserPresenceHeartbeat } from './lib/friendsService';
 
 type AppScreen = 'setup' | 'normal' | 'boardgame' | 'duel' | 'casino' | 'pineapple' | 'crash' | 'podium';
 
@@ -144,6 +145,24 @@ function MainAppContent() {
       });
     }
   }, []);
+
+  // Active user presence heartbeat (updates lastSeen in public profile while user is active in the app)
+  useEffect(() => {
+    if (!user) return;
+    const shortId = getUserCurrentShortId(user.uid);
+    const stopPresence = startUserPresenceHeartbeat(user.uid, shortId);
+    return () => {
+      stopPresence();
+    };
+  }, [user]);
+
+  // Ensure activeRoom is cleared in Firestore if user is not in a multiplayer game screen
+  useEffect(() => {
+    if (user && (currentScreen === 'setup' || currentScreen === 'podium' || currentScreen === 'normal' || currentScreen === 'boardgame')) {
+      const shortId = getUserCurrentShortId(user.uid);
+      setUserActiveRoom(user.uid, shortId, null).catch(() => {});
+    }
+  }, [user, currentScreen]);
 
   const handleStartGame = (
     mode: GameMode,

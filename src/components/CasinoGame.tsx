@@ -9,7 +9,7 @@ import { triggerBettingTimeout, analyzePlayerCasinoBets } from '../lib/casinoFir
 import { CasinoDiceArena } from './CasinoDiceArena';
 import { HeadToHeadTracker } from './HeadToHeadTracker';
 import { recordHeadToHeadMatch } from '../lib/headToHeadService';
-import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
+import { getUserCurrentShortId, setUserActiveRoom, startActiveRoomHeartbeat } from '../lib/friendsService';
 import { auth } from '../lib/firebase';
 import { NetworkConnectionBadge } from './NetworkConnectionBadge';
 import { TavernEmotesOverlay } from './TavernEmotesOverlay';
@@ -44,26 +44,31 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
     clearError,
   } = casinoSocket;
 
-  // Active room tracking for friends
+  // Active room tracking for friends with heartbeat and auto-cleanup
   useEffect(() => {
     const user = auth.currentUser;
-    if (user && room?.roomCode) {
-      const shortId = getUserCurrentShortId(user.uid);
-      setUserActiveRoom(user.uid, shortId, {
+    if (!user || !room?.roomCode) return;
+
+    const shortId = getUserCurrentShortId(user.uid);
+    if (room.status === 'finished') {
+      setUserActiveRoom(user.uid, shortId, null);
+      return;
+    }
+
+    const stopHeartbeat = startActiveRoomHeartbeat(user.uid, shortId, () => {
+      if (!room || room.status === 'finished') return null;
+      return {
         mode: 'casino',
         roomCode: room.roomCode,
         status: room.status === 'in_game' ? 'in_game' : 'lobby',
         playerCount: room.players.length,
         maxPlayers: 6,
         hostName: room.players.find((p) => p.isHost)?.name || localPlayer.name,
-      });
-    }
+      };
+    });
+
     return () => {
-      const user = auth.currentUser;
-      if (user) {
-        const shortId = getUserCurrentShortId(user.uid);
-        setUserActiveRoom(user.uid, shortId, null);
-      }
+      stopHeartbeat();
     };
   }, [room?.roomCode, room?.status, room?.players.length]);
 

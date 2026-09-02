@@ -513,6 +513,7 @@ export interface UserFriendProfile {
   totalXP?: number;
   showcasedItemIds?: string[];
   unlockedAchievements?: string[];
+  lastSeen?: any;
   updatedAt?: any;
 }
 
@@ -524,6 +525,8 @@ export interface FriendEntry {
   currentLevel?: number;
   currentTitle_ro?: string;
   activeRoom?: ActiveRoomInfo | null;
+  lastSeen?: any;
+  updatedAt?: any;
   addedAt?: any;
 }
 

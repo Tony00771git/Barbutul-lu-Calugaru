@@ -30,7 +30,7 @@ import { AvatarDisplay } from './AvatarDisplay';
 import { CrashCanvas } from './CrashCanvas';
 import { CrashSessionTracker, CrashSessionRoundRecord } from './CrashSessionTracker';
 import { useAuth } from '../context/AuthContext';
-import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
+import { getUserCurrentShortId, setUserActiveRoom, startActiveRoomHeartbeat } from '../lib/friendsService';
 import { NetworkConnectionBadge } from './NetworkConnectionBadge';
 import { TavernEmotesOverlay } from './TavernEmotesOverlay';
 import { saveActiveSession, clearActiveSession } from '../lib/sessionManager';
@@ -62,24 +62,30 @@ export const CrashGame: React.FC<CrashGameProps> = ({
   const [sessionRecords, setSessionRecords] = useState<CrashSessionRoundRecord[]>([]);
   const [isLocalCrashed, setIsLocalCrashed] = useState<boolean>(false);
 
-  // Sync player active room status for friends
+  // Sync player active room status for friends with heartbeat and auto-cleanup
   useEffect(() => {
-    if (user && roomCode) {
-      const shortId = getUserCurrentShortId(user.uid);
-      setUserActiveRoom(user.uid, shortId, {
+    if (!user || !roomCode) return;
+
+    const shortId = getUserCurrentShortId(user.uid);
+    if (roomState?.status === 'finished') {
+      setUserActiveRoom(user.uid, shortId, null);
+      return;
+    }
+
+    const stopHeartbeat = startActiveRoomHeartbeat(user.uid, shortId, () => {
+      if (!roomState || roomState.status === 'finished') return null;
+      return {
         mode: 'crash',
         roomCode,
         status: roomState?.status === 'in_game' ? 'in_game' : 'lobby',
         playerCount: roomState?.players.length || 1,
         maxPlayers: 6,
         hostName: roomState?.players.find((p) => p.isHost)?.name || localPlayer.name,
-      });
-    }
+      };
+    });
+
     return () => {
-      if (user) {
-        const shortId = getUserCurrentShortId(user.uid);
-        setUserActiveRoom(user.uid, shortId, null);
-      }
+      stopHeartbeat();
     };
   }, [user, roomCode, roomState?.status, roomState?.players.length]);
 

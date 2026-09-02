@@ -6,7 +6,7 @@ import { AvatarDisplay } from './AvatarDisplay';
 import { AvatarModal } from './AvatarModal';
 import { TrophyShowcase } from './TrophyShowcase';
 import { ACHIEVEMENTS, Achievement, getAchievementsWithProgress } from '../data/achievements';
-import { subscribeToFriends } from '../lib/friendsService';
+import { subscribeToFriends, isRoomActiveAndFresh, formatLastSeenStatus } from '../lib/friendsService';
 import {
   calculateProgression,
   getAchievementTierInfo,
@@ -68,7 +68,15 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
         console.warn('Friends subscription error in ScoreModal:', err);
       }
     );
-    return () => unsub();
+
+    const ticker = setInterval(() => {
+      setFriendsList((prev) => [...prev]);
+    }, 4000);
+
+    return () => {
+      clearInterval(ticker);
+      unsub();
+    };
   }, [isOpen, user?.uid]);
 
   const [activeTab, setActiveTab] = useState<'live' | 'alltime' | 'achievements'>(
@@ -487,27 +495,44 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
 
                 {friendsList.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {friendsList.map((friend) => (
-                      <button
-                        key={friend.friendUid}
-                        type="button"
-                        onClick={() => setSelectedFriendModal(friend)}
-                        className="p-2 rounded-xl bg-[#110a05] border border-[#2d1e11] hover:border-[#ffd700] hover:bg-[#1f140a] transition-all flex items-center gap-2 text-left cursor-pointer group shadow"
-                      >
-                        <div className="w-9 h-9 rounded-lg bg-[#1a120b] border border-[#e8c84a] flex items-center justify-center overflow-hidden flex-shrink-0 group-hover:scale-105 transition-transform">
-                          <AvatarDisplay avatarId={friend.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="font-cinzel font-bold text-xs text-[#f0ebe0] truncate group-hover:text-[#ffd700] transition-colors">
-                            {friend.displayName}
+                    {friendsList.map((friend) => {
+                      const friendStatus = formatLastSeenStatus(friend, language);
+                      return (
+                        <button
+                          key={friend.friendUid}
+                          type="button"
+                          onClick={() => setSelectedFriendModal(friend)}
+                          className={`p-2 rounded-xl bg-[#110a05] border transition-all flex items-center gap-2 text-left cursor-pointer group shadow ${
+                            friendStatus.isOnline
+                              ? 'border-emerald-800/60 hover:border-emerald-400/80 bg-gradient-to-r from-[#10170d]/40 to-[#110a05]'
+                              : 'border-[#2d1e11] hover:border-[#ffd700] hover:bg-[#1f140a] opacity-85 hover:opacity-100'
+                          }`}
+                        >
+                          <div className="relative flex-shrink-0">
+                            <div className="w-9 h-9 rounded-lg bg-[#1a120b] border border-[#e8c84a] flex items-center justify-center overflow-hidden group-hover:scale-105 transition-transform">
+                              <AvatarDisplay avatarId={friend.avatarIcon || 'monk_drunk'} className="w-full h-full p-0.5" />
+                            </div>
+                            <span
+                              className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[#110a05] ${friendStatus.dotClass}`}
+                              title={friendStatus.statusText}
+                            />
                           </div>
-                          <div className="text-[9px] text-amber-400 font-barlow flex items-center gap-1 truncate">
-                            <span className="bg-amber-500/20 px-1 rounded text-amber-300 font-bold">Nv. {friend.currentLevel || 1}</span>
-                            <span className="text-gray-400 truncate">{friend.shortId ? `#${friend.shortId}` : ''}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-cinzel font-bold text-xs text-[#f0ebe0] truncate group-hover:text-[#ffd700] transition-colors flex items-center gap-1">
+                              <span className="truncate">{friend.displayName}</span>
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${friendStatus.dotClass}`}
+                                title={friendStatus.statusText}
+                              />
+                            </div>
+                            <div className="text-[9px] text-amber-400 font-barlow flex items-center gap-1 truncate">
+                              <span className="bg-amber-500/20 px-1 rounded text-amber-300 font-bold">Nv. {friend.currentLevel || 1}</span>
+                              <span className="text-gray-400 truncate">{friend.shortId ? `#${friend.shortId}` : ''}</span>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="p-3 bg-[#0d0905] border border-[#261a0e] rounded-xl flex items-center justify-between gap-2">
@@ -1221,23 +1246,28 @@ export const ScoreModal: React.FC<ScoreModalProps> = ({
             </div>
 
             {/* Friend Stats & ID Details */}
-            <div className="space-y-2 bg-[#0e0905] p-3 rounded-xl border border-[#2b1e12]">
-              <div className="flex justify-between items-center text-xs font-cinzel">
-                <span className="text-gray-400">ID Unic de Prieten:</span>
-                <span className="text-[#ffd700] font-mono font-bold">#{selectedFriendModal.shortId || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-cinzel">
-                <span className="text-gray-400">Rang Monahal:</span>
-                <span className="text-amber-300 font-bold">{selectedFriendModal.currentTitle_ro || 'Ucenic'}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-cinzel">
-                <span className="text-gray-400">Status Tavernă:</span>
-                <span className="text-emerald-400 font-bold flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
-                  {selectedFriendModal.activeRoom ? 'În Meci / Lobby' : 'Activ'}
-                </span>
-              </div>
-            </div>
+            {(() => {
+              const modalStatus = formatLastSeenStatus(selectedFriendModal, language);
+              return (
+                <div className="space-y-2 bg-[#0e0905] p-3 rounded-xl border border-[#2b1e12]">
+                  <div className="flex justify-between items-center text-xs font-cinzel">
+                    <span className="text-gray-400">ID Unic de Prieten:</span>
+                    <span className="text-[#ffd700] font-mono font-bold">#{selectedFriendModal.shortId || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-cinzel">
+                    <span className="text-gray-400">Rang Monahal:</span>
+                    <span className="text-amber-300 font-bold">{selectedFriendModal.currentTitle_ro || 'Ucenic'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-cinzel">
+                    <span className="text-gray-400">Status Tavernă:</span>
+                    <span className={`font-bold flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] ${modalStatus.badgeBgClass}`}>
+                      <span className={`w-2 h-2 rounded-full ${modalStatus.dotClass}`} />
+                      <span>{modalStatus.statusText}</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <button
               type="button"

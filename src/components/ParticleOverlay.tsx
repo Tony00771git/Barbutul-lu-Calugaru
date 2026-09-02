@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 
 interface ParticleOverlayProps {
-  type: 'heaven' | 'chug' | null;
+  type: 'heaven' | 'chug' | 'upgrade' | null;
   onComplete?: () => void;
 }
 
@@ -29,7 +29,7 @@ export const ParticleOverlay: React.FC<ParticleOverlayProps> = ({ type, onComple
 
     let animationFrameId: number;
     const particles: Particle[] = [];
-    const count = type === 'heaven' ? 120 : 150;
+    const count = type === 'heaven' ? 120 : type === 'upgrade' ? 80 : 150;
 
     class Particle {
       x: number;
@@ -44,10 +44,10 @@ export const ParticleOverlay: React.FC<ParticleOverlayProps> = ({ type, onComple
 
       constructor() {
         this.x = Math.random() * width;
-        this.y = type === 'heaven' ? height + Math.random() * 50 : height + 20;
-        this.vx = (Math.random() - 0.5) * (type === 'heaven' ? 1.5 : 3);
-        this.vy = type === 'heaven' ? -(Math.random() * 3 + 1) : -(Math.random() * 6 + 2);
-        this.size = Math.random() * (type === 'heaven' ? 5 : 8) + 2;
+        this.y = type === 'heaven' || type === 'upgrade' ? height + Math.random() * 40 : height + 20;
+        this.vx = (Math.random() - 0.5) * (type === 'heaven' ? 1.5 : type === 'upgrade' ? 2 : 3);
+        this.vy = type === 'heaven' ? -(Math.random() * 3 + 1) : type === 'upgrade' ? -(Math.random() * 4 + 2) : -(Math.random() * 6 + 2);
+        this.size = Math.random() * (type === 'heaven' ? 5 : type === 'upgrade' ? 4.5 : 8) + 2;
         this.alpha = Math.random() * 0.8 + 0.2;
         this.maxLife = Math.random() * 100 + 60;
         this.life = this.maxLife;
@@ -55,6 +55,9 @@ export const ParticleOverlay: React.FC<ParticleOverlayProps> = ({ type, onComple
         if (type === 'heaven') {
           const goldHues = ['#e8c84a', '#ffd700', '#fff8dc', '#f0e68c'];
           this.color = goldHues[Math.floor(Math.random() * goldHues.length)];
+        } else if (type === 'upgrade') {
+          const upgradeHues = ['#10b981', '#34d399', '#6ee7b7', '#ffd700', '#f59e0b', '#ffffff'];
+          this.color = upgradeHues[Math.floor(Math.random() * upgradeHues.length)];
         } else {
           const flameHues = ['#e05c3a', '#ff4500', '#ff8c00', '#ffd700', '#8b0000'];
           this.color = flameHues[Math.floor(Math.random() * flameHues.length)];
@@ -82,8 +85,8 @@ export const ParticleOverlay: React.FC<ParticleOverlayProps> = ({ type, onComple
         context.shadowBlur = 12;
         context.shadowColor = this.color;
 
-        if (type === 'heaven') {
-          // Draw star / diamond particle
+        if (type === 'heaven' || type === 'upgrade') {
+          // Draw sparkling star / diamond
           context.beginPath();
           context.arc(this.x, this.y, this.size, 0, Math.PI * 2);
           context.fill();
@@ -102,7 +105,7 @@ export const ParticleOverlay: React.FC<ParticleOverlayProps> = ({ type, onComple
     }
 
     let startTime = Date.now();
-    const duration = type === 'heaven' ? 4500 : 4000;
+    const duration = type === 'heaven' ? 4500 : type === 'upgrade' ? 2600 : 4000;
 
     const render = () => {
       const elapsed = Date.now() - startTime;
@@ -140,6 +143,16 @@ export const ParticleOverlay: React.FC<ParticleOverlayProps> = ({ type, onComple
           ctx.fill();
         }
         ctx.restore();
+      } else if (type === 'upgrade') {
+        const bgGrad = ctx.createRadialGradient(
+          width / 2, height / 2, 50,
+          width / 2, height / 2, Math.max(width, height)
+        );
+        bgGrad.addColorStop(0, 'rgba(6, 44, 25, 0.82)');
+        bgGrad.addColorStop(0.5, 'rgba(14, 30, 20, 0.75)');
+        bgGrad.addColorStop(1, 'rgba(8, 12, 10, 0.88)');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, width, height);
       } else {
         const bgGrad = ctx.createRadialGradient(
           width / 2, height / 2, 40,
@@ -185,6 +198,20 @@ export const ParticleOverlay: React.FC<ParticleOverlayProps> = ({ type, onComple
             <h2 className="text-3xl font-cinzel text-[#e8c84a] font-bold gold-text-glow">RAI / HEAVEN</h2>
             <p className="text-lg font-barlow text-[#f0ebe0] mt-2">
               Dublu 1-1! Ești iertat de Dumnezeu și de Mănăstire, dar tot bei gurile din tură!
+            </p>
+          </div>
+        ) : type === 'upgrade' ? (
+          <div className="bg-[#0f1712]/95 border-2 border-emerald-400 rounded-3xl p-6 shadow-[0_0_30px_rgba(16,185,129,0.6)] max-w-sm mx-auto backdrop-blur-md space-y-2">
+            <div className="text-5xl mb-1 flex items-center justify-center gap-1">
+              <span>🏗️</span>
+              <span>🏠</span>
+              <span>✨</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-cinzel text-emerald-300 font-black tracking-wide">
+              UPGRADE FINALIZAT!
+            </h2>
+            <p className="text-sm font-barlow text-gray-200">
+              Clădirea a crescut în nivel! Chiria și penalizarea de băutură au fost majorate! 🍺
             </p>
           </div>
         ) : (

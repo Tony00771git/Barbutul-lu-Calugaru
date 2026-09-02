@@ -22,6 +22,8 @@ import {
   UpgradeBuildingsModal,
   TradeAuctionModal,
   MonkDiceDuelModal,
+  TurnDrinkerItem,
+  SipDistributionItem,
 } from './Popups';
 import { ScoreModal } from './ScoreModal';
 import { AvatarDisplay } from './AvatarDisplay';
@@ -41,6 +43,7 @@ interface PendingTurnResult {
   isChug: boolean;
   isImmune: boolean;
   specialNote?: string;
+  drinkersList?: TurnDrinkerItem[];
 }
 
 interface ActionLogEntry {
@@ -68,7 +71,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
   const [hoppingTileIndex, setHoppingTileIndex] = useState<number | null>(null);
 
   // Overlays & Notifications
-  const [particleType, setParticleType] = useState<'heaven' | 'chug' | null>(null);
+  const [particleType, setParticleType] = useState<'heaven' | 'chug' | 'upgrade' | null>(null);
   const [floatingNotification, setFloatingNotification] = useState<{ text: string; color: string } | null>(null);
 
   // Action Log
@@ -127,6 +130,8 @@ export const BoardGame: React.FC<BoardGameProps> = ({
     if (activePlayer.gold < cost) return;
 
     const targetTile = tiles[tileIndex];
+    if (!targetTile || targetTile.isGroapa || targetTile.type === 'chug') return;
+
     const nextLevel = ((targetTile.buildingLevel || 0) + 1) as 1 | 2;
     const basePrice = targetTile.basePrice || targetTile.price || 10;
     const baseSips = targetTile.baseSipsCount || targetTile.sipsCount || 4;
@@ -157,21 +162,34 @@ export const BoardGame: React.FC<BoardGameProps> = ({
       return t;
     }));
 
-    if (upgradedVals.isGroapa) {
-      setParticleType('chug');
-    }
+    // Update inspected tile if currently open so modal updates instantly in place
+    setInspectTile(prev => {
+      if (prev && prev.index === tileIndex) {
+        return {
+          ...prev,
+          buildingLevel: nextLevel,
+          sipsCount: upgradedVals.sipsCount,
+          isGroapa: upgradedVals.isGroapa,
+          type: upgradedVals.isGroapa ? 'chug' : prev.type,
+        };
+      }
+      return prev;
+    });
+
+    // Trigger clean upgrade celebratory animation
+    setParticleType('upgrade');
 
     const tileName = language === 'ro' ? targetTile.nameRo : targetTile.nameEn;
     setFloatingNotification({
-      text: upgradedVals.isGroapa ? `🔥 GROAPĂ creată la ${tileName}!` : `🏗️ Clădire Nivel ${nextLevel} la ${tileName}!`,
-      color: upgradedVals.isGroapa ? 'text-red-400' : 'text-[#ffd700]',
+      text: `🏗️ Clădire Nivel ${nextLevel} la ${tileName}! (🍺 ${upgradedVals.sipsCount} guri)`,
+      color: 'text-emerald-300',
     });
     setTimeout(() => setFloatingNotification(null), 3000);
 
     addLog(
       language === 'ro'
-        ? `${activePlayer.name} a construit Clădire Nivel ${nextLevel} la ${tileName} (${cost} 🪙)! ${upgradedVals.isGroapa ? '🔥 A DEVENIT GROAPĂ!' : `(Chirie: ${upgradedVals.sipsCount} guri)`}`
-        : `${activePlayer.name} upgraded building Level ${nextLevel} at ${tileName} (${cost} 🪙)! ${upgradedVals.isGroapa ? '🔥 BECAME A CHUG TILE!' : `(Rent: ${upgradedVals.sipsCount} sips)`}`,
+        ? `${activePlayer.name} a construit Clădire Nivel ${nextLevel} la ${tileName} (${cost} 🪙)! (Chirie nouă: ${upgradedVals.sipsCount} guri)`
+        : `${activePlayer.name} upgraded building Level ${nextLevel} at ${tileName} (${cost} 🪙)! (New Rent: ${upgradedVals.sipsCount} sips)`,
       'buy'
     );
   };
@@ -894,6 +912,29 @@ export const BoardGame: React.FC<BoardGameProps> = ({
           const isMyProperty = owner && owner.id === activePlayer.id;
           const isOtherProperty = owner && owner.id !== activePlayer.id;
 
+          // Check if this tile can currently be upgraded by active player in their turn
+          const isTileUpgradable = (() => {
+            // Pit / groapa tiles cannot be upgraded
+            if (tile.isGroapa || tile.type === 'chug') return false;
+            // Must have a valid property group
+            if (!tile.group || !PROPERTY_GROUPS[tile.group]) return false;
+            // Must be owned by active player
+            if (!owner || owner.id !== activePlayer.id) return false;
+            // Active player must own ALL tiles in this color group
+            const groupMeta = PROPERTY_GROUPS[tile.group];
+            const ownsAllInGroup = groupMeta.tileIndices.every(idx => activePlayer.properties.includes(idx));
+            if (!ownsAllInGroup) return false;
+            // Max level is 2
+            const currentLvl = tile.buildingLevel || 0;
+            if (currentLvl >= 2) return false;
+            // Active player must have enough gold for the upgrade
+            const basePrice = tile.basePrice || tile.price || 10;
+            const baseSips = tile.baseSipsCount || tile.sipsCount || 4;
+            const upgradeMeta = calculateUpgradedValues(basePrice, baseSips, currentLvl as 0 | 1 | 2);
+            const cost = upgradeMeta.nextUpgradeCost || 0;
+            return activePlayer.gold >= cost;
+          })();
+
           // Focus highlight / mask styling
           const focusStyle = focusMyProperties
             ? isMyProperty
@@ -901,6 +942,8 @@ export const BoardGame: React.FC<BoardGameProps> = ({
               : isOtherProperty
               ? 'opacity-20 grayscale brightness-50 contrast-50 border-stone-800 pointer-events-none'
               : 'opacity-40 brightness-75'
+            : isTileUpgradable
+            ? 'ring-2 ring-emerald-400/90 shadow-[0_0_12px_rgba(16,185,129,0.5)]'
             : '';
 
           // Action label badge for non-buyable tiles
@@ -951,6 +994,16 @@ export const BoardGame: React.FC<BoardGameProps> = ({
                   : `bg-[#15110c] ${theme.border}`
               } hover:brightness-125 hover:z-20`}
             >
+              {/* Up Arrow for Upgradable Tiles (Prominent Animated Up Arrow) */}
+              {isTileUpgradable && (
+                <div
+                  className="absolute -top-1 -right-1 z-30 flex items-center justify-center bg-gradient-to-tr from-emerald-500 via-green-400 to-[#ffd700] text-black rounded-full w-4 h-4 sm:w-5 sm:h-5 shadow-[0_0_10px_rgba(16,185,129,0.95)] border border-white animate-bounce font-black"
+                  title={language === 'ro' ? 'Clădire upgradabilă! Apasă pentru detalii și upgrade.' : 'Upgradable property! Click to open & upgrade.'}
+                >
+                  <span className="text-[8px] sm:text-[10px] font-black leading-none">⬆️</span>
+                </div>
+              )}
+
               {/* Top District Color Strip for Buyable Cells */}
               {tile.buyable ? (
                 <div className={`w-full h-1 sm:h-1.5 rounded-t-sm ${theme.colorBar} shadow-sm`} />
@@ -990,8 +1043,8 @@ export const BoardGame: React.FC<BoardGameProps> = ({
                 )}
               </div>
 
-              {/* Owner Crown Marker (Top Right, never overlapping price) */}
-              {owner && (
+              {/* Owner Crown Marker (Top Right, only if not already showing up arrow) */}
+              {owner && !isTileUpgradable && (
                 <div
                   className="absolute top-0.5 right-0.5 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full border border-black flex items-center justify-center text-[6px] sm:text-[7px] text-black font-black shadow-md z-10"
                   style={{ backgroundColor: owner.color || '#10b981' }}
@@ -1031,9 +1084,20 @@ export const BoardGame: React.FC<BoardGameProps> = ({
                 {language === 'ro' ? 'MĂNĂSTIREA VESELĂ' : 'MERRY MONASTERY'}
               </span>
             </div>
-            <div className="text-[9px] sm:text-[10px] font-cinzel text-gray-400 flex items-center gap-1">
-              <span>{language === 'ro' ? '↻ 36 Chilii' : '↻ 36 Cells'}</span>
-            </div>
+            {canUpgradeBuildings ? (
+              <button
+                type="button"
+                onClick={() => setShowUpgradeModal(true)}
+                className="text-[9px] sm:text-[10px] font-cinzel font-bold text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-500/50 hover:bg-emerald-900/80 flex items-center gap-1 transition-all"
+              >
+                <span>🏗️</span>
+                <span>{language === 'ro' ? 'Upgrade Clădiri ⬆️' : 'Upgrades Available ⬆️'}</span>
+              </button>
+            ) : (
+              <div className="text-[9px] sm:text-[10px] font-cinzel text-gray-400 flex items-center gap-1">
+                <span>{language === 'ro' ? '↻ 36 Chilii' : '↻ 36 Cells'}</span>
+              </div>
+            )}
           </div>
 
           {/* Center Mascot & Active Player Status */}
@@ -1119,6 +1183,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
           isChug={turnResult.isChug}
           isImmune={turnResult.isImmune}
           specialNote={turnResult.specialNote}
+          drinkersList={turnResult.drinkersList}
           onUsePardonLetter={activePlayer.pardonLetters > 0 ? handleUsePardonLetter : undefined}
           onConfirm={() => {
             // Apply drinking score to player before advancing
@@ -1414,7 +1479,7 @@ export const BoardGame: React.FC<BoardGameProps> = ({
         />
       )}
 
-      {/* Merchant Modal (Târgul cu Scrisori & Chei) */}
+      {/* Merchant Modal (Târgul de Iertare) */}
       {showMerchantModal && (
         <MerchantModal
           player={activePlayer}
@@ -1431,26 +1496,8 @@ export const BoardGame: React.FC<BoardGameProps> = ({
             });
             addLog(
               language === 'ro'
-                ? `${activePlayer.name} a cumpărat o Scrisoare de Iertare 🎟️ de la Târgul de Scrisori.`
+                ? `${activePlayer.name} a cumpărat o Scrisoare de Iertare 🎟️ de la Târgul de Iertare.`
                 : `${activePlayer.name} bought a Pardon Letter 🎟️ from the Bazaar.`,
-              'card'
-            );
-          }}
-          onBuyKey={() => {
-            setShowMerchantModal(false);
-            setPlayers(prev => prev.map((p, idx) => idx === activePlayerIndex ? { ...p, gold: p.gold - 20, jailKeys: p.jailKeys + 1 } : p));
-            setTurnResult({
-              title: language === 'ro' ? '🔓 CHEIE DE TEMNIȚĂ CUMPĂRATĂ!' : '🔓 DUNGEON KEY BOUGHT!',
-              reason: language === 'ro' ? 'Ai cumpărat o Cheie de Temniță pentru 20 Galbeni.' : 'You purchased a Dungeon Key for 20 Gold.',
-              sipsToDrink: 0,
-              isChug: false,
-              isImmune: true,
-              specialNote: language === 'ro' ? 'Ai adăugat 1 Cheie 🔓 în inventar! O poți folosi dacă ajungi la temniță.' : 'Added 1 Key 🔓 to inventory!',
-            });
-            addLog(
-              language === 'ro'
-                ? `${activePlayer.name} a cumpărat o Cheie de Temniță 🔓 de la Târgul de Scrisori.`
-                : `${activePlayer.name} bought a Dungeon Key 🔓 from the Bazaar.`,
               'card'
             );
           }}
@@ -1591,34 +1638,64 @@ export const BoardGame: React.FC<BoardGameProps> = ({
         />
       )}
 
-      {/* Select Target Player Modal */}
+      {/* Select Target Player(s) Modal with Multi-Player Distribution */}
       {selectPlayerPrompt && (
         <SelectPlayerModal
           title={selectPlayerPrompt.title}
+          sipsToGive={selectPlayerPrompt.sipsToGive}
           players={players}
           activePlayerId={activePlayer.id}
-          onSelect={targetId => {
-            const sips = selectPlayerPrompt.sipsToGive;
-            const targetPlayer = players.find(p => p.id === targetId);
+          onConfirm={(distribution: SipDistributionItem[]) => {
+            const totalSips = selectPlayerPrompt.sipsToGive;
             setSelectPlayerPrompt(null);
 
-            setPlayers(prev => prev.map(p => p.id === targetId ? { ...p, sipsTotal: p.sipsTotal + sips } : p));
+            // Update all targeted players' sips count
+            setPlayers(prev =>
+              prev.map(p => {
+                const item = distribution.find(d => d.player.id === p.id);
+                if (item) {
+                  return {
+                    ...p,
+                    sipsTotal: p.sipsTotal + item.sips,
+                  };
+                }
+                return p;
+              })
+            );
+
+            // Build detailed drinkers list for the Turn End Modal
+            const drinkersList: TurnDrinkerItem[] = distribution.map(d => ({
+              playerId: d.player.id,
+              name: d.player.name,
+              avatarIcon: d.player.avatarIcon,
+              sips: d.sips,
+              color: d.player.color,
+            }));
+
+            // Summary text for note
+            const summaryParts = distribution.map(
+              d => `${d.player.name} (${d.sips} ${d.sips === 1 ? 'gură' : 'guri'})`
+            );
+            const summaryString = summaryParts.join(', ');
+
             setTurnResult({
-              title: language === 'ro' ? '👉 GURI ÎMPĂRȚITE!' : '👉 SIPS DISTRIBUTED!',
+              title: language === 'ro' ? '👉 GURI DISTRIBUITE!' : '👉 SIPS DISTRIBUTED!',
               reason: language === 'ro'
-                ? `I-ai trimis ${sips} guri lui ${targetPlayer?.name || 'adversarului'}.`
-                : `You gave ${sips} sips to ${targetPlayer?.name || 'opponent'}.`,
+                ? `Ai dat suma ${totalSips} la zaruri (≥6) și ai împărțit gurile la ${distribution.length} ${distribution.length === 1 ? 'jucător' : 'jucători'}.`
+                : `You rolled sum ${totalSips} (≥6) and distributed sips among ${distribution.length} ${distribution.length === 1 ? 'player' : 'players'}.`,
               sipsToDrink: 0,
               isChug: false,
               isImmune: true,
+              drinkersList,
               specialNote: language === 'ro'
-                ? `${targetPlayer?.name} trebuie să bea acum ${sips} guri!`
-                : `${targetPlayer?.name} must now drink ${sips} sips!`,
+                ? `🍺 Împărțire: ${summaryString}`
+                : `🍺 Distribution: ${summaryString}`,
             });
+
             addLog(
               language === 'ro'
-                ? `${activePlayer.name} a trimis ${sips} guri lui ${targetPlayer?.name}.`
-                : `${activePlayer.name} sent ${sips} sips to ${targetPlayer?.name}.`,
+                ? `${activePlayer.name} a împărțit ${totalSips} guri: ${summaryString}.`
+                : `${activePlayer.name} distributed ${totalSips} sips: ${summaryString}.`,
               'drink'
             );
           }}

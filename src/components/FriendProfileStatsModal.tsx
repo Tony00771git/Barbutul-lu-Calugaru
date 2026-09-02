@@ -10,6 +10,7 @@ import { calculateProgression } from '../lib/progression';
 import { getTopRarestInventoryItems } from '../lib/showcaseHelper';
 import { Trophy, Flame, Award, Beer, Shield, Swords, Sparkles, Copy, Check, X, Dices } from 'lucide-react';
 import { soundEffects } from '../lib/soundFx';
+import { isRoomActiveAndFresh, formatLastSeenStatus } from '../lib/friendsService';
 
 interface FriendProfileStatsModalProps {
   friend: FriendEntry | UserFriendProfile;
@@ -31,6 +32,16 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
   const [detailedStats, setDetailedStats] = useState<Partial<Profile> | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [copiedId, setCopiedId] = useState<boolean>(false);
+  const [, setPresenceTicker] = useState(0);
+
+  // Presence ticker while modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const interval = setInterval(() => {
+      setPresenceTicker((p) => p + 1);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [isOpen]);
 
   const friendUid = (friend as FriendEntry).friendUid || (friend as UserFriendProfile).uid;
   const shortId = friend.shortId || '';
@@ -190,8 +201,10 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
     setTimeout(() => setCopiedId(false), 2000);
   };
 
-  const isLobby = Boolean(friend.activeRoom?.roomCode && friend.activeRoom.status === 'lobby');
-  const isInGame = Boolean(friend.activeRoom?.roomCode && friend.activeRoom.status === 'in_game');
+  const freshRoom = isRoomActiveAndFresh(friend.activeRoom) ? friend.activeRoom : null;
+  const isLobby = Boolean(freshRoom?.roomCode && freshRoom.status === 'lobby');
+  const isInGame = Boolean(freshRoom?.roomCode && freshRoom.status === 'in_game');
+  const statusInfo = formatLastSeenStatus(friend, language);
 
   return (
     <div
@@ -217,13 +230,22 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
               <span className="absolute -bottom-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-[#ffd700] text-black font-cinzel font-black text-[9px] shadow border border-black/40">
                 Nv. {currentLevel}
               </span>
+              {/* Online Indicator Dot on Avatar */}
+              <span
+                className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[#1c130b] ${statusInfo.dotClass}`}
+                title={statusInfo.statusText}
+              />
             </div>
 
             {/* Name, Title, and ID */}
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="font-cinzel font-black text-base sm:text-lg text-[#ffd700] gold-text-glow truncate leading-tight">
-                  {friend.displayName}
+                <h2 className="font-cinzel font-black text-base sm:text-lg text-[#ffd700] gold-text-glow truncate leading-tight flex items-center gap-1.5">
+                  <span>{friend.displayName}</span>
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${statusInfo.dotClass}`}
+                    title={statusInfo.statusText}
+                  />
                 </h2>
                 {shortId && (
                   <button
@@ -248,22 +270,10 @@ export const FriendProfileStatsModal: React.FC<FriendProfileStatsModalProps> = (
 
               {/* Status Badge */}
               <div className="flex items-center gap-1.5 mt-1">
-                {isLobby ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-950/80 border border-green-500/60 text-[10px] font-cinzel font-bold text-green-400">
-                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <span>{isRo ? 'În Lobby (Așteaptă meci)' : 'In Lobby (Waiting)'}</span>
-                  </span>
-                ) : isInGame ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/80 border border-amber-500/60 text-[10px] font-cinzel font-bold text-amber-300">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />
-                    <span>{isRo ? 'În Meci Activ' : 'In Active Match'}</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-[10px] font-barlow text-emerald-300">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    <span>{isRo ? 'Frate de Pahar Conectat' : 'Tavern Companion Connected'}</span>
-                  </span>
-                )}
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-cinzel font-bold ${statusInfo.badgeBgClass}`}>
+                  <span className={`w-2 h-2 rounded-full ${statusInfo.isOnline ? (isLobby ? 'bg-green-400 animate-pulse' : isInGame ? 'bg-amber-400' : 'bg-emerald-400') : 'bg-gray-500'}`} />
+                  <span>{statusInfo.statusText}</span>
+                </span>
               </div>
             </div>
           </div>

@@ -88,7 +88,7 @@ export const PROPERTY_GROUPS: Record<PropertyGroup, PropertyGroupConfig> = {
   },
 };
 
-// Compute upgraded sips and groapa state
+// Compute upgraded sips and groapa state (regular property upgrades increase sips cleanly)
 export const calculateUpgradedValues = (basePrice: number, baseSips: number, level: 0 | 1 | 2) => {
   if (level === 0) {
     return {
@@ -99,21 +99,19 @@ export const calculateUpgradedValues = (basePrice: number, baseSips: number, lev
     };
   } else if (level === 1) {
     const sipsLevel1 = Math.round(baseSips * 1.8);
-    const isGroapa = sipsLevel1 > 25;
     return {
       price: basePrice,
-      sipsCount: isGroapa ? 25 : sipsLevel1,
-      isGroapa,
+      sipsCount: sipsLevel1,
+      isGroapa: false,
       nextUpgradeCost: Math.round(basePrice * 1.5), // Al doilea upgrade e cu 50% mai scump
     };
   } else {
     const sipsLevel1 = Math.round(baseSips * 1.8);
     const sipsLevel2 = Math.round(sipsLevel1 * 1.8);
-    const isGroapa = sipsLevel2 > 25;
     return {
       price: basePrice,
-      sipsCount: isGroapa ? 25 : sipsLevel2,
-      isGroapa,
+      sipsCount: sipsLevel2,
+      isGroapa: false,
       nextUpgradeCost: null,
     };
   }
@@ -526,10 +524,10 @@ export const boardTilesData: BoardTile[] = [
     index: 27,
     emoji: '🧙',
     type: 'merchant',
-    nameRo: 'Târgul cu Scrisori',
+    nameRo: 'Târgul de Iertare',
     nameEn: 'Pardon Bazaar',
-    descriptionRo: 'Poți cumpăra o Scrisoare de Iertare (30🪙) sau Cheie de Temniță (20🪙).',
-    descriptionEn: 'Buy a Pardon Letter (30 gold) or Dungeon Key (20 gold).',
+    descriptionRo: 'Poți cumpăra o Scrisoare de Iertare (30🪙) pentru a anula pedepsele de băut.',
+    descriptionEn: 'Buy a Pardon Letter (30 gold) to cancel drinking penalties.',
     buyable: false,
     ...calculateGridPos(27),
   },

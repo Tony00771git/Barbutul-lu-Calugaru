@@ -115,7 +115,9 @@ service cloud.firestore {
         (!('gamesPlayed' in data) || (data.gamesPlayed is number && data.gamesPlayed >= 0)) &&
         (!('totalXP' in data) || (data.totalXP is number && data.totalXP >= 0)) &&
         (!('showcasedItemIds' in data) || (data.showcasedItemIds is list && data.showcasedItemIds.size() <= 10)) &&
-        (!('activeRoom' in data) || data.activeRoom == null || data.activeRoom is map);
+        (!('activeRoom' in data) || data.activeRoom == null || data.activeRoom is map) &&
+        (!('lastSeen' in data) || data.lastSeen is number || data.lastSeen is timestamp || data.lastSeen is string || data.lastSeen == null) &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp || data.updatedAt is number || data.updatedAt == null);
     }
 
     // Friend Record Validation (Within user's friends subcollection)
@@ -128,6 +130,7 @@ service cloud.firestore {
         (!('currentLevel' in data) || (data.currentLevel is number && data.currentLevel >= 1)) &&
         (!('currentTitle_ro' in data) || (data.currentTitle_ro is string && data.currentTitle_ro.size() <= 100)) &&
         (!('activeRoom' in data) || data.activeRoom == null || data.activeRoom is map) &&
+        (!('lastSeen' in data) || data.lastSeen is number || data.lastSeen is timestamp || data.lastSeen is string || data.lastSeen == null) &&
         (!('addedAt' in data) || data.addedAt is timestamp);
     }
 

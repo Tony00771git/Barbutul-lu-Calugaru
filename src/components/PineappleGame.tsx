@@ -30,7 +30,7 @@ import {
 } from '../lib/pineappleFirestoreService';
 import { checkIsFoul } from '../lib/pineapplePokerEvaluator';
 import { getHeadToHeadStats, recordHeadToHeadMatch } from '../lib/headToHeadService';
-import { getUserCurrentShortId, setUserActiveRoom } from '../lib/friendsService';
+import { getUserCurrentShortId, setUserActiveRoom, startActiveRoomHeartbeat } from '../lib/friendsService';
 import { auth } from '../lib/firebase';
 import { NetworkConnectionBadge } from './NetworkConnectionBadge';
 import { TavernEmotesOverlay } from './TavernEmotesOverlay';
@@ -60,26 +60,31 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
     }
   }, [roomCode, roomState, localPlayer, isHost]);
 
-  // Active room tracking for friends
+  // Active room tracking for friends with heartbeat and auto-cleanup
   useEffect(() => {
     const user = auth.currentUser;
-    if (user && roomCode) {
-      const shortId = getUserCurrentShortId(user.uid);
-      setUserActiveRoom(user.uid, shortId, {
+    if (!user || !roomCode) return;
+
+    const shortId = getUserCurrentShortId(user.uid);
+    if (roomState?.status === 'finished') {
+      setUserActiveRoom(user.uid, shortId, null);
+      return;
+    }
+
+    const stopHeartbeat = startActiveRoomHeartbeat(user.uid, shortId, () => {
+      if (!roomState || roomState.status === 'finished') return null;
+      return {
         mode: 'pineapple',
         roomCode,
         status: roomState?.status === 'in_game' ? 'in_game' : 'lobby',
         playerCount: roomState?.players.length || 1,
         maxPlayers: 2,
         hostName: roomState?.players.find((p) => p.isHost)?.name || localPlayer.name,
-      });
-    }
+      };
+    });
+
     return () => {
-      const user = auth.currentUser;
-      if (user) {
-        const shortId = getUserCurrentShortId(user.uid);
-        setUserActiveRoom(user.uid, shortId, null);
-      }
+      stopHeartbeat();
     };
   }, [roomCode, roomState?.status, roomState?.players.length]);
   const [selectedSource, setSelectedSource] = useState<
