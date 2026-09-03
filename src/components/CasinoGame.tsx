@@ -47,7 +47,7 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
   // Active room tracking for friends with heartbeat and auto-cleanup
   useEffect(() => {
     const user = auth.currentUser;
-    if (!user || !room?.roomCode) return;
+    if (!user || !room?.code) return;
 
     const shortId = getUserCurrentShortId(user.uid);
     if (room.status === 'finished') {
@@ -59,18 +59,18 @@ export const CasinoGame: React.FC<CasinoGameProps> = ({
       if (!room || room.status === 'finished') return null;
       return {
         mode: 'casino',
-        roomCode: room.roomCode,
+        roomCode: room.code,
         status: room.status === 'in_game' ? 'in_game' : 'lobby',
-        playerCount: room.players.length,
+        playerCount: room.players?.length || 1,
         maxPlayers: 6,
-        hostName: room.players.find((p) => p.isHost)?.name || localPlayer.name,
+        hostName: room.players?.find((p) => p.isHost)?.name || localPlayer.name,
       };
     });
 
     return () => {
       stopHeartbeat();
     };
-  }, [room?.roomCode, room?.status, room?.players.length]);
+  }, [room?.code, room?.status, room?.players?.length]);
 
   // Save active session for auto-reconnection
   useEffect(() => {

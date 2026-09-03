@@ -9,6 +9,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { cleanFirestoreData } from './cleanFirestoreData';
 import { getDuelQuestionPool, shuffleDeck } from '../data/duelQuestions';
 import {
   DuelDifficulty,
@@ -186,10 +187,11 @@ export async function createDuelRoom(
 
   const path = `duel_rooms/${code}`;
   try {
-    await setDoc(doc(db, 'duel_rooms', code), roomData);
+    await setDoc(doc(db, 'duel_rooms', code), cleanFirestoreData(roomData));
     return code;
   } catch (err) {
     handleFirestoreError(err, OperationType.CREATE, path);
+    throw err;
   }
 }
 

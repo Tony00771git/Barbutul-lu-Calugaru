@@ -77,16 +77,16 @@ export const PineappleGame: React.FC<PineappleGameProps> = ({
         mode: 'pineapple',
         roomCode,
         status: roomState?.status === 'in_game' ? 'in_game' : 'lobby',
-        playerCount: roomState?.players.length || 1,
+        playerCount: roomState?.players?.length || 1,
         maxPlayers: 2,
-        hostName: roomState?.players.find((p) => p.isHost)?.name || localPlayer.name,
+        hostName: roomState?.players?.find((p) => p.isHost)?.name || localPlayer.name,
       };
     });
 
     return () => {
       stopHeartbeat();
     };
-  }, [roomCode, roomState?.status, roomState?.players.length]);
+  }, [roomCode, roomState?.status, roomState?.players?.length]);
   const [selectedSource, setSelectedSource] = useState<
     | { type: 'hand'; card: PlayingCard }
     | { type: 'board'; card: PlayingCard; fromRow: 'top' | 'middle' | 'bottom' }

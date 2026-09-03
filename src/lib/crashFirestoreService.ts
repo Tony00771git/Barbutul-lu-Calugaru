@@ -9,6 +9,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { cleanFirestoreData } from './cleanFirestoreData';
 import {
   CrashBotStyle,
   CrashMatchSettings,
@@ -303,10 +304,10 @@ export async function createCrashRoom(
     history: [],
   };
 
-  await setDoc(roomRef, {
+  await setDoc(roomRef, cleanFirestoreData({
     ...roomState,
     updatedAt: serverTimestamp(),
-  });
+  }));
 
   return code;
 }

@@ -78,16 +78,16 @@ export const CrashGame: React.FC<CrashGameProps> = ({
         mode: 'crash',
         roomCode,
         status: roomState?.status === 'in_game' ? 'in_game' : 'lobby',
-        playerCount: roomState?.players.length || 1,
+        playerCount: roomState?.players?.length || 1,
         maxPlayers: 6,
-        hostName: roomState?.players.find((p) => p.isHost)?.name || localPlayer.name,
+        hostName: roomState?.players?.find((p) => p.isHost)?.name || localPlayer.name,
       };
     });
 
     return () => {
       stopHeartbeat();
     };
-  }, [user, roomCode, roomState?.status, roomState?.players.length]);
+  }, [user, roomCode, roomState?.status, roomState?.players?.length]);
 
   // Local auto-cashout controls
   const [autoCashout, setAutoCashout] = useState<boolean>(false);

@@ -9,6 +9,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
+import { cleanFirestoreData } from './cleanFirestoreData';
 import {
   PineappleBoard,
   PineappleBotDifficulty,
@@ -109,10 +110,10 @@ export async function createPineappleRoom(
     loserId: null,
   };
 
-  await setDoc(roomRef, {
+  await setDoc(roomRef, cleanFirestoreData({
     ...roomState,
     updatedAt: serverTimestamp(),
-  });
+  }));
 
   return code;
 }

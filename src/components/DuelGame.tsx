@@ -47,7 +47,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
   // Track active room for friends with heartbeat and auto-cleanup
   useEffect(() => {
     const user = auth.currentUser;
-    if (!user || !room?.roomCode) return;
+    if (!user || !room?.code) return;
 
     const shortId = getUserCurrentShortId(user.uid);
     if (room.status === 'finished') {
@@ -57,20 +57,21 @@ export const DuelGame: React.FC<DuelGameProps> = ({
 
     const stopHeartbeat = startActiveRoomHeartbeat(user.uid, shortId, () => {
       if (!room || room.status === 'finished') return null;
+      const playerCount = (room.hostPlayer ? 1 : 0) + (room.guestPlayer ? 1 : 0);
       return {
         mode: 'duel',
-        roomCode: room.roomCode,
+        roomCode: room.code,
         status: room.status === 'in_game' ? 'in_game' : 'lobby',
-        playerCount: room.players.length,
+        playerCount,
         maxPlayers: 2,
-        hostName: room.players.find((p) => p.isHost)?.name || localPlayer.name,
+        hostName: room.hostPlayer?.name || localPlayer.name,
       };
     });
 
     return () => {
       stopHeartbeat();
     };
-  }, [room?.roomCode, room?.status, room?.players.length]);
+  }, [room?.code, room?.status, room?.hostPlayer?.name, room?.guestPlayer?.name, localPlayer.name]);
 
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -83,7 +84,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
   // 10-Second Drinking countdown timer state synced with server
   const [drinkCountdownTimeLeft, setDrinkCountdownTimeLeft] = useState<number>(10);
 
-  const isHost = room ? room.hostPlayer.id === playerId : false;
+  const isHost = room?.hostPlayer ? room.hostPlayer.id === playerId : false;
   const me = room ? (isHost ? room.hostPlayer : room.guestPlayer) : null;
   const opponent = room ? (isHost ? room.guestPlayer : room.hostPlayer) : null;
 
@@ -133,7 +134,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
       setDrinkCountdownTimeLeft(remaining);
 
       // When countdown naturally expires, host client auto-triggers next round or endGame
-      if (remaining <= 0 && room.hostPlayer.id === playerId) {
+      if (remaining <= 0 && room.hostPlayer?.id === playerId) {
         const meP = (myScores.sipsTotal || 0) + 25 * (myScores.chugsTotal || 0);
         const oppP = (opponentScores.sipsTotal || 0) + 25 * (opponentScores.chugsTotal || 0);
         const tPts = room.targetPoints || 30;
@@ -154,7 +155,7 @@ export const DuelGame: React.FC<DuelGameProps> = ({
     room?.roundResult?.drinkCountdownEndsAt,
     room?.roundResult?.isTargetReached,
     room?.targetPoints,
-    room?.hostPlayer.id,
+    room?.hostPlayer?.id,
     playerId,
     myScores.sipsTotal,
     myScores.chugsTotal,
@@ -295,16 +296,33 @@ export const DuelGame: React.FC<DuelGameProps> = ({
   if (!room) {
     return (
       <div className="w-full min-h-[70vh] flex flex-col items-center justify-center p-6 text-center space-y-4">
-        <div className="text-4xl animate-bounce">⚔️ 📡</div>
-        <h2 className="text-xl font-cinzel font-bold text-[#e8c84a]">
-          {t('duelConnecting')}
-        </h2>
-        <button
-          onClick={onLeave}
-          className="px-4 py-2 rounded-xl bg-[#22160d] border border-[#e8c84a]/50 text-xs font-cinzel text-[#ffd700]"
-        >
-          {language === 'ro' ? 'Înapoi la Meniu' : 'Back to Menu'}
-        </button>
+        {errorMessage ? (
+          <>
+            <div className="text-4xl">⚠️</div>
+            <h2 className="text-xl font-cinzel font-bold text-red-400">
+              {errorMessage}
+            </h2>
+            <button
+              onClick={onLeave}
+              className="px-4 py-2 rounded-xl bg-[#22160d] border border-red-500/50 text-xs font-cinzel text-red-300 hover:brightness-110"
+            >
+              {language === 'ro' ? 'Înapoi la Meniu' : 'Back to Menu'}
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="text-4xl animate-bounce">⚔️ 📡</div>
+            <h2 className="text-xl font-cinzel font-bold text-[#e8c84a]">
+              {t('duelConnecting')}
+            </h2>
+            <button
+              onClick={onLeave}
+              className="px-4 py-2 rounded-xl bg-[#22160d] border border-[#e8c84a]/50 text-xs font-cinzel text-[#ffd700]"
+            >
+              {language === 'ro' ? 'Înapoi la Meniu' : 'Back to Menu'}
+            </button>
+          </>
+        )}
       </div>
     );
   }
